@@ -3,8 +3,8 @@ import type { RoleDefinition, RoleId } from './types'
 export const roles: Readonly<Record<RoleId, RoleDefinition>> = {
   owner: {
     id: 'owner',
-    label: '老板',
-    title: '企业所有者',
+    label: 'CEO',
+    title: '首席执行官',
     description: '查看企业概况并使用全部已开放的工作功能',
     initials: '和',
   },

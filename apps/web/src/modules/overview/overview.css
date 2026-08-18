@@ -14,13 +14,13 @@
   padding: clamp(28px, 4vw, 48px);
   color: white;
   background:
-    radial-gradient(circle at 82% 25%, rgba(90, 150, 245, 0.32), transparent 25%),
-    linear-gradient(125deg, #0d2851, #154b9a);
+    radial-gradient(circle at 82% 25%, rgba(79, 163, 142, 0.30), transparent 26%),
+    linear-gradient(125deg, #163f3a, #1d5249);
   box-shadow: var(--shadow-md);
 }
 
 .overview__hero .eyebrow {
-  color: #a9c9ff;
+  color: #8fd3c0;
 }
 
 .overview__hero h1 {
@@ -32,7 +32,7 @@
 .overview__hero p {
   max-width: 640px;
   margin-top: 10px;
-  color: #c1d1e9;
+  color: #c9ded8;
   font-size: 14px;
   line-height: 1.7;
 }
@@ -41,7 +41,7 @@
   flex: 0 0 auto;
   border-color: rgba(255, 255, 255, 0.5);
   background: white;
-  color: var(--blue-700);
+  color: var(--jade-900);
   box-shadow: none;
 }
 
@@ -80,7 +80,7 @@
 
 .fact-card p {
   color: var(--ink-500);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .fact-card strong {
@@ -89,7 +89,7 @@
 
 .fact-card small {
   color: var(--ink-400);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .focus-card {
@@ -97,10 +97,10 @@
   grid-template-columns: 60px minmax(0, 1fr) auto;
   align-items: center;
   gap: 22px;
-  border: 1px solid #d5e2f4;
+  border: 1px solid var(--line);
   border-radius: var(--radius-md);
   padding: 27px;
-  background: linear-gradient(120deg, white, #f6f9ff);
+  background: linear-gradient(120deg, white, #f5f8f7);
   box-shadow: var(--shadow-sm);
 }
 
@@ -111,8 +111,8 @@
   place-items: center;
   border-radius: 17px;
   color: white;
-  background: linear-gradient(145deg, #3f80eb, #1756ba);
-  box-shadow: 0 12px 25px rgba(29, 86, 179, 0.22);
+  background: linear-gradient(145deg, #4fa38e, #2f8c78);
+  box-shadow: 0 8px 22px rgba(47, 140, 120, 0.2);
 }
 
 .status-label {
@@ -120,7 +120,7 @@
   align-items: center;
   gap: 7px;
   color: var(--green-600);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
 }
 
@@ -128,7 +128,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #28af7d;
+  background: var(--success-600);
 }
 
 .focus-card__content h2 {
@@ -154,7 +154,7 @@
   align-items: center;
   gap: 5px;
   color: var(--ink-700);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .focus-card__content > div svg {
@@ -165,10 +165,10 @@
   display: flex;
   align-items: flex-start;
   gap: 13px;
-  border: 1px solid #d9e4f3;
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 17px 19px;
-  color: var(--blue-700);
+  color: var(--jade-900);
   background: var(--blue-50);
 }
 
@@ -183,7 +183,7 @@
 .scope-note p {
   margin-top: 5px;
   color: var(--ink-500);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
 }
 

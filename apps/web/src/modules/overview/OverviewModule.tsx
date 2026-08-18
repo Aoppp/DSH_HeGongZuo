@@ -27,7 +27,7 @@ export function OverviewModule({ user, onNavigate }: ModuleProps) {
       <section className="overview__hero">
         <div>
           <span className="eyebrow">{role === 'owner' ? '企业内部工作台' : '开发验证工作台'}</span>
-          <h1>你好，{currentRole.label}</h1>
+          <h1>{role === 'owner' ? '你好，陶总' : `你好，${user.displayName}`}</h1>
           <p>{role === 'owner' ? '通过管理驾驶舱查看公司整体运行情况，或查询员工与组织信息。' : '在这里验证平台模块与员工查询服务。'}</p>
         </div>
         <button type="button" className="primary-action" onClick={() => onNavigate(primaryModule)}>

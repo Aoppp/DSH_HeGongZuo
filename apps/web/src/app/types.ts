@@ -6,6 +6,7 @@ export type RoleId = 'owner' | 'developer'
 export type ModuleId = 'management-cockpit' | 'overview' | 'employee-data' | 'employee-agent' | 'developer-console'
 
 export interface AuthenticatedUser {
+  readonly id: string
   readonly accountId: string
   readonly displayName: string
   readonly role: RoleId

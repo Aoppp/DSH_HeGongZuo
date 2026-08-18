@@ -14,8 +14,8 @@
     "db:seed": "corepack pnpm --filter @hegongzuo/api db:seed",
     "db:setup": "corepack pnpm --filter @hegongzuo/api db:setup",
     "dsh": "dsh",
-    "dsh:accounts": "node scripts/run-account-agent-runtimes.mjs",
-    "dsh:accounts:setup": "corepack pnpm build && node scripts/setup-account-agent-runtimes.mjs",
+    "dsh:accounts": "pnpm dsh:accounts:sync && node scripts/run-account-agent-runtimes.mjs",
+    "dsh:accounts:setup": "corepack pnpm build && pnpm dsh:accounts:sync && node scripts/setup-account-agent-runtimes.mjs",
     "dsh:employee:install": "corepack pnpm build && dsh plugin --profile web add --save-exact ./packages/employee-agent",
     "dsh:web": "dsh web",
     "dsh:dump-config": "dsh --profile web --dump-config",
@@ -26,7 +26,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && corepack pnpm --filter './packages/*' --filter './apps/*' --if-present run typecheck",
     "validate:data": "node scripts/validate-employee-fixtures.mjs",
     "verify:agent-isolation": "node scripts/verify-account-agent-isolation.mjs",
-    "verify:env": "node scripts/verify-environment.mjs"
+    "verify:env": "node scripts/verify-environment.mjs",
+    "dsh:accounts:sync": "node scripts/sync-account-agent-runtimes.mjs"
   },
   "devDependencies": {
     "@deepseek-ai/dsh": "0.1.0-rc.6",

@@ -1,4 +1,4 @@
-import runtimeDefinitions from '../../../../config/account-agent-runtimes.json' with { type: 'json' }
+import runtimeDefinitions from '../../../../.runtime/account-agent-runtimes.json' with { type: 'json' }
 
 export interface AccountAgentRuntimeDefinition {
   readonly accountId: string

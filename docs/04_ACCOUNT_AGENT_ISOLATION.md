@@ -47,7 +47,7 @@ corepack pnpm verify:agent-isolation
 
 ## 4. 防止回归的代码约束
 
-- `config/account-agent-runtimes.json` 是账号、端口、平台代理路径和工作区的唯一定义。
+- `.runtime/account-agent-runtimes.json` 由 `dsh:accounts:sync` 从平台账号表自动生成，是账号、端口、平台代理路径和工作区的唯一定义。
 - `getAccountAgentRuntime()` 对未配置账号返回 `undefined`，不存在共享 fallback。
 - 员工 Agent 插件启动时通过 DSH Workspace Registry 注册后台分配的目录，用户不再选择本地路径。
 - 原生 Agent 客户端只使用账号配置对应的平台代理路径，账号登出时组件和连接完全卸载。
@@ -56,7 +56,7 @@ corepack pnpm verify:agent-isolation
 ## 5. 新增账号
 
 1. 在正式账号服务中创建账号；当前本地阶段修改 `apps/web/src/app/accounts.ts`。
-2. 在 `config/account-agent-runtimes.json` 为账号分配唯一端口和环境变量。
+2. 在开发控制台的账号管理中新增账号（启用状态），运行 `dsh:accounts:sync` 自动分配唯一端口、代理路径与工作区。
 3. 为账号分配 `.runtime/workspaces/<account>/employee-agent` 下的唯一工作区。
 4. 执行 `corepack pnpm dsh:accounts:setup` 初始化专属 DSH_HOME 和工作区。
 5. 执行 `corepack pnpm verify:agent-isolation` 确认隔离。

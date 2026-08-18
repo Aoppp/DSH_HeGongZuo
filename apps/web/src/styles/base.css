@@ -41,7 +41,7 @@ p {
 button:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid rgba(36, 104, 216, 0.24);
+  outline: 3px solid rgba(47, 140, 120, 0.22);
   outline-offset: 2px;
 }
 
@@ -79,19 +79,19 @@ textarea:focus-visible {
   border: 1px solid var(--blue-600);
   color: white;
   background: var(--blue-600);
-  box-shadow: 0 8px 20px rgba(36, 104, 216, 0.2);
+  box-shadow: 0 4px 16px rgba(47, 140, 120, 0.18);
 }
 
 .secondary-action {
-  border: 1px solid #cbd9ed;
-  color: var(--blue-700);
+  border: 1px solid var(--line);
+  color: var(--jade-900);
   background: white;
 }
 
 .primary-action:hover,
 .secondary-action:hover {
   transform: translateY(-1px);
-  box-shadow: 0 10px 24px rgba(18, 48, 94, 0.14);
+  box-shadow: 0 6px 20px rgba(31, 78, 68, 0.1);
 }
 
 .panel-card {

@@ -12,7 +12,7 @@ export const accountWorkspaceRoot = path.join(projectRoot, '.runtime', 'workspac
 
 /** @typedef {{ accountId: string, port: number, apiBasePath: string, workspaceDirectory: string }} AccountAgentRuntimeDefinition */
 /** @type {AccountAgentRuntimeDefinition[]} */
-const accountAgentRuntimeDefinitions = JSON.parse(await readFile(path.join(projectRoot, 'config', 'account-agent-runtimes.json'), 'utf8'))
+const accountAgentRuntimeDefinitions = JSON.parse(await readFile(path.join(projectRoot, '.runtime', 'account-agent-runtimes.json'), 'utf8'))
 
 export const accountAgentRuntimes = accountAgentRuntimeDefinitions.map((definition) => {
   const workspacePath = path.resolve(projectRoot, definition.workspaceDirectory)

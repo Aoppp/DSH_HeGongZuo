@@ -37,12 +37,12 @@ corepack pnpm platform:dev
 
 | 账号 | 密码 | 系统身份 | 默认入口 |
 | --- | --- | --- | --- |
-| `boss` | `demo123` | 老板 | 管理驾驶舱 |
-| `developer` | `demo123` | 开发者 | 概览 |
+| `taochunlin` | `wangshuhe123` | 陶春霖（CEO） | 管理驾驶舱 |
+| `liuao` | `wangshuhe123` | 刘奥（开发者） | 概览 |
 
-系统通过账号记录自动判断身份，登录后不能手动切换角色。当前账号是前端本地测试实现；正式上线前必须替换为服务端认证和权限校验。
+账号由服务端认证：密码经 scrypt 哈希存储于 PostgreSQL，登录会话有效期 7 天，退出即失效。账号由平台开发者在开发控制台管理。登录名规则为姓名拼音（如 liuao）；新账号初始密码统一为 wangshuhe123，登录后可在顶栏修改自己的密码。
 
-员工管理 Agent 已使用“和工作”原生对话界面，不再显示或嵌入 DSH Web 页面。平台通过同源 HTTP/WebSocket 代理连接账号专属 DSH 运行时：老板账号使用 `3180`、`.runtime/dsh/boss` 和 `.runtime/workspaces/boss/employee-agent`，开发者账号使用 `3181`、`.runtime/dsh/developer` 和 `.runtime/workspaces/developer/employee-agent`。工作区在运行时启动时自动注册，用户无需选择文件夹。
+员工管理 Agent 已使用“和工作”原生对话界面，不再显示或嵌入 DSH Web 页面。平台通过同源 HTTP/WebSocket 代理连接账号专属 DSH 运行时：每个启用账号自动分配独立端口（3180 起）、`.runtime/dsh/<登录名>` 与 `.runtime/workspaces/<登录名>/employee-agent`。运行时配置由 `dsh:accounts:sync` 从账号表自动生成，新增账号后重启平台即可获得专属会话空间。工作区在运行时启动时自动注册，用户无需选择文件夹。
 
 需要调用模型时，请在本地 `.env` 中填写 `DEEPSEEK_API_KEY`。`.env` 已被 Git 忽略，禁止提交真实密钥。
 

@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-import runtimeDefinitions from '../../config/account-agent-runtimes.json' with { type: 'json' }
+import runtimeDefinitions from '../../.runtime/account-agent-runtimes.json' with { type: 'json' }
 
 const agentProxy = Object.fromEntries(runtimeDefinitions.map((runtime) => {
   const target = `http://127.0.0.1:${runtime.port}`
@@ -17,10 +17,20 @@ const agentProxy = Object.fromEntries(runtimeDefinitions.map((runtime) => {
   }]
 }))
 
+const apiTarget = process.env.HEGONGZUO_API_URL ?? 'http://127.0.0.1:4174'
+
 const platformProxy = {
   ...agentProxy,
+  '/api/auth': {
+    target: apiTarget,
+    changeOrigin: true,
+  },
+  '/api/accounts': {
+    target: apiTarget,
+    changeOrigin: true,
+  },
   '/api/employees': {
-    target: process.env.HEGONGZUO_API_URL ?? 'http://127.0.0.1:4174',
+    target: apiTarget,
     changeOrigin: true,
   },
 }

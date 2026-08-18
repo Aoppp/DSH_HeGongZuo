@@ -1,7 +1,7 @@
-import { ArrowRight, Check, Eye, EyeOff, LockKeyhole, UserRound } from 'lucide-react'
+import { ArrowRight, Check, Eye, EyeOff, LoaderCircle, LockKeyhole, UserRound } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
-import { authenticateAccount, developmentAccountHints } from '../app/accounts'
+import { apiLogin } from '../app/auth-client'
 import type { AuthenticatedUser } from '../app/types'
 import { BrandMark } from './BrandMark'
 
@@ -13,17 +13,21 @@ export function AccountLogin({ onAuthenticated }: AccountLoginProps) {
   const [accountId, setAccountId] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const result = authenticateAccount(accountId, password)
-    if (!result.ok || !result.user) {
-      setError(result.error ?? '无法登录。')
-      return
+    if (!accountId.trim() || !password) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      onAuthenticated(await apiLogin(accountId.trim(), password))
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : '无法登录。')
+    } finally {
+      setSubmitting(false)
     }
-    setError('')
-    onAuthenticated(result.user)
   }
 
   return (
@@ -31,7 +35,7 @@ export function AccountLogin({ onAuthenticated }: AccountLoginProps) {
       <section className="access-gate__intro">
         <BrandMark />
         <div className="access-gate__copy">
-          <span className="eyebrow">王叔和内部办公平台</span>
+          <span className="eyebrow">企业内部办公平台</span>
           <h1>看清公司运行，<br />再做出好决策。</h1>
           <p>和工作将日常办公数据与工作入口集中在同一个平台。系统会根据登录账号自动判断身份和可见内容。</p>
         </div>
@@ -43,37 +47,25 @@ export function AccountLogin({ onAuthenticated }: AccountLoginProps) {
       </section>
 
       <section className="access-card" aria-label="账号登录">
-        <header>
-          <span className="access-card__icon"><LockKeyhole size={22} /></span>
-          <div>
-            <p>内部访问</p>
-            <h2>登录和工作</h2>
-          </div>
-        </header>
-
-        <form className="login-form" onSubmit={submit}>
-          <label>
-            <span>账号</span>
-            <div className="login-input"><UserRound size={17} /><input value={accountId} onChange={(event) => { setAccountId(event.target.value); setError('') }} autoComplete="username" placeholder="请输入账号" /></div>
-          </label>
-          <label>
-            <span>密码</span>
-            <div className="login-input"><LockKeyhole size={17} /><input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => { setPassword(event.target.value); setError('') }} autoComplete="current-password" placeholder="请输入密码" /><button type="button" onClick={() => setShowPassword((value) => !value)} aria-label={showPassword ? '隐藏密码' : '显示密码'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
-          </label>
-          {error && <p className="login-error" role="alert">{error}</p>}
-          <button type="submit" className="primary-action" disabled={!accountId || !password}>登录 <ArrowRight size={18} /></button>
-        </form>
-
-        <div className="development-accounts">
-          <p>本地测试账号</p>
-          {developmentAccountHints.map((account) => (
-            <div key={account.accountId}>
-              <span>{account.role === 'owner' ? '老板' : '开发者'}</span>
-              <code>{account.accountId} / {account.password}</code>
-            </div>
-          ))}
+        <div className="access-card__heading">
+          <h2>登录和工作</h2>
+          <p>使用平台账号登录</p>
         </div>
-        <p className="access-card__notice">当前为本地测试账号。正式上线前将改为服务端认证，不在前端保存密码。</p>
+        <form onSubmit={(event) => { void submit(event) }}>
+          <label className="login-field">
+            <span>账号</span>
+            <div className="login-input"><UserRound size={17} /><input value={accountId} onChange={(event) => { setAccountId(event.target.value); setError(null) }} autoComplete="username" placeholder="请输入账号" /></div>
+          </label>
+          <label className="login-field">
+            <span>密码</span>
+            <div className="login-input"><LockKeyhole size={17} /><input type={showPassword ? 'text' : 'password'} value={password} onChange={(event) => { setPassword(event.target.value); setError(null) }} autoComplete="current-password" placeholder="请输入密码" /><button type="button" className="login-input__toggle" onClick={() => setShowPassword((current) => !current)} title={showPassword ? '隐藏密码' : '显示密码'} aria-label={showPassword ? '隐藏密码' : '显示密码'}>{showPassword ? <EyeOff size={16} /> : <Eye size={16} />}</button></div>
+          </label>
+          {error && <p className="login-error">{error}</p>}
+          <button type="submit" className="primary-action" disabled={submitting || !accountId || !password}>
+            {submitting ? <LoaderCircle className="spin" size={18} /> : <>登录 <ArrowRight size={18} /></>}
+          </button>
+        </form>
+        <p className="access-card__notice">登录状态保持 7 天。账号问题请联系平台开发者。</p>
       </section>
     </main>
   )

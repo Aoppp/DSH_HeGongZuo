@@ -8,7 +8,8 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 try {
   process.loadEnvFile(path.join(projectRoot, '.env'))
 } catch (error) {
-  if (error?.code !== 'ENOENT') throw error
+  const code = (/** @type {NodeJS.ErrnoException} */ (error)).code
+  if (code !== 'ENOENT') throw error
 }
 
 if (!process.env.DATABASE_URL) {

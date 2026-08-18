@@ -7,10 +7,11 @@
     "build": "tsc -p tsconfig.json",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/import-employees.mjs --apply",
-    "db:setup": "pnpm db:migrate && pnpm db:seed",
+    "db:setup": "pnpm db:migrate && pnpm db:seed && pnpm db:seed:accounts",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "db:seed:accounts": "node scripts/seed-accounts.mjs"
   },
   "dependencies": {
     "@hegongzuo/employee-domain": "workspace:*",

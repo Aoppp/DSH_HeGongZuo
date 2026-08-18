@@ -5,37 +5,17 @@
 }
 
 .brand__mark {
-  position: relative;
-  display: grid;
+  display: block;
   width: 40px;
   height: 40px;
   flex: 0 0 40px;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 12px;
-  color: white;
-  background: linear-gradient(145deg, #397ce8 0%, #164fba 58%, #0c347c 100%);
-  box-shadow: 0 8px 18px rgba(26, 87, 186, 0.28);
+  object-fit: contain;
 }
 
-.brand__mark > span {
-  position: absolute;
-  width: 25px;
-  height: 7px;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  border-radius: 6px;
-  transform: rotate(-31deg);
-}
-
-.brand__mark > span:nth-child(2) {
-  transform: rotate(31deg);
-}
-
-.brand__mark svg {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  fill: #d9e8ff;
+.brand--compact .brand__mark {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
 }
 
 .brand__wording {
@@ -65,11 +45,11 @@
   align-items: center;
   gap: clamp(50px, 8vw, 130px);
   padding: clamp(42px, 7vw, 100px);
-  color: white;
+  color: var(--ink-900);
   background:
-    radial-gradient(circle at 18% 78%, rgba(50, 119, 231, 0.26), transparent 32%),
-    radial-gradient(circle at 82% 15%, rgba(67, 125, 220, 0.15), transparent 28%),
-    linear-gradient(135deg, #07172f 0%, #0c2143 54%, #102b57 100%);
+    radial-gradient(circle at 18% 78%, rgba(79, 163, 142, 0.10), transparent 34%),
+    radial-gradient(circle at 82% 15%, rgba(47, 140, 120, 0.08), transparent 30%),
+    var(--canvas);
 }
 
 .access-gate__intro {
@@ -81,7 +61,7 @@
 }
 
 .access-gate__copy .eyebrow {
-  color: #92baff;
+  color: var(--jade-700);
 }
 
 .access-gate__copy h1 {
@@ -94,7 +74,7 @@
 .access-gate__copy p {
   max-width: 570px;
   margin-top: 24px;
-  color: #b7c5dc;
+  color: var(--ink-500);
   font-size: 17px;
   line-height: 1.8;
 }
@@ -104,7 +84,7 @@
   flex-wrap: wrap;
   gap: 12px 24px;
   margin-top: 42px;
-  color: #d6e2f5;
+  color: var(--ink-700);
   font-size: 13px;
 }
 
@@ -115,7 +95,7 @@
 }
 
 .access-gate__points svg {
-  color: #72dfa9;
+  color: var(--jade-700);
 }
 
 .access-card {
@@ -126,7 +106,7 @@
   padding: clamp(28px, 4vw, 42px);
   color: var(--ink-900);
   background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 34px 90px rgba(0, 10, 31, 0.34);
+  box-shadow: 0 10px 40px rgba(31, 78, 68, 0.10);
 }
 
 .access-card header {
@@ -145,30 +125,30 @@
   background: var(--blue-100);
 }
 
-.access-card header p {
+.access-card__heading p {
   color: var(--ink-500);
   font-size: 12px;
 }
 
-.access-card header h2 {
+.access-card__heading h2 {
   margin-top: 3px;
   font-size: 22px;
 }
 
-.login-form {
+.access-card form {
   display: grid;
   gap: 17px;
   margin: 28px 0 20px;
 }
 
-.login-form label {
+.login-field {
   display: grid;
   gap: 7px;
 }
 
-.login-form label > span {
+.login-field > span {
   color: var(--ink-700);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -177,7 +157,7 @@
   min-height: 46px;
   align-items: center;
   gap: 10px;
-  border: 1px solid #d6deea;
+  border: 1px solid var(--line);
   border-radius: 11px;
   padding: 0 13px;
   color: var(--ink-400);
@@ -186,8 +166,8 @@
 }
 
 .login-input:focus-within {
-  border-color: #7fa8e9;
-  box-shadow: 0 0 0 3px rgba(36, 104, 216, 0.1);
+  border-color: var(--jade-700);
+  box-shadow: 0 0 0 3px rgba(47, 140, 120, 0.12);
 }
 
 .login-input input {
@@ -200,10 +180,10 @@
 }
 
 .login-input input::placeholder {
-  color: #a1aaba;
+  color: var(--ink-400);
 }
 
-.login-input button {
+.login-input__toggle {
   display: grid;
   width: 28px;
   height: 28px;
@@ -211,14 +191,19 @@
   border: 0;
   color: var(--ink-400);
   background: transparent;
+  cursor: pointer;
 }
 
-.login-form .primary-action {
+.login-input__toggle:hover {
+  color: var(--jade-700);
+}
+
+.access-card form .primary-action {
   width: 100%;
   margin-top: 2px;
 }
 
-.login-form .primary-action:disabled {
+.access-card form .primary-action:disabled {
   cursor: not-allowed;
   opacity: 0.5;
   transform: none;
@@ -226,8 +211,8 @@
 
 .login-error {
   margin: -5px 0;
-  color: #c43c4d;
-  font-size: 11px;
+  color: var(--danger-600);
+  font-size: 12px;
 }
 
 .development-accounts {
@@ -240,7 +225,7 @@
 .development-accounts > p {
   margin-bottom: 2px;
   color: var(--ink-500);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -252,23 +237,23 @@
   border-radius: 8px;
   padding: 8px 10px;
   color: var(--ink-500);
-  background: #fafbfd;
+  background: var(--canvas);
 }
 
 .development-accounts span {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
 }
 
 .development-accounts code {
   color: var(--blue-700);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .access-card__notice {
   margin-top: 17px;
   color: var(--ink-400);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.6;
   text-align: center;
 }
@@ -290,8 +275,9 @@
   display: flex;
   height: 100vh;
   flex-direction: column;
-  color: #dfe9f8;
-  background: linear-gradient(180deg, var(--navy-950), var(--navy-900));
+  color: var(--ink-700);
+  background: var(--surface);
+  border-right: 1px solid var(--line);
 }
 
 .sidebar__brand {
@@ -299,7 +285,7 @@
   height: var(--topbar-height);
   align-items: center;
   padding: 0 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--line);
 }
 
 .platform-shell--collapsed .sidebar__brand {
@@ -317,8 +303,8 @@
 .sidebar__navigation > p {
   min-height: 17px;
   margin: 0 10px 8px;
-  color: #71829e;
-  font-size: 10px;
+  color: var(--ink-400);
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
 }
@@ -331,20 +317,19 @@
   border: 0;
   border-radius: 10px;
   padding: 0 13px;
-  color: #aebdd2;
+  color: var(--ink-500);
   text-align: left;
   background: transparent;
 }
 
 .sidebar__navigation button:hover {
-  color: white;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink-900);
+  background: var(--canvas);
 }
 
 .sidebar__navigation button.is-active {
-  color: white;
-  background: linear-gradient(90deg, #225dbb, #2a6bd1);
-  box-shadow: 0 8px 24px rgba(5, 19, 45, 0.24);
+  color: var(--jade-900);
+  background: var(--jade-100);
 }
 
 .sidebar__navigation button span {
@@ -356,9 +341,9 @@
 .sidebar__navigation button small {
   border-radius: 5px;
   padding: 3px 5px;
-  font-size: 8px;
+  font-size: 12px;
   font-weight: 800;
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--jade-100);
 }
 
 .platform-shell--collapsed .sidebar__navigation button {
@@ -369,19 +354,19 @@
 .sidebar__scope {
   min-height: 72px;
   margin: auto 14px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
   padding: 12px;
-  color: #91a2bd;
-  background: rgba(255, 255, 255, 0.035);
+  color: var(--ink-500);
+  background: var(--canvas);
 }
 
 .sidebar__scope span {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #cbd8ea;
-  font-size: 10px;
+  color: var(--ink-700);
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -389,13 +374,13 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #45d09a;
-  box-shadow: 0 0 0 4px rgba(69, 208, 154, 0.1);
+  background: var(--success-600);
+  box-shadow: 0 0 0 4px rgba(22, 131, 93, 0.1);
 }
 
 .sidebar__scope p {
   margin-top: 7px;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .platform-shell--collapsed .sidebar__scope {
@@ -412,7 +397,7 @@
   width: 27px;
   height: 27px;
   place-items: center;
-  border: 1px solid #d6deea;
+  border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--ink-500);
   background: white;
@@ -451,7 +436,7 @@
 .topbar__title small {
   overflow: hidden;
   color: var(--ink-500);
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -466,11 +451,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid #d5e3f8;
+  border: 1px solid var(--line);
   border-radius: 99px;
   padding: 6px 10px;
   color: var(--blue-700);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   background: var(--blue-50);
 }
@@ -493,7 +478,7 @@
   color: white;
   font-size: 13px;
   font-weight: 800;
-  background: linear-gradient(145deg, #1a59bd, #103d86);
+  background: linear-gradient(145deg, #2f8c78, #163f3a);
 }
 
 .account-identity > span:nth-child(2) {
@@ -509,7 +494,7 @@
 
 .account-identity small {
   color: var(--ink-500);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .icon-button {
@@ -605,4 +590,13 @@
   .platform-content {
     padding: 16px;
   }
+}
+
+.platform-boot {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  color: var(--ink-400);
+  background: var(--canvas);
+  font-size: 12px;
 }

@@ -3,6 +3,7 @@ import { Blocks, CheckCircle2, Code2, Database, Layers3, Server } from 'lucide-r
 import { platformModules } from '../../app/module-registry'
 import type { ModuleProps } from '../../app/types'
 import { getAccountAgentRuntime } from '../../config/runtime'
+import { AccountManagement } from './AccountManagement'
 import './developer-console.css'
 
 export function DeveloperConsoleModule({ user }: ModuleProps) {
@@ -20,6 +21,8 @@ export function DeveloperConsoleModule({ user }: ModuleProps) {
         <article><span><Database size={20} /></span><div><small>员工数据</small><strong>10 条 Mock 记录</strong><p>synthetic-non-personal</p></div></article>
         <article><span><Blocks size={20} /></span><div><small>平台模块</small><strong>{platformModules.length} 个已注册</strong><p>注册表统一管理</p></div></article>
       </section>
+
+      <AccountManagement user={user} />
 
       <section className="module-inventory panel-card">
         <header><div><span><Layers3 size={19} /></span><div><h2>模块清单</h2><p>导航、访问范围和组件均来自同一注册表</p></div></div></header>

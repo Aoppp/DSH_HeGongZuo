@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
+import { apiLogout, apiMe } from './auth-client'
 import { AccountLogin } from '../components/AccountLogin'
 import { Sidebar } from '../components/Sidebar'
 import { Topbar } from '../components/Topbar'
@@ -8,10 +9,25 @@ import type { AuthenticatedUser, ModuleId } from './types'
 
 export default function App() {
   const [user, setUser] = useState<AuthenticatedUser | null>(null)
+  const [restoring, setRestoring] = useState(true)
   const [activeModuleId, setActiveModuleId] = useState<ModuleId>('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
+  useEffect(() => {
+    void apiMe().then((restoredUser) => {
+      if (restoredUser) {
+        setUser(restoredUser)
+        setActiveModuleId(restoredUser.role === 'owner' ? 'management-cockpit' : 'overview')
+      }
+      setRestoring(false)
+    })
+  }, [])
+
   const visibleModules = useMemo(() => user ? getVisibleModules(user.role) : [], [user])
+
+  if (restoring) {
+    return <div className="platform-boot">正在加载平台…</div>
+  }
 
   if (!user) {
     return <AccountLogin onAuthenticated={(authenticatedUser) => {
@@ -27,6 +43,7 @@ export default function App() {
     setUser(null)
     setActiveModuleId('overview')
     setSidebarCollapsed(false)
+    void apiLogout()
   }
 
   return (

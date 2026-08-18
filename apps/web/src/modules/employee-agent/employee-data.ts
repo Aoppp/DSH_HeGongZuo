@@ -117,16 +117,31 @@ interface ErrorResponse {
   readonly error?: string
 }
 
-export class EmployeeApiError extends Error {}
+export class EmployeeApiError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = localStorage.getItem('hegongzuo.session.token')
   const response = await fetch(path, {
     ...init,
     headers: {
       ...(init?.body ? { 'content-type': 'application/json' } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   })
+  if (response.status === 401) {
+    // 会话过期：清除本地登录态并回到登录页
+    localStorage.removeItem('hegongzuo.session.token')
+    window.location.reload()
+    throw new EmployeeApiError(401, '登录已过期，请重新登录。')
+  }
   if (!response.ok) {
     let message = `员工 API 请求失败（HTTP ${response.status}）。`
     try {
@@ -135,7 +150,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       // 非 JSON 错误响应使用 HTTP 状态信息。
     }
-    throw new EmployeeApiError(message)
+    throw new EmployeeApiError(response.status, message)
   }
   if (response.status === 204) return undefined as T
   return response.json() as Promise<T>

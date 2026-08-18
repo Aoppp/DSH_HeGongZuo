@@ -57,7 +57,7 @@
 .developer-status-grid p {
   overflow: hidden;
   color: var(--ink-500);
-  font-size: 9px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -95,7 +95,7 @@
 .module-inventory header p {
   margin-top: 4px;
   color: var(--ink-500);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .module-inventory > div {
@@ -107,7 +107,7 @@
   grid-template-columns: 36px minmax(180px, 1fr) minmax(160px, 0.7fr) 20px;
   align-items: center;
   gap: 12px;
-  border-bottom: 1px solid #edf1f6;
+  border-bottom: 1px solid var(--line);
   padding: 14px 0;
 }
 
@@ -138,7 +138,7 @@
 .module-inventory article small,
 .module-inventory article p {
   color: var(--ink-500);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .module-inventory article > svg {
@@ -171,14 +171,14 @@
   place-items: center;
   border-radius: 8px;
   color: var(--blue-700);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   background: var(--blue-100);
 }
 
 .architecture-note li p {
   color: var(--ink-700);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .architecture-note code {
@@ -202,4 +202,183 @@
   .module-inventory article > p {
     display: none;
   }
+}
+
+/* —— 账号管理 —— */
+.account-admin > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.account-admin > header > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.account-admin > header > div > span {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: none;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--jade-700);
+  background: var(--jade-100);
+}
+
+.account-admin > header h2 {
+  font-size: 16px;
+}
+
+.account-admin > header p {
+  margin-top: 3px;
+  color: var(--ink-400);
+  font-size: 11px;
+}
+
+.account-admin__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #edcfca;
+  border-radius: var(--radius-sm);
+  margin-bottom: 14px;
+  padding: 9px 12px;
+  color: var(--danger-600);
+  font-size: 12px;
+  background: #fbecec;
+}
+
+.account-admin__error button {
+  border: 0;
+  color: var(--danger-600);
+  font-size: 12px;
+  text-decoration: underline;
+  background: transparent;
+  cursor: pointer;
+}
+
+.account-admin__table-wrap {
+  overflow-x: auto;
+}
+
+.account-admin__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.account-admin__table th {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 12px;
+  color: var(--ink-500);
+  font-size: 11px;
+  font-weight: 500;
+  text-align: left;
+  background: var(--canvas);
+}
+
+.account-admin__table td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 12px;
+  color: var(--ink-900);
+  vertical-align: middle;
+}
+
+.account-admin__table tbody tr:hover {
+  background: #f7faf9;
+}
+
+.account-admin__table td small {
+  margin-left: 7px;
+  color: var(--ink-400);
+  font-size: 10px;
+}
+
+.account-admin__table code {
+  border-radius: 5px;
+  padding: 2px 6px;
+  color: var(--jade-900);
+  background: var(--jade-100);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.account-role,
+.account-status {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 3px 9px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.account-role--owner {
+  color: var(--jade-900);
+  background: var(--jade-100);
+}
+
+.account-role--developer {
+  color: var(--ink-700);
+  background: #eef1f0;
+}
+
+.account-status--active {
+  color: var(--success-600);
+  background: var(--success-100);
+}
+
+.account-status--disabled {
+  color: var(--ink-400);
+  background: #eef1f0;
+}
+
+.account-admin__row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-admin__row-actions button {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0 9px;
+  color: var(--ink-500);
+  font-size: 11px;
+  background: white;
+  cursor: pointer;
+}
+
+.account-admin__row-actions button:hover:not(:disabled) {
+  border-color: var(--jade-700);
+  color: var(--jade-700);
+  background: var(--jade-100);
+}
+
+.account-admin__row-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.account-admin__hint {
+  margin: 10px 0 0;
+  color: var(--ink-400);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.account-admin__empty {
+  padding: 22px 0;
+  color: var(--ink-400);
+  font-size: 12px;
+  text-align: center;
 }
