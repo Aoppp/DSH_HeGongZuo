@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hegongzuo.example/schemas/employee-dataset.schema.json",
+  "title": "和工作员工数据集",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "metadata",
+    "employees"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "source",
+        "classification",
+        "generatedAt",
+        "recordCount",
+        "notice"
+      ],
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "source": {
+          "const": "synthetic"
+        },
+        "classification": {
+          "const": "synthetic-non-personal"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "recordCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "notice": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "employees": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/employee"
+      }
+    }
+  },
+  "$defs": {
+    "employee": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "displayName",
+        "workEmail",
+        "workPhone",
+        "departmentName",
+        "jobTitle",
+        "employmentType",
+        "status",
+        "hireDate",
+        "workLocation",
+        "responsibilities",
+        "resumeFileName",
+        "resumeMimeType",
+        "resumeSize"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^EMP-[0-9]{4}$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workEmail": {
+          "oneOf": [
+            {
+              "type": "string",
+              "format": "email"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "workPhone": {
+          "type": "string",
+          "minLength": 1
+        },
+        "departmentName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "jobTitle": {
+          "type": "string",
+          "minLength": 1
+        },
+        "employmentType": {
+          "enum": [
+            "full_time",
+            "part_time",
+            "contractor",
+            "intern"
+          ]
+        },
+        "status": {
+          "enum": [
+            "probation",
+            "active",
+            "on_leave",
+            "inactive"
+          ]
+        },
+        "hireDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "workLocation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "responsibilities": {
+          "type": "string"
+        },
+        "resumeFileName": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resumeMimeType": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resumeSize": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+# “和工作”员工管理 Agent：在 DSH profile 中加入只读员工工具。
+- insert:
+    - id: hegongzuo-employee-agent
+      name: '@hegongzuo/employee-agent'

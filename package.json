@@ -1,0 +1,36 @@
+{
+  "name": "@hegongzuo/workspace",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && corepack pnpm --filter './packages/*' --filter './apps/*' --if-present run build",
+    "api:dev": "corepack pnpm --filter @hegongzuo/api dev",
+    "db:migrate": "corepack pnpm --filter @hegongzuo/api db:migrate",
+    "db:seed": "corepack pnpm --filter @hegongzuo/api db:seed",
+    "db:setup": "corepack pnpm --filter @hegongzuo/api db:setup",
+    "dsh": "dsh",
+    "dsh:accounts": "node scripts/run-account-agent-runtimes.mjs",
+    "dsh:accounts:setup": "corepack pnpm build && node scripts/setup-account-agent-runtimes.mjs",
+    "dsh:employee:install": "corepack pnpm build && dsh plugin --profile web add --save-exact ./packages/employee-agent",
+    "dsh:web": "dsh web",
+    "dsh:dump-config": "dsh --profile web --dump-config",
+    "platform:dev": "node scripts/run-platform-development.mjs",
+    "platform:web": "corepack pnpm --filter @hegongzuo/web dev",
+    "platform:preview": "corepack pnpm --filter @hegongzuo/web preview",
+    "test": "corepack pnpm build && corepack pnpm --filter './packages/*' --filter './apps/*' --if-present run test",
+    "typecheck": "tsc -p tsconfig.json --noEmit && corepack pnpm --filter './packages/*' --filter './apps/*' --if-present run typecheck",
+    "validate:data": "node scripts/validate-employee-fixtures.mjs",
+    "verify:agent-isolation": "node scripts/verify-account-agent-isolation.mjs",
+    "verify:env": "node scripts/verify-environment.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh": "0.1.0-rc.6",
+    "@types/node": "22.20.1",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@hegongzuo/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:seed": "node scripts/import-employees.mjs --apply",
+    "db:setup": "pnpm db:migrate && pnpm db:seed",
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@hegongzuo/employee-domain": "workspace:*",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.21.0",
+    "exceljs": "^4.4.0",
+    "tsx": "^4.23.12"
+  }
+}
