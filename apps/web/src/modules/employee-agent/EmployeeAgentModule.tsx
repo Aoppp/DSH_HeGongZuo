@@ -19,7 +19,8 @@ import { useEmployeeAgent } from './use-employee-agent'
 import './employee-agent.css'
 
 const agentCapabilities = [
-  { title: '员工查询', description: '按姓名、部门、岗位、学历等条件查询员工档案' },
+  { title: '在职员工查询', description: '按姓名、部门、岗位、学历等条件查询员工档案' },
+  { title: '离职员工查询', description: '查询离职日期、离职原因与原任职信息' },
   { title: '组织关系', description: '查看部门成员与汇报关系' },
   { title: '统计分布', description: '各部门人数、学历、性别、司龄等分布统计' },
   { title: '合同与转正预警', description: '查询合同到期名单与转正提醒' },
@@ -66,7 +67,6 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
     <div className="employee-agent module-page">
       <section className="agent-heading">
         <div>
-          <span className="eyebrow"><Users size={15} /> 员工信息</span>
           <h1>员工查询</h1>
           <p>查询员工、部门和组织关系。</p>
         </div>

@@ -48,6 +48,8 @@ export interface EmployeeRecord {
   readonly expectedRegularDate?: string | null
   readonly actualRegularDate?: string | null
   readonly contractEndDate?: string | null
+  readonly departureDate?: string | null
+  readonly departureReason?: string | null
 }
 
 // —— 敏感字段脱敏与派生计算（纯函数，可单测）——
@@ -90,13 +92,14 @@ export function employeeAge(birthDate: string | null | undefined): number | null
   return age
 }
 
-export function tenureMonths(hireDate: string | null | undefined): number | null {
+export function tenureMonths(hireDate: string | null | undefined, endDate?: string | null): number | null {
   if (!hireDate) return null
   const hire = new Date(`${hireDate}T00:00:00`)
   if (Number.isNaN(hire.getTime())) return null
-  const today = new Date()
-  const months = (today.getFullYear() - hire.getFullYear()) * 12 + (today.getMonth() - hire.getMonth())
-  return today.getDate() < hire.getDate() ? months - 1 : months
+  const end = endDate ? new Date(`${endDate}T00:00:00`) : new Date()
+  if (Number.isNaN(end.getTime())) return null
+  const months = (end.getFullYear() - hire.getFullYear()) * 12 + (end.getMonth() - hire.getMonth())
+  return end.getDate() < hire.getDate() ? months - 1 : months
 }
 
 export interface ResumeUploadPayload {
@@ -174,8 +177,11 @@ export async function updateEmployeeRecord(employee: EmployeeRecord, resume?: Re
   })).employee
 }
 
-export async function deleteEmployeeRecord(id: string): Promise<void> {
-  await apiRequest<void>(`/api/employees/${encodeURIComponent(id)}`, { method: 'DELETE' })
+export async function departEmployeeRecord(id: string, departureDate: string, departureReason: string): Promise<EmployeeRecord> {
+  return (await apiRequest<EmployeeResponse>(`/api/employees/${encodeURIComponent(id)}/departure`, {
+    method: 'POST',
+    body: JSON.stringify({ departureDate, departureReason }),
+  })).employee
 }
 
 export function employeeResumeUrl(id: string): string {

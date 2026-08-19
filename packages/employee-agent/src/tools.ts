@@ -101,6 +101,14 @@ const employeeViewSchema = {
       oneOf: [{ type: 'string' }, { type: 'null' }],
       required: true,
     },
+    departureDate: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    departureReason: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
     archiveNo: {
       oneOf: [{ type: 'string' }, { type: 'null' }],
       required: true,
@@ -145,6 +153,8 @@ function employeeValue(employee: EmployeeView) {
     expectedRegularDate: employee.expectedRegularDate ?? null,
     actualRegularDate: employee.actualRegularDate ?? null,
     contractEndDate: employee.contractEndDate ?? null,
+    departureDate: employee.departureDate ?? null,
+    departureReason: employee.departureReason ?? null,
     archiveNo: employee.archiveNo ?? null,
     notes: employee.notes ?? null,
   }
@@ -373,6 +383,55 @@ export function createEmployeeTools(
     },
   })
 
+  const departureSearch = defineTool({
+    name: 'departure_search',
+    description:
+      '查询离职员工档案。可按姓名、部门或岗位检索，返回离职日期、离职原因及原任职信息；仅查询状态为 inactive 的员工。',
+    parameters: {
+      query: {
+        type: 'string',
+        description: '匹配离职员工姓名、部门、岗位、所属公司或学历的关键词。',
+      },
+      department: {
+        type: 'string',
+        description: '部门名称关键词。',
+      },
+      job_title: { type: 'string', description: '岗位名称关键词。' },
+      offset: { type: 'integer', description: '从第几条结果开始，默认 0。' },
+      limit: { type: 'integer', description: '最多返回多少条，默认 20，最大 50。' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          total: { type: 'integer', required: true },
+          offset: { type: 'integer', required: true },
+          limit: { type: 'integer', required: true },
+          employees: { type: 'array', items: employeeViewSchema, required: true },
+        },
+      },
+      render: renderJson,
+    },
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      const result = await repository.search({
+        status: 'inactive',
+        ...(args.query === undefined ? {} : { query: args.query }),
+        ...(args.department === undefined ? {} : { department: args.department }),
+        ...(args.job_title === undefined ? {} : { jobTitle: args.job_title }),
+        ...(args.offset === undefined ? {} : { offset: args.offset }),
+        ...(args.limit === undefined ? {} : { limit: args.limit }),
+      })
+      return {
+        total: result.total,
+        offset: result.offset,
+        limit: result.limit,
+        employees: result.employees.map(employeeValue),
+      }
+    },
+  })
+
   const listDepartmentMembers = defineTool({
     name: 'organization_list_members',
     description:
@@ -425,5 +484,5 @@ export function createEmployeeTools(
     },
   })
 
-  return [stats, contractAlerts, search, get, listDepartmentMembers]
+  return [stats, contractAlerts, search, get, departureSearch, listDepartmentMembers]
 }

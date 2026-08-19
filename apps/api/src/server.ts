@@ -49,6 +49,23 @@ function resumeEmployeeId(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
+function departureEmployeeId(pathname: string): string | null {
+  const match = pathname.match(/^\/api\/employees\/([^/]+)\/departure$/)
+  return match?.[1] ? decodeURIComponent(match[1]) : null
+}
+
+function departureInput(value: unknown): { departureDate: string; departureReason: string } {
+  if (!value || typeof value !== 'object') throw new HttpError(400, '请填写离职信息。')
+  const record = value as Record<string, unknown>
+  const departureDate = typeof record.departureDate === 'string' ? record.departureDate.trim() : ''
+  const departureReason = typeof record.departureReason === 'string' ? record.departureReason.trim() : ''
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(departureDate) || Number.isNaN(Date.parse(`${departureDate}T00:00:00Z`))) {
+    throw new HttpError(400, '请填写有效的离职日期。')
+  }
+  if (!departureReason) throw new HttpError(400, '请填写离职原因。')
+  return { departureDate, departureReason }
+}
+
 async function requireAuth(request: IncomingMessage): Promise<AuthUser> {
   const token = bearerToken(request.headers.authorization)
   const user = await auth.userForToken(token)
@@ -140,6 +157,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const created = await accounts.create({
       accountId: typeof record.accountId === 'string' ? record.accountId : '',
       displayName: typeof record.displayName === 'string' ? record.displayName : '',
+      position: typeof record.position === 'string' ? record.position : '',
       role: typeof record.role === 'string' ? record.role : '',
     })
     sendJson(response, 201, { account: created })
@@ -155,10 +173,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const updated = await accounts.update(accountIdPath, {
       accountId: typeof record.accountId === 'string' ? record.accountId : '',
       displayName: typeof record.displayName === 'string' ? record.displayName : '',
+      position: typeof record.position === 'string' ? record.position : '',
       role: typeof record.role === 'string' ? record.role : '',
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
     sendJson(response, 200, { account: updated })
+    return
+  }
+
+  if (accountIdPath && request.method === 'DELETE') {
+    requireDeveloper(currentUser)
+    if (accountIdPath === currentUser.id) throw new HttpError(400, '不能删除当前登录的账号。')
+    if (!await accounts.delete(accountIdPath)) throw new HttpError(404, '账号不存在。')
+    sendJson(response, 200, { ok: true })
     return
   }
 
@@ -209,6 +236,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  const departureId = departureEmployeeId(url.pathname)
+  if (departureId && request.method === 'POST') {
+    const { departureDate, departureReason } = departureInput(await readJson(request))
+    const employee = await repository.depart(departureId, departureDate, departureReason)
+    if (!employee) throw new HttpError(404, '员工不存在。')
+    sendJson(response, 200, { employee })
+    return
+  }
+
   const id = employeeId(url.pathname)
   if (id && request.method === 'GET') {
     const employee = await repository.get(id)
@@ -222,13 +258,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const employee = await repository.update(id, input)
     if (!employee) throw new HttpError(404, '员工不存在。')
     sendJson(response, 200, { employee })
-    return
-  }
-
-  if (id && request.method === 'DELETE') {
-    if (!await repository.delete(id)) throw new HttpError(404, '员工不存在。')
-    response.writeHead(204)
-    response.end()
     return
   }
 

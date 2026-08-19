@@ -35,12 +35,11 @@ export function AccountLogin({ onAuthenticated }: AccountLoginProps) {
       <section className="access-gate__intro">
         <BrandMark />
         <div className="access-gate__copy">
-          <span className="eyebrow">企业内部办公平台</span>
           <h1>看清公司运行，<br />再做出好决策。</h1>
           <p>和工作将日常办公数据与工作入口集中在同一个平台。系统会根据登录账号自动判断身份和可见内容。</p>
         </div>
         <div className="access-gate__points">
-          <span><Check size={16} /> 账号自动匹配角色</span>
+          <span><Check size={16} /> 账号自动匹配职位</span>
           <span><Check size={16} /> 模块按权限自动显示</span>
           <span><Check size={16} /> 员工查询直接集成在平台内</span>
         </div>

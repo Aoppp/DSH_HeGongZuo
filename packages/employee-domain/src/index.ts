@@ -67,6 +67,8 @@ export interface EmployeeRecord {
   readonly expectedRegularDate?: string | null
   readonly actualRegularDate?: string | null
   readonly contractEndDate?: string | null
+  readonly departureDate?: string | null
+  readonly departureReason?: string | null
 }
 
 export interface EmployeeDatasetMetadata {

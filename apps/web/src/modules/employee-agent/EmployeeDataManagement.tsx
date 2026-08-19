@@ -12,15 +12,14 @@ import {
   Settings2,
   Trash2,
   Upload,
-  Users,
   X,
 } from 'lucide-react'
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import {
   contractDaysLeft,
   createEmployeeRecord,
-  deleteEmployeeRecord,
+  departEmployeeRecord,
   employeeAge,
   employeeResumeUrl,
   employeeStatuses,
@@ -53,7 +52,9 @@ const employmentTypeLabels: Record<EmploymentType, string> = {
 }
 
 type PageMode = 'directory' | 'maintenance'
-type EditorMode = 'view' | 'create' | 'edit'
+type EditorMode = 'view' | 'create' | 'edit' | 'departure'
+type EmployeeScope = 'employed' | 'departed'
+const pageSizeOptions = [10, 20, 50, 100] as const
 
 interface EmployeeDataManagementProps {
   readonly backLabel?: string
@@ -140,7 +141,7 @@ function validateEmployee(draft: EmployeeRecord, employees: readonly EmployeeRec
 }
 
 // 档案字段分组：任职 / 身份 / 联系 / 教育 / 财务
-const archiveSections = [
+const activeArchiveSections = [
   {
     title: '任职信息',
     items: [
@@ -200,6 +201,47 @@ const archiveSections = [
   },
 ] as const
 
+const departureArchiveSections = [
+  {
+    title: '任职与离职信息',
+    items: [
+      { label: '所属公司', field: 'companyName' }, { label: '一级部门', field: 'departmentName' },
+      { label: '二级部门', field: 'departmentLevel2' }, { label: '岗位', field: 'jobTitle' },
+      { label: '用工类型', field: 'employmentType' }, { label: '入职时间', field: 'hireDate' },
+      { label: '离职日期', field: 'departureDate' }, { label: '离职原因', field: 'departureReason' },
+      { label: '档案编号', field: 'archiveNo' },
+    ],
+  },
+  {
+    title: '身份信息',
+    items: [
+      { label: '性别', field: 'gender' }, { label: '出生日期', field: 'birthDate' },
+      { label: '身份证', field: 'idNumber' }, { label: '籍贯', field: 'hometown' },
+      { label: '婚否', field: 'maritalStatus' }, { label: '育否', field: 'hasChildren' },
+      { label: '居住住址', field: 'residentialAddress' }, { label: '身份证地址', field: 'idAddress' },
+    ],
+  },
+  {
+    title: '联系方式',
+    items: [
+      { label: '工作电话', field: 'workPhone' }, { label: '个人邮箱', field: 'personalEmail' },
+      { label: '企业邮箱', field: 'workEmail' }, { label: '紧急联系人', field: 'emergencyContact' },
+      { label: '紧急联系人电话', field: 'emergencyContactPhone' },
+    ],
+  },
+  {
+    title: '教育背景',
+    items: [
+      { label: '学历', field: 'education' }, { label: '专业', field: 'major' },
+      { label: '毕业学校', field: 'school' }, { label: '毕业时间', field: 'graduationDate' },
+    ],
+  },
+  {
+    title: '财务信息',
+    items: [{ label: '银行卡', field: 'bankAccount' }, { label: '开户行', field: 'bankName' }],
+  },
+] as const
+
 const sensitiveMasks: Partial<Record<keyof EmployeeRecord, 'idNumber' | 'bankAccount' | 'address'>> = {
   idNumber: 'idNumber',
   bankAccount: 'bankAccount',
@@ -220,7 +262,7 @@ function archiveFieldValue(employee: EmployeeRecord, field: keyof EmployeeRecord
   }
   if (field === 'hireDate') {
     if (!value) return '—'
-    const months = tenureMonths(employee.hireDate)
+    const months = tenureMonths(employee.hireDate, employee.departureDate)
     if (months === null) return String(value)
     const years = Math.floor(months / 12)
     return years > 0 ? `${value}（${years} 年 ${months % 12} 个月）` : `${value}（${months} 个月）`
@@ -233,6 +275,28 @@ function archiveFieldValue(employee: EmployeeRecord, field: keyof EmployeeRecord
   if (field === 'probationMonths') return value ? `${value} 个月` : '—'
   if (value === null || value === undefined || value === '') return '—'
   return String(value)
+}
+
+function employmentTenure(employee: EmployeeRecord): string {
+  const months = tenureMonths(employee.hireDate, employee.departureDate)
+  if (months === null || months < 0) return '—'
+  const years = Math.floor(months / 12)
+  return years > 0 ? `${years} 年 ${months % 12} 个月` : `${months} 个月`
+}
+
+function departureReasonText(reason: string | null | undefined): string {
+  if (!reason) return '—'
+  if (!/^\d{4,5}(?:\.0+)?$/.test(reason)) return reason
+  const serial = Number(reason)
+  if (serial < 30_000 || serial > 60_000) return reason
+  return new Date(Date.UTC(1899, 11, 30) + serial * 86_400_000).toISOString().slice(0, 10)
+}
+
+function todayDate(): string {
+  const date = new Date()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
 }
 
 const optionalTextProfileFields = [
@@ -269,13 +333,39 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
   const [exporting, setExporting] = useState(false)
   const [sortField, setSortField] = useState<SortField>('hireDate')
   const [sortAscending, setSortAscending] = useState(true)
+  const [employeeScope, setEmployeeScope] = useState<EmployeeScope>('employed')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [employeesPerPage, setEmployeesPerPage] = useState<(typeof pageSizeOptions)[number]>(10)
+  const tableWrapRef = useRef<HTMLDivElement>(null)
+
+  const employedCount = employees.filter((employee) => employee.status !== 'inactive').length
+  const departedCount = employees.filter((employee) => employee.status === 'inactive').length
+  const isDepartedView = employeeScope === 'departed'
 
   const visibleEmployees = useMemo(
     () => employees
+      .filter((employee) => employeeScope === 'departed' ? employee.status === 'inactive' : employee.status !== 'inactive')
       .filter((employee) => matchesQuery(employee, query))
       .sort((a, b) => compareEmployees(a, b, sortField, sortAscending)),
-    [employees, query, sortField, sortAscending],
+    [employees, employeeScope, query, sortField, sortAscending],
   )
+  const totalPages = Math.max(1, Math.ceil(visibleEmployees.length / employeesPerPage))
+  const pageEmployees = visibleEmployees.slice((currentPage - 1) * employeesPerPage, currentPage * employeesPerPage)
+  const pageStart = visibleEmployees.length === 0 ? 0 : (currentPage - 1) * employeesPerPage + 1
+  const pageEnd = Math.min(currentPage * employeesPerPage, visibleEmployees.length)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [employeeScope, query, sortField, sortAscending, employeesPerPage])
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages))
+  }, [totalPages])
+
+  function goToPage(page: number) {
+    setCurrentPage(page)
+    requestAnimationFrame(() => tableWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }
 
   const loadEmployees = useCallback(async () => {
     setLoading(true)
@@ -301,6 +391,19 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
     setResumeRemoved(false)
   }
 
+  function openDepartureEditor(employee: EmployeeRecord) {
+    setDraft({
+      ...employee,
+      status: 'inactive',
+      departureDate: employee.departureDate ?? todayDate(),
+      departureReason: employee.departureReason ?? '',
+    })
+    setEditorMode('departure')
+    setFormError(null)
+    setPendingResume(null)
+    setResumeRemoved(false)
+  }
+
   function closeEditor() {
     setEditorMode(null)
     setDraft(null)
@@ -316,6 +419,27 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
   async function saveEmployee(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!draft) return
+    if (editorMode === 'departure') {
+      const departureDate = draft.departureDate?.trim() ?? ''
+      const departureReason = draft.departureReason?.trim() ?? ''
+      if (!departureDate || !departureReason) {
+        setFormError('请填写离职日期和离职原因。')
+        return
+      }
+      setSaving(true)
+      setFormError(null)
+      try {
+        const saved = await departEmployeeRecord(draft.id, departureDate, departureReason)
+        setEmployees((current) => current.map((employee) => employee.id === saved.id ? saved : employee))
+        setEmployeeScope('departed')
+        closeEditor()
+      } catch (error) {
+        setFormError(error instanceof Error ? error.message : String(error))
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
     const error = validateEmployee(draft, employees)
     if (error) {
       setFormError(error)
@@ -349,18 +473,6 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
       setFormError(error instanceof Error ? error.message : String(error))
     } finally {
       setSaving(false)
-    }
-  }
-
-  async function deleteEmployee(employee: EmployeeRecord) {
-    if (!globalThis.confirm(`确认删除员工“${employee.displayName}”吗？`)) return
-    setDataError(null)
-    try {
-      await deleteEmployeeRecord(employee.id)
-      setEmployees((current) => current.filter((candidate) => candidate.id !== employee.id))
-      if (draft?.id === employee.id) closeEditor()
-    } catch (error) {
-      setDataError(error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -408,9 +520,8 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
       <header className="employee-data__header">
         <div className="employee-data__title">
           <button className="employee-data__back" type="button" onClick={onBack}><ArrowLeft size={16} /> {backLabel}</button>
-          <span className="eyebrow"><Users size={15} /> 员工数据</span>
-          <h1>{pageMode === 'directory' ? '全体员工信息' : '员工数据维护'}</h1>
-          <p>{pageMode === 'directory' ? `当前共 ${employees.length} 名员工，查看公司员工档案与组织信息。` : '在系统中查询、新增、查看、编辑或删除员工。'}</p>
+          <h1>{pageMode === 'directory' ? isDepartedView ? '离职人员档案' : '在职员工信息' : '员工数据维护'}</h1>
+          <p>{pageMode === 'directory' ? isDepartedView ? `当前共 ${departedCount} 名离职人员，查看任职记录与离职信息。` : `当前共 ${employedCount} 名在职员工，查看员工档案与组织信息。` : '在系统中查询、新增、查看、编辑或删除员工。'}</p>
         </div>
         <div className="employee-data__header-actions">
           {pageMode === 'directory' ? (
@@ -433,7 +544,11 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
             <Search size={15} />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名、邮箱、部门、岗位或地点" />
           </label>
-          <span>显示 {visibleEmployees.length} / {employees.length} 人</span>
+          <span>显示 {pageStart}–{pageEnd} / {visibleEmployees.length} 人</span>
+          <div className="employee-data__scope" aria-label="员工范围">
+            <button type="button" className={employeeScope === 'employed' ? 'is-active' : ''} onClick={() => setEmployeeScope('employed')}>在职</button>
+            <button type="button" className={employeeScope === 'departed' ? 'is-active' : ''} onClick={() => setEmployeeScope('departed')}>离职</button>
+          </div>
           <div className="employee-data__sort">
             <label>
               排序
@@ -463,42 +578,60 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                     <button type="button" role="menuitem" onClick={() => { setExportMenuOpen(false); void (async () => {
                       setExporting(true)
                       try {
-                        await exportEmployeesToExcel(visibleEmployees)
+                        await exportEmployeesToExcel(visibleEmployees, employeeScope)
                       } catch (error) {
                         setDataError(error instanceof Error ? error.message : String(error))
                       } finally {
                         setExporting(false)
                       }
                     })() }}>导出为 Excel</button>
-                    <button type="button" role="menuitem" onClick={() => { setExportMenuOpen(false); exportEmployeesToPdf(visibleEmployees) }}>导出为 PDF</button>
+                    <button type="button" role="menuitem" onClick={() => { setExportMenuOpen(false); exportEmployeesToPdf(visibleEmployees, employeeScope) }}>导出为 PDF</button>
                   </div>
                 </>
               )}
             </div>
           )}
-          {pageMode === 'maintenance' && (
+          {pageMode === 'maintenance' && employeeScope === 'employed' && (
             <button className="employee-data__primary" type="button" onClick={() => openEditor('create')}><Plus size={16} /> 新增员工</button>
           )}
         </div>
 
-        <div className="employee-data__table-wrap">
-          <table className="employee-data__table">
+        <div className="employee-data__table-wrap" ref={tableWrapRef}>
+          <table className={`employee-data__table${isDepartedView ? ' employee-data__table--departed' : ''}`}>
             <thead>
               <tr>
-                <th>员工</th><th>部门 / 岗位</th><th>联系方式</th><th>用工状态</th><th>入职时间</th><th>合同到期</th>
-                <th>{pageMode === 'directory' ? '档案' : '操作'}</th>
+                {isDepartedView ? (
+                  <>
+                    <th>员工</th><th>部门 / 岗位</th><th>联系方式</th><th>入职时间</th><th>离职时间 / 工龄</th><th>离职原因</th><th>{pageMode === 'directory' ? '档案' : '操作'}</th>
+                  </>
+                ) : (
+                  <>
+                    <th>员工</th><th>部门 / 岗位</th><th>联系方式</th><th>用工状态</th><th>入职时间</th><th>合同到期</th><th>{pageMode === 'directory' ? '档案' : '操作'}</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
-              {visibleEmployees.map((employee) => (
+              {pageEmployees.map((employee) => (
                 <tr key={employee.id}>
-                  <td><strong>{employee.displayName}</strong><small>{employee.id}</small></td>
-                  <td><strong>{employee.departmentName}</strong><small>{employee.jobTitle}</small></td>
-                  <td><strong>{employee.workPhone}</strong><small>{employee.workEmail ?? '未填写邮箱'}</small></td>
-                  <td><span className={`employee-status employee-status--${employee.status}`}>{statusLabels[employee.status]}</span><small>{employmentTypeLabels[employee.employmentType]}</small></td>
-                  <td><strong>{employee.hireDate}</strong></td>
-                  <td>
-                    {employee.contractEndDate
+                  {isDepartedView ? (
+                    <>
+                      <td><strong>{employee.displayName}</strong><small>{employee.id}</small></td>
+                      <td><strong>{employee.departmentName}</strong><small>{employee.jobTitle}</small></td>
+                      <td><strong>{employee.workPhone}</strong><small>{employee.workEmail ?? '未填写邮箱'}</small></td>
+                      <td className="employee-departure-date"><strong>{employee.hireDate}</strong><small>入职</small></td>
+                      <td className="employee-departure-date"><strong>{employee.departureDate ?? '—'}</strong><small>工龄 {employmentTenure(employee)}</small></td>
+                      <td className="employee-departure-reason">{departureReasonText(employee.departureReason)}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td><strong>{employee.displayName}</strong><small>{employee.id}</small></td>
+                      <td><strong>{employee.departmentName}</strong><small>{employee.jobTitle}</small></td>
+                      <td><strong>{employee.workPhone}</strong><small>{employee.workEmail ?? '未填写邮箱'}</small></td>
+                      <td><span className={`employee-status employee-status--${employee.status}`}>{statusLabels[employee.status]}</span><small>{employmentTypeLabels[employee.employmentType]}</small></td>
+                      <td><strong>{employee.hireDate}</strong></td>
+                      <td>
+                        {employee.contractEndDate
                       ? (() => {
                           const days = contractDaysLeft(employee.contractEndDate)
                           const expiring = days !== null && days <= 60
@@ -509,8 +642,10 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                             </span>
                           )
                         })()
-                      : <span>—</span>}
-                  </td>
+                          : <span>—</span>}
+                      </td>
+                    </>
+                  )}
                   <td>
                     <div className="employee-data__row-actions">
                       {pageMode === 'directory' ? (
@@ -518,7 +653,7 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                       ) : (
                         <>
                           <button type="button" title="编辑" onClick={() => openEditor('edit', employee)}><Pencil size={14} /></button>
-                          <button className="is-danger" type="button" title="删除" onClick={() => void deleteEmployee(employee)}><Trash2 size={14} /></button>
+                          {employee.status !== 'inactive' && <button className="is-danger employee-data__departure" type="button" onClick={() => openDepartureEditor(employee)}>员工离职</button>}
                         </>
                       )}
                     </div>
@@ -531,20 +666,37 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
             ? <div className="employee-data__empty">正在从 PostgreSQL 加载员工数据…</div>
             : visibleEmployees.length === 0 && <div className="employee-data__empty">没有找到匹配的员工</div>}
         </div>
+        {!loading && visibleEmployees.length > 0 && (
+          <nav className="employee-data__pagination" aria-label="员工分页">
+            <div className="employee-data__pagination-summary">
+              <span>第 {currentPage} / {totalPages} 页</span>
+              <label>每页
+                <select value={employeesPerPage} onChange={(event) => setEmployeesPerPage(Number(event.target.value) as (typeof pageSizeOptions)[number])}>
+                  {pageSizeOptions.map((size) => <option key={size} value={size}>{size}</option>)}
+                </select>
+                人
+              </label>
+            </div>
+            <div className="employee-data__pagination-actions">
+              <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}>上一页</button>
+              <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}>下一页</button>
+            </div>
+          </nav>
+        )}
       </section>
 
       {editorMode && draft && (
-        <div className="employee-editor" role="dialog" aria-modal="true" aria-label={editorMode === 'create' ? '新增员工' : `${draft.displayName}的员工信息`}>
+        <div className="employee-editor" role="dialog" aria-modal="true" aria-label={editorMode === 'create' ? '新增员工' : editorMode === 'departure' ? `${draft.displayName}的离职信息` : `${draft.displayName}的员工信息`}>
           <button className="employee-editor__backdrop" type="button" aria-label="关闭" onClick={closeEditor} />
           <section className="employee-editor__panel" key={`${draft.id}:${editorMode}`}>
             <header>
-              <div><span>{editorMode === 'view' ? '员工详情' : editorMode === 'create' ? '新增员工' : '编辑员工'}</span><strong>{draft.displayName || '填写员工信息'}</strong></div>
+              <div><span>{editorMode === 'view' ? '员工详情' : editorMode === 'create' ? '新增员工' : editorMode === 'departure' ? '员工离职' : '编辑员工'}</span><strong>{draft.displayName || '填写员工信息'}</strong></div>
               <button type="button" onClick={closeEditor} title="关闭"><X size={18} /></button>
             </header>
             <form onSubmit={(event) => { void saveEmployee(event) }}>
               {editorMode === 'view' ? (
                 <>
-                  <section className="employee-resume-preview">
+                  {draft.status !== 'inactive' && <section className="employee-resume-preview">
                     <div className="employee-resume-preview__heading"><FileText size={18} /><div><strong>员工简历</strong><span>{draft.resumeFileName ?? '暂未上传简历'}</span></div></div>
                     <div className="employee-resume-preview__responsibilities"><strong>员工职责</strong><p>{draft.responsibilities || '暂未填写员工职责。'}</p></div>
                     {draft.resumeFileName && draft.resumeMimeType === 'application/pdf' && (
@@ -553,9 +705,9 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                     {draft.resumeFileName && draft.resumeMimeType !== 'application/pdf' && (
                       <a href={employeeResumeUrl(draft.id)} target="_blank" rel="noreferrer"><Download size={15} /> 查看或下载简历</a>
                     )}
-                  </section>
+                  </section>}
                   <div className="employee-archive">
-                    {archiveSections.map((section) => (
+                    {(draft.status === 'inactive' ? departureArchiveSections : activeArchiveSections).map((section) => (
                       <section className="employee-archive__group" key={section.title}>
                         <h3 className="employee-archive__heading">{section.title}</h3>
                         <dl className="employee-archive__grid">
@@ -574,6 +726,17 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                     </section>
                   </div>
                 </>
+              ) : editorMode === 'departure' ? (
+                <div className="employee-editor__fields">
+                  <label>姓名<input value={draft.displayName} disabled /></label>
+                  <label>所属公司<input value={draft.companyName ?? ''} disabled /></label>
+                  <label>部门名称<input value={draft.departmentName} disabled /></label>
+                  <label>岗位<input value={draft.jobTitle} disabled /></label>
+                  <label>用工类型<input value={employmentTypeLabels[draft.employmentType]} disabled /></label>
+                  <label>入职日期<input value={draft.hireDate} disabled /></label>
+                  <label>离职日期<input required type="date" value={draft.departureDate ?? ''} onChange={(event) => updateDraft('departureDate', event.target.value || null)} /></label>
+                  <label className="employee-editor__wide">离职原因<textarea required rows={4} value={draft.departureReason ?? ''} onChange={(event) => updateDraft('departureReason', event.target.value || null)} placeholder="填写离职原因" /></label>
+                </div>
               ) : (
               <div className="employee-editor__fields">
                 <label>姓名<input required value={draft.displayName} onChange={(event) => updateDraft('displayName', event.target.value)} /></label>
@@ -584,14 +747,16 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                 <label>用工类型<select value={draft.employmentType} onChange={(event) => updateDraft('employmentType', event.target.value as EmploymentType)}>{employmentTypes.map((type) => <option key={type} value={type}>{employmentTypeLabels[type]}</option>)}</select></label>
                 <label>员工状态<select value={draft.status} onChange={(event) => updateDraft('status', event.target.value as EmployeeStatus)}>{employeeStatuses.map((status) => <option key={status} value={status}>{statusLabels[status]}</option>)}</select></label>
                 <label>入职日期<input required type="date" value={draft.hireDate} onChange={(event) => updateDraft('hireDate', event.target.value)} /></label>
-                <label>工作地点（选填）<input value={draft.workLocation} onChange={(event) => updateDraft('workLocation', event.target.value)} /></label>
+                {draft.status !== 'inactive' && <label>工作地点（选填）<input value={draft.workLocation} onChange={(event) => updateDraft('workLocation', event.target.value)} /></label>}
                 <h3 className="employee-editor__section-title">任职信息</h3>
                 <label>所属公司<input value={draft.companyName ?? ''} onChange={(event) => updateDraft('companyName', event.target.value || null)} /></label>
                 <label>二级部门<input value={draft.departmentLevel2 ?? ''} onChange={(event) => updateDraft('departmentLevel2', event.target.value || null)} /></label>
-                <label>试用期（月）<input type="number" min={1} max={12} value={draft.probationMonths ?? ''} onChange={(event) => updateDraft('probationMonths', event.target.value ? Number(event.target.value) : null)} /></label>
-                <label>预计转正日期<input type="date" value={draft.expectedRegularDate ?? ''} onChange={(event) => updateDraft('expectedRegularDate', event.target.value || null)} /></label>
-                <label>实际转正日期<input type="date" value={draft.actualRegularDate ?? ''} onChange={(event) => updateDraft('actualRegularDate', event.target.value || null)} /></label>
-                <label>合同到期日期<input type="date" value={draft.contractEndDate ?? ''} onChange={(event) => updateDraft('contractEndDate', event.target.value || null)} /></label>
+                {draft.status !== 'inactive' && <>
+                  <label>试用期（月）<input type="number" min={1} max={12} value={draft.probationMonths ?? ''} onChange={(event) => updateDraft('probationMonths', event.target.value ? Number(event.target.value) : null)} /></label>
+                  <label>预计转正日期<input type="date" value={draft.expectedRegularDate ?? ''} onChange={(event) => updateDraft('expectedRegularDate', event.target.value || null)} /></label>
+                  <label>实际转正日期<input type="date" value={draft.actualRegularDate ?? ''} onChange={(event) => updateDraft('actualRegularDate', event.target.value || null)} /></label>
+                  <label>合同到期日期<input type="date" value={draft.contractEndDate ?? ''} onChange={(event) => updateDraft('contractEndDate', event.target.value || null)} /></label>
+                </>}
                 <label>档案编号<input value={draft.archiveNo ?? ''} onChange={(event) => updateDraft('archiveNo', event.target.value || null)} /></label>
                 <h3 className="employee-editor__section-title">身份信息</h3>
                 <label>性别<input value={draft.gender ?? ''} onChange={(event) => updateDraft('gender', event.target.value || null)} /></label>
@@ -615,7 +780,7 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                 <label>银行卡<input value={draft.bankAccount ?? ''} onChange={(event) => updateDraft('bankAccount', event.target.value || null)} /></label>
                 <label>开户行<input value={draft.bankName ?? ''} onChange={(event) => updateDraft('bankName', event.target.value || null)} /></label>
                 <label className="employee-editor__wide">备注<textarea rows={3} value={draft.notes ?? ''} onChange={(event) => updateDraft('notes', event.target.value || null)} placeholder="填写需要记录的其他信息" /></label>
-                <label className="employee-editor__wide">员工职责<textarea rows={5} value={draft.responsibilities} onChange={(event) => updateDraft('responsibilities', event.target.value)} placeholder="填写该员工负责的工作范围、目标和主要职责" /></label>
+                {draft.status !== 'inactive' && <><label className="employee-editor__wide">员工职责<textarea rows={5} value={draft.responsibilities} onChange={(event) => updateDraft('responsibilities', event.target.value)} placeholder="填写该员工负责的工作范围、目标和主要职责" /></label>
                 <div className="employee-editor__wide employee-resume-upload">
                   <span className="employee-resume-upload__label">员工简历（选填）</span>
                   <label className="employee-resume-upload__picker">
@@ -624,7 +789,7 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                   </label>
                   {(pendingResume || draft.resumeFileName) && <button className="employee-resume-upload__remove" type="button" onClick={removeResume}><Trash2 size={14} /> 删除简历</button>}
                   <small>文件将保存到 PostgreSQL，最大 5 MB。</small>
-                </div>
+                </div></>}
               </div>
               )}
               {formError && <p className="employee-editor__error">{formError}</p>}
@@ -633,7 +798,7 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
                 {editorMode === 'view' ? (
                   <button className="employee-data__primary" type="button" onClick={editEmployeeFromPreview}><Pencil size={15} /> 编辑员工</button>
                 ) : (
-                  <button className="employee-data__primary" type="submit" disabled={saving}><Save size={15} /> {saving ? '保存中…' : '保存'}</button>
+                  <button className={editorMode === 'departure' ? 'employee-data__primary is-danger' : 'employee-data__primary'} type="submit" disabled={saving}><Save size={15} /> {saving ? '保存中…' : editorMode === 'departure' ? '确认离职' : '保存'}</button>
                 )}
               </footer>
             </form>

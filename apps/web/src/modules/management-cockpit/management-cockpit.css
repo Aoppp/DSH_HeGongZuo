@@ -225,6 +225,19 @@
   padding: 15px 17px 9px;
 }
 
+.cockpit-placeholder {
+  display: grid;
+  min-height: 205px;
+  place-items: center;
+  color: var(--ink-400);
+  font-size: 12px;
+}
+
+.cockpit-placeholder--inverse {
+  min-height: 115px;
+  color: #c9ded8;
+}
+
 .trend-chart svg {
   display: block;
   width: 100%;

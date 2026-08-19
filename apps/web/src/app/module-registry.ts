@@ -5,7 +5,7 @@ import { EmployeeAgentModule } from '../modules/employee-agent/EmployeeAgentModu
 import { EmployeeDataModule } from '../modules/employee-agent/EmployeeDataModule'
 import { ManagementCockpitModule } from '../modules/management-cockpit/ManagementCockpitModule'
 import { OverviewModule } from '../modules/overview/OverviewModule'
-import type { ModuleId, PlatformModule, RoleId } from './types'
+import type { AuthenticatedUser, ModuleId, PlatformModule, RoleId } from './types'
 
 // 每个功能只在此注册一次。删除该项即可从导航和路由中同时移除功能。
 export const platformModules: readonly PlatformModule[] = [
@@ -15,6 +15,7 @@ export const platformModules: readonly PlatformModule[] = [
     description: '公司整体运行情况的一屏总览',
     icon: Gauge,
     allowedRoles: ['owner'],
+    bossOnly: true,
     component: ManagementCockpitModule,
   },
   {
@@ -51,8 +52,13 @@ export const platformModules: readonly PlatformModule[] = [
   },
 ]
 
-export function getVisibleModules(role: RoleId): readonly PlatformModule[] {
-  return platformModules.filter((module) => module.allowedRoles.includes(role))
+export function getVisibleModules(user: AuthenticatedUser): readonly PlatformModule[] {
+  return platformModules.filter((module) => {
+    if (!module.allowedRoles.includes(user.role)) return false
+    // 管理驾驶舱仅对 CEO 职位开放
+    if (module.bossOnly && user.position !== 'CEO') return false
+    return true
+  })
 }
 
 export function getModule(moduleId: ModuleId): PlatformModule {

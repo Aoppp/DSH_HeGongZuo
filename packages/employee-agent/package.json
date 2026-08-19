@@ -2,7 +2,7 @@
   "name": "@hegongzuo/employee-agent",
   "version": "0.0.0",
   "private": true,
-  "description": "和工作员工管理 Agent 的 DSH 只读工具插件",
+  "description": "和工作员工管理的只读工具插件，支持在职与离职员工查询、统计和预警",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

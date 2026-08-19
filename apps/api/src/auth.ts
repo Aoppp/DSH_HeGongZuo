@@ -6,6 +6,7 @@ export interface AuthUser {
   readonly id: string
   readonly accountId: string
   readonly displayName: string
+  readonly position: string
   readonly role: 'owner' | 'developer'
 }
 
@@ -13,6 +14,7 @@ interface AccountRow {
   readonly id: string
   readonly account_id: string
   readonly display_name: string
+  readonly position: string
   readonly password_hash: string
   readonly role: 'owner' | 'developer'
   readonly status: 'active' | 'disabled'
@@ -47,7 +49,7 @@ export class AuthService {
   async login(accountId: string, password: string): Promise<{ token: string; user: AuthUser }> {
     const normalized = accountId.trim()
     const result = await this.pool.query<AccountRow>(
-      'SELECT id, account_id, display_name, password_hash, role, status FROM accounts WHERE account_id = $1',
+      'SELECT id, account_id, display_name, position, password_hash, role, status FROM accounts WHERE account_id = $1',
       [normalized],
     )
     const account = result.rows[0]
@@ -70,6 +72,7 @@ export class AuthService {
         id: account.id,
         accountId: account.account_id,
         displayName: account.display_name,
+        position: account.position,
         role: account.role,
       },
     }
@@ -78,7 +81,7 @@ export class AuthService {
   async userForToken(token: string | null | undefined): Promise<AuthUser | null> {
     if (!token) return null
     const result = await this.pool.query<AccountRow>(
-      `SELECT a.id, a.account_id, a.display_name, a.password_hash, a.role, a.status
+      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.role, a.status
        FROM sessions s
        JOIN accounts a ON a.id = s.account_id
        WHERE s.token_hash = $1 AND s.expires_at > now()`,
@@ -90,6 +93,7 @@ export class AuthService {
       id: account.id,
       accountId: account.account_id,
       displayName: account.display_name,
+      position: account.position,
       role: account.role,
     }
   }
@@ -97,7 +101,7 @@ export class AuthService {
   async changePassword(id: string, currentPassword: string, newPassword: string): Promise<void> {
     if (newPassword.length < 6) throw new AuthError('新密码至少 6 位。')
     const result = await this.pool.query<AccountRow>(
-      'SELECT id, account_id, display_name, password_hash, role, status FROM accounts WHERE id = $1',
+      'SELECT id, account_id, display_name, position, password_hash, role, status FROM accounts WHERE id = $1',
       [id],
     )
     const account = result.rows[0]

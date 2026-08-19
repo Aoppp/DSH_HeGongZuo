@@ -10,8 +10,8 @@ function hashPassword(password) {
 }
 
 const initialAccounts = [
-  { accountId: 'taochunlin', displayName: '陶春霖', role: 'owner' },
-  { accountId: 'liuao', displayName: '刘奥', role: 'developer' },
+  { accountId: 'taochunlin', displayName: '陶春霖', position: 'CEO', role: 'owner' },
+  { accountId: 'liuao', displayName: '刘奥', position: '开发者', role: 'developer' },
 ]
 const initialPassword = process.env.ACCOUNT_SEED_PASSWORD ?? 'wangshuhe123'
 
@@ -21,10 +21,10 @@ try {
   for (const [index, account] of initialAccounts.entries()) {
     const id = `ACC-${String(index + 1).padStart(4, '0')}`
     await client.query(
-      `INSERT INTO accounts (id, account_id, display_name, password_hash, role)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO accounts (id, account_id, display_name, position, password_hash, role)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (account_id) DO NOTHING`,
-      [id, account.accountId, account.displayName, hashPassword(initialPassword), account.role],
+      [id, account.accountId, account.displayName, account.position, hashPassword(initialPassword), account.role],
     )
   }
   await client.query('COMMIT')

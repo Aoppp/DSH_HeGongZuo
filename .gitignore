@@ -8,4 +8,5 @@ lib/
 coverage/
 *.tsbuildinfo
 *.log
+DEVELOPMENT_LOG.md
 .DS_Store

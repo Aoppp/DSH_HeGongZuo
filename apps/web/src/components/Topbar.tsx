@@ -13,6 +13,7 @@ interface TopbarProps {
 
 export function Topbar({ activeModule, user, onExit }: TopbarProps) {
   const currentRole = roles[user.role]
+  const positionLabel = user.position || currentRole.label
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -63,7 +64,7 @@ export function Topbar({ activeModule, user, onExit }: TopbarProps) {
           <span className="avatar">{user.displayName.slice(0, 1)}</span>
           <span>
             <strong>{user.displayName}</strong>
-            <small>{currentRole.label}</small>
+            <small>{positionLabel}</small>
           </span>
         </div>
         <button type="button" className="icon-button" onClick={() => { setPasswordOpen(true); setFormError(null) }} title="修改密码" aria-label="修改密码"><KeyRound size={17} /></button>

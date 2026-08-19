@@ -6,6 +6,7 @@ export interface AccountRecord {
   readonly id: string
   readonly accountId: string
   readonly displayName: string
+  readonly position: string
   readonly role: 'owner' | 'developer'
   readonly status: 'active' | 'disabled'
   readonly createdAt: string
@@ -35,6 +36,7 @@ interface AccountRow {
   readonly id: string
   readonly account_id: string
   readonly display_name: string
+  readonly position: string
   readonly role: 'owner' | 'developer'
   readonly status: 'active' | 'disabled'
   readonly created_at: string | Date
@@ -47,6 +49,7 @@ function toAccount(row: AccountRow): AccountRecord {
     id: row.id,
     accountId: row.account_id,
     displayName: row.display_name,
+    position: row.position,
     role: row.role,
     status: row.status,
     createdAt: format(row.created_at),
@@ -59,7 +62,7 @@ export class AccountsService {
 
   async list(): Promise<AccountRecord[]> {
     const result = await this.pool.query<AccountRow>(
-      'SELECT id, account_id, display_name, role, status, created_at, updated_at FROM accounts ORDER BY created_at, id',
+      'SELECT id, account_id, display_name, position, role, status, created_at, updated_at FROM accounts ORDER BY created_at, id',
     )
     return result.rows.map(toAccount)
   }
@@ -67,20 +70,24 @@ export class AccountsService {
   async create(input: {
     readonly accountId: string
     readonly displayName: string
+    readonly position: string
     readonly role: string
   }): Promise<AccountRecord> {
     const accountId = input.accountId.trim()
     const displayName = input.displayName.trim()
+    const position = input.position.trim()
     if (!displayName) throw new AccountValidationError('请填写姓名。')
+    if (!position) throw new AccountValidationError('请填写职位。')
+    if (position.length > 120) throw new AccountValidationError('职位不能超过 120 个字符。')
     const idError = validateAccountId(accountId)
     if (idError) throw new AccountValidationError(idError)
     if (!rolePattern.test(input.role)) throw new AccountValidationError('角色无效。')
     const id = await this.nextId()
     const result = await this.pool.query<AccountRow>(
-      `INSERT INTO accounts (id, account_id, display_name, password_hash, role)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, account_id, display_name, role, status, created_at, updated_at`,
-      [id, accountId, displayName, hashPassword(defaultAccountPassword), input.role],
+      `INSERT INTO accounts (id, account_id, display_name, position, password_hash, role)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, account_id, display_name, position, role, status, created_at, updated_at`,
+      [id, accountId, displayName, position, hashPassword(defaultAccountPassword), input.role],
     )
     const row = result.rows[0]
     if (!row) throw new Error('新增账号后未返回记录。')
@@ -90,21 +97,30 @@ export class AccountsService {
   async update(id: string, input: {
     readonly accountId: string
     readonly displayName: string
+    readonly position: string
     readonly role: string
   }): Promise<AccountRecord | null> {
     const accountId = input.accountId.trim()
     const displayName = input.displayName.trim()
+    const position = input.position.trim()
     if (!displayName) throw new AccountValidationError('请填写姓名。')
+    if (!position) throw new AccountValidationError('请填写职位。')
+    if (position.length > 120) throw new AccountValidationError('职位不能超过 120 个字符。')
     const idError = validateAccountId(accountId)
     if (idError) throw new AccountValidationError(idError)
     if (!rolePattern.test(input.role)) throw new AccountValidationError('角色无效。')
     const result = await this.pool.query<AccountRow>(
-      `UPDATE accounts SET account_id = $2, display_name = $3, role = $4, updated_at = now()
+      `UPDATE accounts SET account_id = $2, display_name = $3, position = $4, role = $5, updated_at = now()
        WHERE id = $1
-       RETURNING id, account_id, display_name, role, status, created_at, updated_at`,
-      [id, accountId, displayName, input.role],
+       RETURNING id, account_id, display_name, position, role, status, created_at, updated_at`,
+      [id, accountId, displayName, position, input.role],
     )
     return result.rows[0] ? toAccount(result.rows[0]) : null
+  }
+
+  async delete(id: string): Promise<boolean> {
+    const result = await this.pool.query('DELETE FROM accounts WHERE id = $1', [id])
+    return (result.rowCount ?? 0) > 0
   }
 
   async resetPassword(id: string): Promise<boolean> {
@@ -120,7 +136,7 @@ export class AccountsService {
     const result = await this.pool.query<AccountRow>(
       `UPDATE accounts SET status = $2, updated_at = now()
        WHERE id = $1
-       RETURNING id, account_id, display_name, role, status, created_at, updated_at`,
+       RETURNING id, account_id, display_name, position, role, status, created_at, updated_at`,
       [id, status],
     )
     return result.rows[0] ? toAccount(result.rows[0]) : null

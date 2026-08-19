@@ -5,6 +5,7 @@ export interface AccountRecord {
   readonly id: string
   readonly accountId: string
   readonly displayName: string
+  readonly position: string
   readonly role: AccountRole
   readonly status: AccountStatus
   readonly createdAt: string
@@ -67,6 +68,7 @@ export async function readAccounts(): Promise<AccountRecord[]> {
 export async function createAccount(input: {
   readonly accountId: string
   readonly displayName: string
+  readonly position: string
   readonly role: AccountRole
 }): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>('/api/accounts', {
@@ -78,12 +80,19 @@ export async function createAccount(input: {
 export async function updateAccount(id: string, input: {
   readonly accountId: string
   readonly displayName: string
+  readonly position: string
   readonly role: AccountRole
 }): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>(`/api/accounts/${encodeURIComponent(id)}`, {
     method: 'PUT',
     body: JSON.stringify(input),
   })).account
+}
+
+export async function deleteAccount(id: string): Promise<void> {
+  await accountsRequest<{ ok: boolean }>(`/api/accounts/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
 }
 
 export async function resetAccountPassword(id: string): Promise<void> {

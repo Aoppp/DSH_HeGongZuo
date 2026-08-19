@@ -7,6 +7,8 @@
     "build": "tsc -p tsconfig.json",
     "db:migrate": "node scripts/migrate.mjs",
     "db:seed": "node scripts/import-employees.mjs --apply",
+    "db:import-departed": "node scripts/import-departed-employees.mjs --apply",
+    "db:normalize-departure-reasons": "node scripts/normalize-departure-reasons.mjs",
     "db:setup": "pnpm db:migrate && pnpm db:seed && pnpm db:seed:accounts",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",

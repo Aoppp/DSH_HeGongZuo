@@ -1,37 +1,34 @@
 import { ArrowRight, CheckCircle2, Code2, Database, ShieldCheck, Users } from 'lucide-react'
 
-import { roles } from '../../app/roles'
 import type { ModuleProps } from '../../app/types'
 import './overview.css'
 
 const ownerFacts = [
   { label: '员工查询', value: '已开放', detail: '查询员工与组织信息', icon: Users },
   { label: '员工数据', value: '已接入', detail: '查看和维护员工信息', icon: Users },
-  { label: '访问范围', value: '当前账号', detail: '按角色展示可用内容', icon: ShieldCheck },
+  { label: '访问范围', value: '当前账号', detail: '按职位展示可用内容', icon: ShieldCheck },
 ] as const
 
 const developerFacts = [
   { label: '查询服务版本', value: 'rc.6', detail: '项目内精确锁定', icon: Code2 },
   { label: '查询能力', value: '3', detail: '查询、详情、组织成员', icon: Users },
-  { label: '测试数据', value: '10', detail: '6 个虚构部门', icon: Database },
+  { label: '待开发', value: '待开发', detail: '待开发', icon: Database },
 ] as const
 
 export function OverviewModule({ user, onNavigate }: ModuleProps) {
-  const role = user.role
-  const currentRole = roles[role]
-  const facts = role === 'owner' ? ownerFacts : developerFacts
-  const primaryModule = role === 'owner' ? 'management-cockpit' : 'employee-agent'
+  const isBoss = user.position === 'CEO'
+  const facts = isBoss ? ownerFacts : developerFacts
+  const primaryModule = isBoss ? 'management-cockpit' : 'employee-agent'
 
   return (
     <div className="overview module-page">
       <section className="overview__hero">
         <div>
-          <span className="eyebrow">{role === 'owner' ? '企业内部工作台' : '开发验证工作台'}</span>
-          <h1>{role === 'owner' ? '你好，陶总' : `你好，${user.displayName}`}</h1>
-          <p>{role === 'owner' ? '通过管理驾驶舱查看公司整体运行情况，或查询员工与组织信息。' : '在这里验证平台模块与员工查询服务。'}</p>
+          <h1>{isBoss ? '你好，陶总' : `你好，${user.displayName}`}</h1>
+          <p>{isBoss ? '通过管理驾驶舱查看公司整体运行情况，或查询员工与组织信息。' : '在这里验证平台模块与员工查询服务。'}</p>
         </div>
         <button type="button" className="primary-action" onClick={() => onNavigate(primaryModule)}>
-          {role === 'owner' ? '打开管理驾驶舱' : '打开员工查询'} <ArrowRight size={18} />
+          {isBoss ? '打开管理驾驶舱' : '打开员工查询'} <ArrowRight size={18} />
         </button>
       </section>
 
@@ -66,7 +63,7 @@ export function OverviewModule({ user, onNavigate }: ModuleProps) {
         <ShieldCheck size={19} />
         <div>
           <strong>当前开放范围</strong>
-          <p>当前仅开放管理员和开发者账号。其他角色的工作台将在账号和权限系统建立后逐步开发。</p>
+          <p>当前仅开放管理员和开发者账号。其他职位的账号工作台将逐步开放。</p>
         </div>
       </section>
     </div>

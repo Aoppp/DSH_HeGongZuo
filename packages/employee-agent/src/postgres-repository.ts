@@ -43,6 +43,8 @@ interface EmployeeRow {
   readonly expected_regular_date: string | Date | null
   readonly actual_regular_date: string | Date | null
   readonly contract_end_date: string | Date | null
+  readonly departure_date: string | Date | null
+  readonly departure_reason: string | null
   readonly archive_no: string | null
   readonly notes: string | null
 }
@@ -89,6 +91,8 @@ function toEmployee(row: EmployeeRow): EmployeeRecord {
     expectedRegularDate: row.expected_regular_date ? formatDate(row.expected_regular_date) : null,
     actualRegularDate: row.actual_regular_date ? formatDate(row.actual_regular_date) : null,
     contractEndDate: row.contract_end_date ? formatDate(row.contract_end_date) : null,
+    departureDate: row.departure_date ? formatDate(row.departure_date) : null,
+    departureReason: row.departure_reason,
     archiveNo: row.archive_no,
     notes: row.notes,
   }
@@ -133,6 +137,7 @@ export class PostgresEmployeeRepository implements EmployeeDataSource {
         marital_status, has_children, hometown,
         department_level2, probation_months,
         expected_regular_date, actual_regular_date, contract_end_date,
+        departure_date, departure_reason,
         archive_no, notes
       FROM employees
       ORDER BY display_name, id
@@ -140,4 +145,3 @@ export class PostgresEmployeeRepository implements EmployeeDataSource {
     return new EmployeeRepository(result.rows.map(toEmployee))
   }
 }
-

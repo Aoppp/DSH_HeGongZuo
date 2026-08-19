@@ -17,13 +17,13 @@ export default function App() {
     void apiMe().then((restoredUser) => {
       if (restoredUser) {
         setUser(restoredUser)
-        setActiveModuleId(restoredUser.role === 'owner' ? 'management-cockpit' : 'overview')
+        setActiveModuleId(restoredUser.position === 'CEO' ? 'management-cockpit' : 'overview')
       }
       setRestoring(false)
     })
   }, [])
 
-  const visibleModules = useMemo(() => user ? getVisibleModules(user.role) : [], [user])
+  const visibleModules = useMemo(() => user ? getVisibleModules(user) : [], [user])
 
   if (restoring) {
     return <div className="platform-boot">正在加载平台…</div>
@@ -32,7 +32,7 @@ export default function App() {
   if (!user) {
     return <AccountLogin onAuthenticated={(authenticatedUser) => {
       setUser(authenticatedUser)
-      setActiveModuleId(authenticatedUser.role === 'owner' ? 'management-cockpit' : 'overview')
+      setActiveModuleId(authenticatedUser.position === 'CEO' ? 'management-cockpit' : 'overview')
     }} />
   }
 
@@ -44,6 +44,10 @@ export default function App() {
     setActiveModuleId('overview')
     setSidebarCollapsed(false)
     void apiLogout()
+  }
+
+  function updateCurrentUserProfile(profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position'>) {
+    setUser((current) => current ? { ...current, ...profile } : current)
   }
 
   return (
@@ -58,7 +62,7 @@ export default function App() {
       <div className="platform-shell__main">
         <Topbar activeModule={activeModule} user={user} onExit={exitPreview} />
         <main className="platform-content">
-          <ActiveComponent user={user} onNavigate={setActiveModuleId} />
+          <ActiveComponent user={user} onNavigate={setActiveModuleId} onUserProfileUpdated={updateCurrentUserProfile} />
         </main>
       </div>
     </div>

@@ -43,6 +43,8 @@ interface EmployeeRow {
   readonly expected_regular_date: string | Date | null
   readonly actual_regular_date: string | Date | null
   readonly contract_end_date: string | Date | null
+  readonly departure_date: string | Date | null
+  readonly departure_reason: string | null
 }
 
 // pg 的 date 列返回本地午夜构造的 Date；必须用本地 getter 格式化，
@@ -75,7 +77,8 @@ const columns = `
   emergency_contact, emergency_contact_phone,
   residential_address, id_address, bank_account, bank_name,
   archive_no, notes, department_level2, probation_months,
-  expected_regular_date, actual_regular_date, contract_end_date
+  expected_regular_date, actual_regular_date, contract_end_date,
+  departure_date, departure_reason
 `
 
 function toEmployee(row: EmployeeRow): EmployeeRecord {
@@ -119,6 +122,8 @@ function toEmployee(row: EmployeeRow): EmployeeRecord {
     expectedRegularDate: toDate(row.expected_regular_date),
     actualRegularDate: toDate(row.actual_regular_date),
     contractEndDate: toDate(row.contract_end_date),
+    departureDate: toDate(row.departure_date),
+    departureReason: row.departure_reason,
   }
 }
 
@@ -257,9 +262,15 @@ export class PostgresEmployeeRepository {
     return result.rows[0] ? toEmployee(result.rows[0]) : null
   }
 
-  async delete(id: string): Promise<boolean> {
-    const result = await this.pool.query('DELETE FROM employees WHERE id = $1', [id])
-    return (result.rowCount ?? 0) > 0
+  async depart(id: string, departureDate: string, departureReason: string): Promise<EmployeeRecord | null> {
+    const result = await this.pool.query<EmployeeRow>(
+      `UPDATE employees SET
+        status = 'inactive', departure_date = $2, departure_reason = $3, updated_at = now()
+       WHERE id = $1
+       RETURNING ${columns}`,
+      [id, departureDate, departureReason],
+    )
+    return result.rows[0] ? toEmployee(result.rows[0]) : null
   }
 
   async getResume(id: string): Promise<EmployeeResume | null> {
