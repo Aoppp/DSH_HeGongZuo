@@ -9,6 +9,27 @@ import type {
   RpcResponse,
 } from '@deepseek-ai/dsh-client-connection/client'
 
+function fallbackRandomUuid(): string {
+  const bytes = new Uint8Array(16)
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    globalThis.crypto.getRandomValues(bytes)
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256)
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+// HTTP 的公网 IP 不属于安全上下文，部分浏览器不会暴露 crypto.randomUUID。
+// DSH 客户端用它生成请求标识，因此在其初始化前补齐兼容实现。
+function ensureRandomUuid(): void {
+  const cryptoApi = globalThis.crypto as (Crypto & { randomUUID?: () => string }) | undefined
+  if (!cryptoApi || typeof cryptoApi.randomUUID === 'function') return
+  Object.defineProperty(cryptoApi, 'randomUUID', { configurable: true, value: fallbackRandomUuid })
+}
+
 export class DshRequestError extends Error {
   readonly code: string
 
@@ -24,6 +45,7 @@ export class AccountDshApiClient extends AbstractApiClient {
 
   constructor(apiBasePath = '/api/employee-agent') {
     super(20_000)
+    ensureRandomUuid()
     this.#apiBasePath = apiBasePath.replace(/\/$/, '')
   }
 
