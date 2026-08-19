@@ -22,15 +22,16 @@ export class DshRequestError extends Error {
 export class AccountDshApiClient extends AbstractApiClient {
   readonly #apiBasePath: string
 
-  constructor(apiBasePath: string) {
+  constructor(apiBasePath = '/api/employee-agent') {
     super(20_000)
     this.#apiBasePath = apiBasePath.replace(/\/$/, '')
   }
 
   async deleteSession(sessionId: string): Promise<void> {
+    const token = localStorage.getItem('hegongzuo.session.token')
     const response = await fetch(`${this.#apiBasePath}/hegongzuo/api/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE',
-      headers: { accept: 'application/json' },
+      headers: { accept: 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
     })
     const body = await response.json().catch(() => ({})) as { error?: unknown }
     if (!response.ok) {
@@ -41,7 +42,10 @@ export class AccountDshApiClient extends AbstractApiClient {
   protected override doFetch(input: URL, init?: RequestInit): Promise<Response> {
     const proxiedUrl = new URL(input)
     proxiedUrl.pathname = `${this.#apiBasePath}${proxiedUrl.pathname}`
-    return fetch(proxiedUrl, init)
+    const headers = new Headers(init?.headers)
+    const token = localStorage.getItem('hegongzuo.session.token')
+    if (token) headers.set('authorization', `Bearer ${token}`)
+    return fetch(proxiedUrl, { ...init, headers })
   }
 
   protected override openMux(

@@ -2,12 +2,10 @@ import { Blocks, CheckCircle2, Database, Layers3, Server } from 'lucide-react'
 
 import { platformModules } from '../../app/module-registry'
 import type { ModuleProps } from '../../app/types'
-import { getAccountAgentRuntime } from '../../config/runtime'
 import { AccountManagement } from './AccountManagement'
 import './developer-console.css'
 
 export function DeveloperConsoleModule({ user, onUserProfileUpdated }: ModuleProps) {
-  const agentRuntime = getAccountAgentRuntime(user.accountId)
   return (
     <div className="developer-console module-page">
       <section className="developer-console__heading">
@@ -16,7 +14,7 @@ export function DeveloperConsoleModule({ user, onUserProfileUpdated }: ModulePro
       </section>
 
       <section className="developer-status-grid">
-        <article><span><Server size={20} /></span><div><small>查询服务运行时</small><strong>DSH 0.1.0-rc.6</strong><p>{agentRuntime?.apiBasePath ?? '未配置服务运行时'}</p></div></article>
+        <article><span><Server size={20} /></span><div><small>查询服务运行时</small><strong>员工查询服务</strong><p>通过平台访问控制连接</p></div></article>
         <article><span><Database size={20} /></span><div><small>员工数据</small><strong>待开发</strong><p>待开发</p></div></article>
         <article><span><Blocks size={20} /></span><div><small>平台模块</small><strong>{platformModules.length} 个已注册</strong><p>注册表统一管理</p></div></article>
       </section>

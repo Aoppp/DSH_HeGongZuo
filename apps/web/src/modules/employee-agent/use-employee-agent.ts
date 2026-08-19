@@ -6,7 +6,6 @@ import type {
 } from '@deepseek-ai/dsh-client-connection/client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { AccountAgentRuntime } from '../../config/runtime'
 import { appendSessionEvent } from './conversation'
 import { AccountDshApiClient, unwrapDshResponse } from './dsh-api-client'
 
@@ -32,8 +31,8 @@ export interface EmployeeAgentSession {
   readonly running: boolean
 }
 
-export function useEmployeeAgent(runtime: AccountAgentRuntime | undefined) {
-  const api = useMemo(() => runtime ? new AccountDshApiClient(runtime.apiBasePath) : undefined, [runtime])
+export function useEmployeeAgent() {
+  const api = useMemo(() => new AccountDshApiClient(), [])
   const [connectionState, setConnectionState] = useState<AgentConnectionState>('connecting')
   const [error, setError] = useState<string | null>(null)
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null)
@@ -136,7 +135,7 @@ export function useEmployeeAgent(runtime: AccountAgentRuntime | undefined) {
   }, [api, refreshSessions, selectSession])
 
   useEffect(() => {
-    if (!api || !runtime) {
+    if (!api) {
       setConnectionState('error')
       return
     }
@@ -216,7 +215,7 @@ export function useEmployeeAgent(runtime: AccountAgentRuntime | undefined) {
       workspaceRef.current = null
       activeSessionRef.current = null
     }
-  }, [api, refreshSessions, runtime, selectSession])
+  }, [api, refreshSessions, selectSession])
 
   return {
     activeSessionId,

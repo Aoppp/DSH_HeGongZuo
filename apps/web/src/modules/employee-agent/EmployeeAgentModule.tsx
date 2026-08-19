@@ -11,7 +11,6 @@ import {
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleProps } from '../../app/types'
-import { getAccountAgentRuntime } from '../../config/runtime'
 import { buildConversation } from './conversation'
 import { EmployeeDataManagement } from './EmployeeDataManagement'
 import { MarkdownText } from './markdown'
@@ -30,8 +29,7 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
   const [draft, setDraft] = useState('')
   const [showEmployeeData, setShowEmployeeData] = useState(false)
   const messageEndRef = useRef<HTMLDivElement>(null)
-  const agentRuntime = getAccountAgentRuntime(user.accountId)
-  const agent = useEmployeeAgent(agentRuntime)
+  const agent = useEmployeeAgent()
   const conversation = useMemo(() => buildConversation(agent.history), [agent.history])
   const activeSession = agent.sessions.find((session) => session.id === agent.activeSessionId)
 

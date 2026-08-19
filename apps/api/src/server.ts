@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 
 import { AccountValidationError, AccountsService } from './accounts.js'
+import { AgentRuntimeProxyError, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
 import { AuthError, AuthService, bearerToken, type AuthUser } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './employee-input.js'
@@ -18,12 +19,29 @@ class HttpError extends Error {
   }
 }
 
-function sendJson(response: ServerResponse, status: number, value: unknown): void {
+function sendJson(response: ServerResponse, status: number, value: unknown, headers: Record<string, string> = {}): void {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
+    ...headers,
   })
   response.end(JSON.stringify(value))
+}
+
+function cookieToken(cookieHeader: string | undefined): string | null {
+  const entry = cookieHeader?.split(';').map((part) => part.trim()).find((part) => part.startsWith('hegongzuo_session='))
+  if (!entry) return null
+  return decodeURIComponent(entry.slice('hegongzuo_session='.length)) || null
+}
+
+function sessionToken(request: IncomingMessage): string | null {
+  return bearerToken(request.headers.authorization) ?? cookieToken(request.headers.cookie)
+}
+
+function sessionCookie(token: string, clear = false): string {
+  const secure = process.env.HEGONGZUO_SESSION_COOKIE_SECURE === 'true' ? '; Secure' : ''
+  const maxAge = clear ? '; Max-Age=0' : '; Max-Age=604800'
+  return `hegongzuo_session=${encodeURIComponent(token)}; Path=/api; HttpOnly; SameSite=Strict${secure}${maxAge}`
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
@@ -67,7 +85,7 @@ function departureInput(value: unknown): { departureDate: string; departureReaso
 }
 
 async function requireAuth(request: IncomingMessage): Promise<AuthUser> {
-  const token = bearerToken(request.headers.authorization)
+  const token = sessionToken(request)
   const user = await auth.userForToken(token)
   if (!user) throw new HttpError(401, '登录已过期，请重新登录。')
   return user
@@ -109,15 +127,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       throw new HttpError(400, '请填写账号和密码。')
     }
     const result = await auth.login(record.accountId, record.password)
-    sendJson(response, 200, result)
+    sendJson(response, 200, result, { 'set-cookie': sessionCookie(result.token) })
     return
   }
 
   if (url.pathname === '/api/auth/me' && request.method === 'GET') {
-    const token = bearerToken(request.headers.authorization)
+    const token = sessionToken(request)
     const user = await auth.userForToken(token)
     if (!user) throw new HttpError(401, '登录已过期，请重新登录。')
-    sendJson(response, 200, { user })
+    sendJson(response, 200, { user }, token ? { 'set-cookie': sessionCookie(token) } : {})
     return
   }
 
@@ -134,14 +152,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
-    await auth.logout(bearerToken(request.headers.authorization))
-    response.writeHead(204)
+    await auth.logout(sessionToken(request))
+    response.writeHead(204, { 'set-cookie': sessionCookie('', true) })
     response.end()
     return
   }
 
   // —— 以下业务接口全部要求登录 ——
   const currentUser = await requireAuth(request)
+
+  if (isAgentRuntimeRequest(request.url)) {
+    await proxyAgentRequest(request, response, currentUser)
+    return
+  }
 
   if (url.pathname === '/api/accounts' && request.method === 'GET') {
     requireDeveloper(currentUser)
@@ -280,8 +303,8 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof AccountValidationError) {
-      sendJson(response, error instanceof HttpError ? error.status : 400, { error: error.message })
+    if (error instanceof HttpError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof AccountValidationError) {
+      sendJson(response, error instanceof HttpError || error instanceof AgentRuntimeProxyError ? error.status : 400, { error: error.message })
       return
     }
     const databaseError = postgresErrorStatus(error)
@@ -291,6 +314,25 @@ const server = createServer((request, response) => {
     }
     console.error('[和工作 API] 请求失败：', error)
     sendJson(response, 500, { error: '服务器处理员工数据时发生错误。' })
+  })
+})
+
+server.on('upgrade', (request, socket, head) => {
+  if (!isAgentRuntimeRequest(request.url)) {
+    socket.destroy()
+    return
+  }
+  void (async () => {
+    const user = await auth.userForToken(sessionToken(request))
+    if (!user) {
+      socket.end('HTTP/1.1 401 Unauthorized\r\nconnection: close\r\n\r\n')
+      return
+    }
+    await proxyAgentUpgrade(request, socket, head, user)
+  })().catch((error: unknown) => {
+    const status = error instanceof AgentRuntimeProxyError ? error.status : 502
+    const message = error instanceof Error ? error.message : '员工查询服务暂时不可用。'
+    socket.end(`HTTP/1.1 ${status} Service Unavailable\r\ncontent-type: application/json; charset=utf-8\r\nconnection: close\r\n\r\n${JSON.stringify({ error: message })}`)
   })
 })
 

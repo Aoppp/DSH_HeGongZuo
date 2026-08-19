@@ -62,9 +62,11 @@ corepack pnpm dsh:web          # 仅启动旧的共享 DSH，平台不再使用
 corepack pnpm dsh:dump-config  # 查看 web profile 的最终配置
 corepack pnpm platform:dev     # 启动和工作平台开发预览
 corepack pnpm platform:preview # 预览已构建的平台页面
+corepack pnpm platform:prepare # 上线前构建并配置账号专属查询服务
+corepack pnpm platform:production # 启动编译后的 API 与账号专属查询服务
 ```
 
-DSH Web 仅作为底层运行服务和开发调试入口，不再作为“和工作”的用户界面。正式部署时，应在服务端实现与当前 `/dsh/<account>` 等价的认证代理，不能信任浏览器直接提供的账号或运行时地址。
+DSH Web 仅作为底层运行服务和开发调试入口，不再作为“和工作”的用户界面。正式环境中，员工查询请求统一通过 `/api/employee-agent`：平台 API 校验登录会话后才会转发至当前账号的本机运行时，浏览器不会获得运行时地址。
 
 ## 文档
 
@@ -73,6 +75,7 @@ DSH Web 仅作为底层运行服务和开发调试入口，不再作为“和工
 - [平台视觉原型说明](docs/02_PLATFORM_UI.md)
 - [管理驾驶舱说明](docs/03_MANAGEMENT_COCKPIT.md)
 - [Agent 账号隔离说明](docs/04_ACCOUNT_AGENT_ISOLATION.md)
+- [生产部署说明](docs/05_PRODUCTION_DEPLOYMENT.md)
 - [第三方软件声明](THIRD_PARTY_NOTICES.md)
 - [开发日志](DEVELOPMENT_LOG.md)
 

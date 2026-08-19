@@ -20,6 +20,8 @@
     "dsh:web": "dsh web",
     "dsh:dump-config": "dsh --profile web --dump-config",
     "platform:dev": "node scripts/run-platform-development.mjs",
+    "platform:prepare": "corepack pnpm build && corepack pnpm dsh:accounts:sync && node scripts/setup-account-agent-runtimes.mjs",
+    "platform:production": "node scripts/run-platform-production.mjs",
     "platform:web": "corepack pnpm --filter @hegongzuo/web dev",
     "platform:preview": "corepack pnpm --filter @hegongzuo/web preview",
     "test": "corepack pnpm build && corepack pnpm --filter './packages/*' --filter './apps/*' --if-present run test",
