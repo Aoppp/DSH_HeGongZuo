@@ -3,6 +3,8 @@ import type { Pool } from 'pg'
 
 import {
   EmployeeRepository,
+  type EmployeeAnalysisCriteria,
+  type EmployeeAnalysisView,
   type ContractAlertCriteria,
   type ContractAlertsView,
   type DepartmentMembersResult,
@@ -119,6 +121,10 @@ export class PostgresEmployeeRepository implements EmployeeDataSource {
 
   async stats(): Promise<EmployeeStatsView> {
     return (await this.snapshot()).stats()
+  }
+
+  async analyze(criteria: EmployeeAnalysisCriteria = {}): Promise<EmployeeAnalysisView> {
+    return (await this.snapshot()).analyze(criteria)
   }
 
   async contractAlerts(criteria: ContractAlertCriteria = {}): Promise<ContractAlertsView> {

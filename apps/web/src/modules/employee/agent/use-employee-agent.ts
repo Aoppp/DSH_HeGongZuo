@@ -19,6 +19,13 @@ function isAbortReason(reason: unknown): boolean {
   return /abort(ed)?|user aborted a request/i.test(message)
 }
 
+function agentRequestError(reason: unknown): string {
+  if (isAbortReason(reason) || (reason instanceof DOMException && reason.name === 'TimeoutError')) {
+    return '本次查询连接中断，后台可能仍在处理。请稍后查看本对话，必要时重新发送。'
+  }
+  return reason instanceof Error ? reason.message : String(reason)
+}
+
 function reconnectDelay(attempt: number): number { return Math.min(5_000, 500 * 2 ** Math.min(attempt, 4)) }
 
 function sessionTitle(session: SessionSummary): string {
@@ -55,6 +62,7 @@ export function useEmployeeAgent() {
   const workspaceRef = useRef<WorkspaceView | null>(null)
   const pendingEventsRef = useRef(new Map<number, SessionEvent>())
   const eventFlushTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
+  const sessionEventRevisionRef = useRef(0)
 
   const clearPendingEvents = useCallback(() => {
     pendingEventsRef.current.clear()
@@ -63,6 +71,7 @@ export function useEmployeeAgent() {
   }, [])
 
   const queueSessionEvent = useCallback((event: SessionEvent) => {
+    sessionEventRevisionRef.current += 1
     pendingEventsRef.current.set(event.seq, event)
     if (eventFlushTimerRef.current !== null) return
     eventFlushTimerRef.current = globalThis.setTimeout(() => {
@@ -128,16 +137,18 @@ export function useEmployeeAgent() {
     setError(null)
     try {
       const sessionId = activeSessionRef.current ?? await createSession()
-      unwrapDshResponse(await api.sessions.prompt({
+      const eventRevision = sessionEventRevisionRef.current
+      unwrapDshResponse(await api.promptSession({
         sessionId,
         mode: 'queue',
         content: [{ type: 'text', text }],
         clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }))
-      await loadHistory(sessionId)
+      // 实时事件已完整到达时无需再次加载整段历史；没有收到事件时再兜底同步。
+      if (sessionEventRevisionRef.current === eventRevision) await loadHistory(sessionId)
       if (workspaceRef.current) await refreshSessions(workspaceRef.current)
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(agentRequestError(reason))
     } finally {
       setSending(false)
     }

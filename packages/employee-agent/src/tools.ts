@@ -232,6 +232,46 @@ export function createEmployeeTools(
     },
   })
 
+  const analysis = defineTool({
+    name: 'employee_analysis',
+    description:
+      '对员工群体直接执行聚合分析，可筛选在职状态、性别、部门和岗位，并返回人数、平均当前年龄、平均离职年龄及平均工龄。回答平均年龄、平均离职年龄、平均工龄等问题时必须调用本工具，不得分页拉取员工明细后自行计算。',
+    parameters: {
+      status: {
+        type: 'string',
+        enum: employeeStatuses,
+        description: '员工状态：probation、active、on_leave 或 inactive。',
+      },
+      gender: { type: 'string', description: '性别，例如男或女。' },
+      department: { type: 'string', description: '部门名称关键词。' },
+      job_title: { type: 'string', description: '岗位名称关键词。' },
+    },
+    output: {
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          total: { type: 'integer', required: true },
+          withBirthDate: { type: 'integer', required: true },
+          withDepartureDate: { type: 'integer', required: true },
+          averageCurrentAge: { oneOf: [{ type: 'number' }, { type: 'null' }], required: true },
+          averageAgeAtDeparture: { oneOf: [{ type: 'number' }, { type: 'null' }], required: true },
+          averageTenureYears: { oneOf: [{ type: 'number' }, { type: 'null' }], required: true },
+        },
+      },
+      render: renderJson,
+    },
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      return repository.analyze({
+        ...(args.status === undefined ? {} : { status: args.status }),
+        ...(args.gender === undefined ? {} : { gender: args.gender }),
+        ...(args.department === undefined ? {} : { department: args.department }),
+        ...(args.job_title === undefined ? {} : { jobTitle: args.job_title }),
+      })
+    },
+  })
+
   const contractAlerts = defineTool({
     name: 'contract_alerts',
     description:
@@ -484,5 +524,5 @@ export function createEmployeeTools(
     },
   })
 
-  return [stats, contractAlerts, search, get, departureSearch, listDepartmentMembers]
+  return [stats, contractAlerts, search, get, departureSearch, listDepartmentMembers, analysis]
 }

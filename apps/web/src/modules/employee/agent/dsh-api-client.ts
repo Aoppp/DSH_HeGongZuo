@@ -1,5 +1,5 @@
 // 员工查询服务客户端。
-import { AbstractApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
+import { AbstractApiClient, type IApiClient } from '@deepseek-ai/dsh-host-apiproxy/client'
 import { hostFrameSchema, muxFrameSchema } from '@deepseek-ai/dsh-host-apiproxy/api/events.schema'
 import { serverRequestSchema } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type {
@@ -9,6 +9,8 @@ import type {
   RpcRequest,
   RpcResponse,
 } from '@deepseek-ai/dsh-client-connection/client'
+
+const agentTaskTimeoutMs = 5 * 60_000
 
 function fallbackRandomUuid(): string {
   const bytes = new Uint8Array(16)
@@ -108,6 +110,16 @@ export class AccountDshApiClient extends AbstractApiClient {
     if (!response.ok) {
       throw new Error(typeof body.error === 'string' ? body.error : `删除对话失败（HTTP ${response.status}）。`)
     }
+  }
+
+  /** 发送消息是长任务，不使用列表/历史接口的 30 秒健康检查时限。 */
+  promptSession(
+    payload: Parameters<IApiClient['sessions']['prompt']>[0],
+    signal?: AbortSignal,
+  ): ReturnType<IApiClient['sessions']['prompt']> {
+    const timeoutSignal = AbortSignal.timeout(agentTaskTimeoutMs)
+    const taskSignal = signal ? AbortSignal.any([timeoutSignal, signal]) : timeoutSignal
+    return this.callUnary('session.prompt', payload, taskSignal, 'caller-signal-only')
   }
 
   protected override doFetch(input: URL, init?: RequestInit): Promise<Response> {

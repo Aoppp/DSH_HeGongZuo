@@ -36,7 +36,24 @@ export interface EmployeeDataSource {
   getById(identifier: string): EmployeeView | null | Promise<EmployeeView | null>
   listDepartmentMembers(department: string): DepartmentMembersResult | Promise<DepartmentMembersResult>
   stats(): EmployeeStatsView | Promise<EmployeeStatsView>
+  analyze(criteria?: EmployeeAnalysisCriteria): EmployeeAnalysisView | Promise<EmployeeAnalysisView>
   contractAlerts(criteria?: ContractAlertCriteria): ContractAlertsView | Promise<ContractAlertsView>
+}
+
+export interface EmployeeAnalysisCriteria {
+  readonly status?: EmployeeStatus
+  readonly gender?: string
+  readonly department?: string
+  readonly jobTitle?: string
+}
+
+export interface EmployeeAnalysisView {
+  readonly total: number
+  readonly withBirthDate: number
+  readonly withDepartureDate: number
+  readonly averageCurrentAge: number | null
+  readonly averageAgeAtDeparture: number | null
+  readonly averageTenureYears: number | null
 }
 
 export interface StatBucket {
@@ -241,6 +258,34 @@ export class EmployeeRepository implements EmployeeDataSource {
     }
   }
 
+  analyze(criteria: EmployeeAnalysisCriteria = {}): EmployeeAnalysisView {
+    const gender = criteria.gender?.trim()
+    const department = criteria.department?.trim()
+    const jobTitle = criteria.jobTitle?.trim()
+    const matched = this.#employees.filter((employee) => (
+      (!criteria.status || employee.status === criteria.status)
+      && (!gender || normalize(employee.gender ?? '') === normalize(gender))
+      && (!department || includes(employee.departmentName, department))
+      && (!jobTitle || includes(employee.jobTitle, jobTitle))
+    ))
+    const today = localDateText(new Date())
+    const currentAges = matched.flatMap((employee) => employee.birthDate
+      ? [yearsBetween(employee.birthDate, today)] : [])
+    const departureAges = matched.flatMap((employee) => employee.birthDate && employee.departureDate
+      ? [yearsBetween(employee.birthDate, employee.departureDate)] : [])
+    const tenures = matched.flatMap((employee) => employee.hireDate
+      ? [yearsBetween(employee.hireDate, employee.departureDate ?? today)] : [])
+
+    return {
+      total: matched.length,
+      withBirthDate: currentAges.length,
+      withDepartureDate: matched.filter((employee) => employee.departureDate).length,
+      averageCurrentAge: average(currentAges),
+      averageAgeAtDeparture: average(departureAges),
+      averageTenureYears: average(tenures),
+    }
+  }
+
   contractAlerts(criteria: ContractAlertCriteria = {}): ContractAlertsView {
     const days = normalizedPageValue(criteria.days, 60, 365)
     const regularizationDays = normalizedPageValue(criteria.regularizationDays, 30, 365)
@@ -308,4 +353,24 @@ function daysBetween(dateText: string): number {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   return Math.round((target.getTime() - today.getTime()) / 86_400_000)
+}
+
+function localDateText(value: Date): string {
+  const year = value.getFullYear()
+  const month = String(value.getMonth() + 1).padStart(2, '0')
+  const day = String(value.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function yearsBetween(startText: string, endText: string): number {
+  const timestamp = (text: string) => {
+    const [year = 0, month = 1, day = 1] = text.slice(0, 10).split('-').map(Number)
+    return Date.UTC(year, month - 1, day)
+  }
+  return Math.max(0, (timestamp(endText) - timestamp(startText)) / 86_400_000 / 365.2425)
+}
+
+function average(values: readonly number[]): number | null {
+  if (values.length === 0) return null
+  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 10) / 10
 }

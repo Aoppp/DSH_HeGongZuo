@@ -7,6 +7,8 @@ import type { Duplex } from 'node:stream'
 import type { AuthUser } from './auth.js'
 
 const agentPathPrefix = '/api/employee-agent'
+const boundedRequestTimeoutMs = 30_000
+const agentTaskTimeoutMs = 5 * 60_000 + 30_000
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(sourceDirectory, '../../..')
 const runtimeConfigPath = process.env.HEGONGZUO_AGENT_RUNTIME_CONFIG
@@ -45,6 +47,12 @@ function upstreamPath(requestUrl: string | undefined): string {
   url.searchParams.delete('access_token')
   const pathname = url.pathname.slice(agentPathPrefix.length) || '/'
   return `${pathname}${url.search}`
+}
+
+function upstreamTimeout(requestUrl: string | undefined): number {
+  return upstreamPath(requestUrl).split('?', 1)[0] === '/api/session.prompt'
+    ? agentTaskTimeoutMs
+    : boundedRequestTimeoutMs
 }
 
 async function runtimeFor(user: AuthUser): Promise<AccountAgentRuntime> {
@@ -144,7 +152,7 @@ export async function proxyAgentRequest(
     upstreamResponse.pipe(response)
   })
   upstream.once('error', () => unavailable(response))
-  upstream.setTimeout(30_000, () => upstream.destroy(new Error('员工查询服务响应超时。')))
+  upstream.setTimeout(upstreamTimeout(request.url), () => upstream.destroy(new Error('员工查询服务响应超时。')))
   request.once('aborted', () => upstream.destroy())
   request.once('error', () => upstream.destroy())
   response.once('close', () => { if (!response.writableEnded) upstream.destroy() })
