@@ -5,6 +5,7 @@ import {
   Download,
   Eye,
   FileText,
+  Network,
   Pencil,
   Plus,
   Save,
@@ -34,6 +35,7 @@ import {
   type EmploymentType,
 } from './employee-data'
 import { MaskedText } from './MaskedText'
+import { OrganizationChart } from './OrganizationChart'
 import { exportEmployeesToExcel, exportEmployeesToPdf } from './export-employees'
 import { compareEmployees, sortFieldLabels, type SortField } from './employee-sort'
 
@@ -51,7 +53,7 @@ const employmentTypeLabels: Record<EmploymentType, string> = {
   intern: '实习',
 }
 
-type PageMode = 'directory' | 'maintenance'
+type PageMode = 'directory' | 'maintenance' | 'organization'
 type EditorMode = 'view' | 'create' | 'edit' | 'departure'
 type EmployeeScope = 'employed' | 'departed'
 const pageSizeOptions = [10, 20, 50, 100] as const
@@ -341,6 +343,9 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
   const employedCount = employees.filter((employee) => employee.status !== 'inactive').length
   const departedCount = employees.filter((employee) => employee.status === 'inactive').length
   const isDepartedView = employeeScope === 'departed'
+  const availableSortFields: readonly SortField[] = isDepartedView
+    ? ['departureDate', 'displayName', 'departmentName']
+    : ['hireDate', 'displayName', 'departmentName', 'contractEndDate']
 
   const visibleEmployees = useMemo(
     () => employees
@@ -361,6 +366,12 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, totalPages))
   }, [totalPages])
+
+  function selectEmployeeScope(scope: EmployeeScope) {
+    setEmployeeScope(scope)
+    setSortField(scope === 'departed' ? 'departureDate' : 'hireDate')
+    setSortAscending(scope !== 'departed')
+  }
 
   function goToPage(page: number) {
     setCurrentPage(page)
@@ -520,19 +531,21 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
       <header className="employee-data__header">
         <div className="employee-data__title">
           <button className="employee-data__back" type="button" onClick={onBack}><ArrowLeft size={16} /> {backLabel}</button>
-          <h1>{pageMode === 'directory' ? isDepartedView ? '离职人员档案' : '在职员工信息' : '员工数据维护'}</h1>
-          <p>{pageMode === 'directory' ? isDepartedView ? `当前共 ${departedCount} 名离职人员，查看任职记录与离职信息。` : `当前共 ${employedCount} 名在职员工，查看员工档案与组织信息。` : '在系统中查询、新增、查看、编辑或删除员工。'}</p>
+          <h1>{pageMode === 'organization' ? '组织架构图' : pageMode === 'directory' ? isDepartedView ? '离职人员档案' : '在职员工信息' : '员工数据维护'}</h1>
+          <p>{pageMode === 'organization' ? '按一级部门和二级部门查看在职员工组织分布。' : pageMode === 'directory' ? isDepartedView ? `当前共 ${departedCount} 名离职人员，按离职时间排序。` : `当前共 ${employedCount} 名在职员工，查看员工档案与组织信息。` : '在系统中查询、新增、查看、编辑或删除员工。'}</p>
         </div>
         <div className="employee-data__header-actions">
           {pageMode === 'directory' ? (
-            <button className="employee-data__primary" type="button" onClick={() => setPageMode('maintenance')}><Settings2 size={16} /> 进入维护</button>
+            <><button className="employee-data__secondary" type="button" onClick={() => setPageMode('organization')}><Network size={16} /> 组织架构</button><button className="employee-data__primary" type="button" onClick={() => setPageMode('maintenance')}><Settings2 size={16} /> 进入维护</button></>
+          ) : pageMode === 'organization' ? (
+            <button className="employee-data__secondary" type="button" onClick={() => setPageMode('directory')}><ArrowLeft size={16} /> 返回员工信息</button>
           ) : (
             <button className="employee-data__secondary" type="button" onClick={() => { setPageMode('directory'); closeEditor() }}><Eye size={16} /> 退出维护</button>
           )}
         </div>
       </header>
 
-      <section className="employee-data__panel">
+      {pageMode === 'organization' ? <OrganizationChart employees={employees} onBack={() => setPageMode('directory')} /> : <section className="employee-data__panel">
         {dataError && (
           <div className="employee-data__database-error">
             <span>{dataError}</span>
@@ -546,14 +559,14 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
           </label>
           <span>显示 {pageStart}–{pageEnd} / {visibleEmployees.length} 人</span>
           <div className="employee-data__scope" aria-label="员工范围">
-            <button type="button" className={employeeScope === 'employed' ? 'is-active' : ''} onClick={() => setEmployeeScope('employed')}>在职</button>
-            <button type="button" className={employeeScope === 'departed' ? 'is-active' : ''} onClick={() => setEmployeeScope('departed')}>离职</button>
+            <button type="button" className={employeeScope === 'employed' ? 'is-active' : ''} onClick={() => selectEmployeeScope('employed')}>在职</button>
+            <button type="button" className={employeeScope === 'departed' ? 'is-active' : ''} onClick={() => selectEmployeeScope('departed')}>离职</button>
           </div>
           <div className="employee-data__sort">
             <label>
               排序
               <select value={sortField} onChange={(event) => setSortField(event.target.value as SortField)}>
-                {(Object.keys(sortFieldLabels) as SortField[]).map((field) => (
+                {availableSortFields.map((field) => (
                   <option key={field} value={field}>{sortFieldLabels[field]}</option>
                 ))}
               </select>
@@ -683,7 +696,7 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
             </div>
           </nav>
         )}
-      </section>
+      </section>}
 
       {editorMode && draft && (
         <div className="employee-editor" role="dialog" aria-modal="true" aria-label={editorMode === 'create' ? '新增员工' : editorMode === 'departure' ? `${draft.displayName}的离职信息` : `${draft.displayName}的员工信息`}>

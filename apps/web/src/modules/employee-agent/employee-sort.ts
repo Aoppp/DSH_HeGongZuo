@@ -1,9 +1,10 @@
 import type { EmployeeRecord } from './employee-data'
 
-export type SortField = 'hireDate' | 'displayName' | 'departmentName' | 'contractEndDate'
+export type SortField = 'hireDate' | 'departureDate' | 'displayName' | 'departmentName' | 'contractEndDate'
 
 export const sortFieldLabels: Record<SortField, string> = {
   hireDate: '入职时间',
+  departureDate: '离职时间',
   displayName: '姓名',
   departmentName: '部门',
   contractEndDate: '合同到期',
@@ -26,6 +27,14 @@ export function compareEmployees(a: EmployeeRecord, b: EmployeeRecord, field: So
     if (!a.contractEndDate) return 1
     if (!b.contractEndDate) return -1
     return a.contractEndDate.localeCompare(b.contractEndDate) * direction
+  }
+  if (field === 'departureDate') {
+    // 无离职日期的记录始终排在最后；离职页面默认使用降序展示最新变动。
+    if (!a.departureDate && !b.departureDate) return a.displayName.localeCompare(b.displayName, 'zh-CN')
+    if (!a.departureDate) return 1
+    if (!b.departureDate) return -1
+    return a.departureDate.localeCompare(b.departureDate) * direction
+      || a.displayName.localeCompare(b.displayName, 'zh-CN')
   }
   return a.hireDate.localeCompare(b.hireDate) * direction
     || a.displayName.localeCompare(b.displayName, 'zh-CN')
