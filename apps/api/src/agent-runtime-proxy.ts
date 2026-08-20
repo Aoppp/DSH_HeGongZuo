@@ -157,6 +157,22 @@ function serializedUpgradeHeaders(headers: IncomingHttpHeaders): string {
     .join('\r\n')
 }
 
+/** 任一端断开时同步释放双向管道，且不让 Socket 的 error 事件冒泡为进程异常。 */
+function bridgeUpgradeSockets(clientSocket: Duplex, upstreamSocket: Duplex): void {
+  const closeBridge = () => {
+    clientSocket.unpipe(upstreamSocket)
+    upstreamSocket.unpipe(clientSocket)
+    if (!clientSocket.destroyed) clientSocket.destroy()
+    if (!upstreamSocket.destroyed) upstreamSocket.destroy()
+  }
+  clientSocket.once('error', closeBridge)
+  upstreamSocket.once('error', closeBridge)
+  clientSocket.once('close', () => { if (!upstreamSocket.destroyed) upstreamSocket.destroy() })
+  upstreamSocket.once('close', () => { if (!clientSocket.destroyed) clientSocket.destroy() })
+  upstreamSocket.pipe(clientSocket)
+  clientSocket.pipe(upstreamSocket)
+}
+
 export async function proxyAgentUpgrade(
   request: IncomingMessage,
   socket: Duplex,
@@ -177,8 +193,7 @@ export async function proxyAgentUpgrade(
     socket.write(`HTTP/1.1 ${status} ${statusMessage}\r\n${serializedUpgradeHeaders(upstreamResponse.headers)}\r\n\r\n`)
     if (head.length > 0) upstreamSocket.write(head)
     if (upstreamHead.length > 0) socket.write(upstreamHead)
-    upstreamSocket.pipe(socket)
-    socket.pipe(upstreamSocket)
+    bridgeUpgradeSockets(socket, upstreamSocket)
   })
   upstream.once('response', () => writeUpgradeError(socket, 502, '员工查询服务未能建立实时连接。'))
   upstream.once('error', () => writeUpgradeError(socket, 502, '员工查询服务暂时不可用，请稍后重试。'))

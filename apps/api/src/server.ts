@@ -364,6 +364,8 @@ server.on('connection', (socket) => {
 })
 
 server.on('upgrade', (request, socket, head) => {
+  // 认证与上游连接建立前浏览器也可能主动断开；必须接管错误，避免 ECONNRESET 退出 API。
+  socket.on('error', () => undefined)
   if (!isAgentRuntimeRequest(request.url)) {
     socket.destroy()
     return
@@ -382,7 +384,7 @@ server.on('upgrade', (request, socket, head) => {
   })().catch((error: unknown) => {
     const status = error instanceof AgentRuntimeProxyError ? error.status : 502
     const message = error instanceof Error ? error.message : '员工查询服务暂时不可用。'
-    socket.end(`HTTP/1.1 ${status} Service Unavailable\r\ncontent-type: application/json; charset=utf-8\r\nconnection: close\r\n\r\n${JSON.stringify({ error: message })}`)
+    if (!socket.destroyed) socket.end(`HTTP/1.1 ${status} Service Unavailable\r\ncontent-type: application/json; charset=utf-8\r\nconnection: close\r\n\r\n${JSON.stringify({ error: message })}`)
   })
 })
 
