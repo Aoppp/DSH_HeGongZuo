@@ -10,6 +10,9 @@ const requiredTemplates = [
   'deploy/systemd/hegongzuo-health.service.template',
   'deploy/systemd/hegongzuo-health.timer.template',
   'deploy/systemd/hegongzuo-alert@.service.template',
+  'deploy/systemd/hegongzuo-agent-sync.service.template',
+  'deploy/systemd/hegongzuo-agent-sync.path.template',
+  'deploy/systemd/hegongzuo-sync-agent-units.sh.template',
   'deploy/systemd/journald.conf.d/hegongzuo.conf.template',
 ]
 const requiredApiSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOFILE=', 'OnFailure=']

@@ -1,0 +1,9 @@
+[Unit]
+Description=监听和工作账号运行时配置变更
+
+[Path]
+PathChanged=__PROJECT_DIR__/.runtime/account-agent-runtimes.json
+Unit=hegongzuo-agent-sync.service
+
+[Install]
+WantedBy=multi-user.target

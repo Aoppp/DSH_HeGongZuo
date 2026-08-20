@@ -1,0 +1,32 @@
+#!/bin/sh
+# 此文件安装到 /usr/local/sbin 并由 root 所有；只接受严格校验后的账号 ID。
+set -eu
+
+PROJECT_DIR=__PROJECT_DIR__
+CONFIG_PATH="$PROJECT_DIR/.runtime/account-agent-runtimes.json"
+
+if [ ! -f "$CONFIG_PATH" ]; then
+  echo "[和工作] 运行时配置不存在：$CONFIG_PATH" >&2
+  exit 1
+fi
+
+desired_accounts=$(/usr/bin/node -e '
+  const fs = require("node:fs")
+  const entries = JSON.parse(fs.readFileSync(process.argv[1], "utf8"))
+  if (!Array.isArray(entries)) throw new Error("运行时配置必须为数组")
+  const ids = [...new Set(entries.map((entry) => entry?.accountId).filter((id) => typeof id === "string" && /^[a-z][a-z0-9]{1,31}$/.test(id)))]
+  if (ids.length !== entries.length) throw new Error("运行时配置包含无效账号")
+  process.stdout.write(ids.join("\n"))
+' "$CONFIG_PATH")
+
+running_accounts=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^hegongzuo-agent@\([a-z][a-z0-9]*\)\.service.*/\1/p')
+
+for account in $desired_accounts; do
+  systemctl enable --now "hegongzuo-agent@${account}.service"
+done
+
+for account in $running_accounts; do
+  if ! printf '%s\n' "$desired_accounts" | grep -Fxq "$account"; then
+    systemctl disable --now "hegongzuo-agent@${account}.service"
+  fi
+done

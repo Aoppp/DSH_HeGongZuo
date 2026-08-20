@@ -76,6 +76,8 @@ sudo systemctl enable --now hegongzuo-agent@<账号>.service
 
 对 `.runtime/account-agent-runtimes.json` 中每个启用账号执行最后一条命令。新增、删除或停用账号后，先同步运行时配置，再由运维执行对应的启用、停止或禁用命令；API 不直接管理 systemd 单元。
 
+启用 `hegongzuo-agent-sync.path` 后，配置变更会触发 root 所有的同步脚本，自动启停对应账号实例；脚本仅接受符合账号格式的配置值，API 不直接调用 systemd。
+
 ### 迁移验证与回滚
 
 上线前在预发布服务器执行 `corepack pnpm verify:production-services`，并模拟停止 `hegongzuo-api`、任一 `hegongzuo-agent@账号`、PostgreSQL 三种故障，确认健康 timer 失败、告警到达且未受影响单元保持运行。生产迁移后重复该检查。

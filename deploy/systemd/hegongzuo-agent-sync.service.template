@@ -1,0 +1,8 @@
+[Unit]
+Description=和工作账号运行时服务同步
+After=hegongzuo-api.service
+OnFailure=hegongzuo-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/hegongzuo-sync-agent-units
