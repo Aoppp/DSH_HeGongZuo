@@ -2,6 +2,7 @@
 Description=和工作平台与员工查询服务
 After=network-online.target postgresql.service
 Wants=network-online.target
+OnFailure=hegongzuo-alert@%n.service
 
 [Service]
 Type=simple
@@ -24,7 +25,6 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=__PROJECT_DIR__/.runtime __PROJECT_DIR__/apps/web/dist
-OnFailure=hegongzuo-alert@%n.service
 
 [Install]
 WantedBy=multi-user.target

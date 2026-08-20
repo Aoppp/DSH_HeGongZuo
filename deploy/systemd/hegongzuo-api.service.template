@@ -2,6 +2,7 @@
 Description=和工作平台 API
 After=network-online.target postgresql.service
 Wants=network-online.target
+OnFailure=hegongzuo-alert@%n.service
 
 [Service]
 Type=simple
@@ -9,7 +10,7 @@ User=__DEPLOY_USER__
 Group=__DEPLOY_USER__
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=__PROJECT_DIR__/.env
-ExecStart=/usr/bin/env corepack pnpm --filter @hegongzuo/api start
+ExecStart=/usr/bin/node apps/api/dist/server.js
 Restart=on-failure
 RestartSec=5
 MemoryMax=1G
@@ -21,7 +22,6 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=__PROJECT_DIR__/.runtime
-OnFailure=hegongzuo-alert@%n.service
 
 [Install]
 WantedBy=multi-user.target

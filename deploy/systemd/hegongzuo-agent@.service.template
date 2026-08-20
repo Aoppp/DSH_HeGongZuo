@@ -2,6 +2,7 @@
 Description=和工作员工查询运行时：%i
 After=network-online.target hegongzuo-api.service
 Wants=network-online.target
+OnFailure=hegongzuo-alert@%n.service
 
 [Service]
 Type=simple
@@ -21,7 +22,6 @@ PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
 ReadWritePaths=__PROJECT_DIR__/.runtime
-OnFailure=hegongzuo-alert@%n.service
 
 [Install]
 WantedBy=multi-user.target

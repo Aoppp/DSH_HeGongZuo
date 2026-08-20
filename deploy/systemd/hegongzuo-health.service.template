@@ -1,6 +1,7 @@
 [Unit]
 Description=和工作 API、数据库与账号运行时健康检查
 After=hegongzuo.service postgresql.service
+OnFailure=hegongzuo-alert@%n.service
 
 [Service]
 Type=oneshot
@@ -9,4 +10,3 @@ Group=__DEPLOY_USER__
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=__PROJECT_DIR__/.env
 ExecStart=/bin/sh -c '/usr/bin/pg_isready --dbname="$DATABASE_URL" && /usr/bin/env node scripts/check-production-health.mjs'
-OnFailure=hegongzuo-alert@%n.service
