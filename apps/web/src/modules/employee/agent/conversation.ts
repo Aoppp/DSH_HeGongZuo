@@ -111,10 +111,11 @@ export function buildConversation(entries: readonly HistoryEntry[]): Conversatio
       }
       case 'turn/end': {
         if (event.data.reason.kind === 'error') {
+          const interrupted = /abort(ed)?|user aborted a request/i.test(event.data.reason.error.message)
           upsert({
             id: `error-${event.seq}`,
             kind: 'error',
-            text: event.data.reason.error.message,
+            text: interrupted ? '本次查询连接中断，请重新发送。' : event.data.reason.error.message,
             state: 'failed',
             time: event.time,
           })
@@ -141,4 +142,12 @@ export function appendSessionEvent(entries: readonly HistoryEntry[], event: Sess
   const existing = entries.findIndex((entry) => entry.event.seq === event.seq)
   if (existing === -1) return [...entries, { event }]
   return entries.map((entry, index) => index === existing ? { event } : entry)
+}
+
+/** 批量合并高频流式事件，避免每个文本片段都遍历和重绘整段会话。 */
+export function appendSessionEvents(entries: readonly HistoryEntry[], events: readonly SessionEvent[]): HistoryEntry[] {
+  if (events.length === 0) return [...entries]
+  const merged = new Map(entries.map((entry) => [entry.event.seq, entry]))
+  for (const event of events) merged.set(event.seq, { event })
+  return [...merged.values()].sort((left, right) => left.event.seq - right.event.seq)
 }

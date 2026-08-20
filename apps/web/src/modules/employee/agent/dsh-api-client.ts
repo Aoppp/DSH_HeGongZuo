@@ -94,7 +94,7 @@ export class AccountDshApiClient extends AbstractApiClient {
   readonly #apiBasePath: string
 
   constructor(apiBasePath = '/api/employee-agent') {
-    super(20_000)
+    super(30_000)
     this.#apiBasePath = apiBasePath.replace(/\/$/, '')
   }
 
@@ -144,13 +144,26 @@ export class AccountDshApiClient extends AbstractApiClient {
     const socket = new WebSocket(url)
     const inbox: Array<{ readonly kind: 'frame'; readonly envelope: RpcRequest<T> } | { readonly kind: 'end' }> = []
     let wake: (() => void) | undefined
+    let ended = false
+    const finish = () => {
+      if (ended) return
+      ended = true
+      enqueue({ kind: 'end' })
+    }
 
     const enqueue = (item: (typeof inbox)[number]) => {
       inbox.push(item)
       wake?.()
       wake = undefined
     }
-    const handleOpen = () => onOpen?.()
+    const connectionTimer = globalThis.setTimeout(() => {
+      if (socket.readyState === WebSocket.CONNECTING) socket.close()
+      finish()
+    }, 10_000)
+    const handleOpen = () => {
+      globalThis.clearTimeout(connectionTimer)
+      onOpen?.()
+    }
     const handleMessage = (event: MessageEvent) => {
       try {
         if (typeof event.data !== 'string') throw new Error('收到了不支持的二进制事件。')
@@ -162,7 +175,8 @@ export class AccountDshApiClient extends AbstractApiClient {
         console.error('[和工作] 已忽略无法解析的 Agent 事件：', reason)
       }
     }
-    const handleClose = () => enqueue({ kind: 'end' })
+    const handleClose = () => finish()
+    const handleError = () => finish()
     const handleAbort = () => {
       if (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN) socket.close()
     }
@@ -170,6 +184,7 @@ export class AccountDshApiClient extends AbstractApiClient {
     socket.addEventListener('open', handleOpen)
     socket.addEventListener('message', handleMessage)
     socket.addEventListener('close', handleClose, { once: true })
+    socket.addEventListener('error', handleError, { once: true })
     signal.addEventListener('abort', handleAbort, { once: true })
     if (signal.aborted) handleAbort()
 
@@ -184,9 +199,11 @@ export class AccountDshApiClient extends AbstractApiClient {
       }
     } finally {
       signal.removeEventListener('abort', handleAbort)
+      globalThis.clearTimeout(connectionTimer)
       socket.removeEventListener('open', handleOpen)
       socket.removeEventListener('message', handleMessage)
       socket.removeEventListener('close', handleClose)
+      socket.removeEventListener('error', handleError)
       handleAbort()
     }
   }

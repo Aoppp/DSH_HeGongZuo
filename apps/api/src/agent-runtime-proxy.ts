@@ -139,13 +139,20 @@ export async function proxyAgentRequest(
     headers: proxyHeaders(request.headers, runtime),
   }, (upstreamResponse) => {
     response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers)
+    upstreamResponse.once('error', () => unavailable(response))
+    response.once('error', () => upstreamResponse.destroy())
     upstreamResponse.pipe(response)
   })
   upstream.once('error', () => unavailable(response))
+  upstream.setTimeout(30_000, () => upstream.destroy(new Error('员工查询服务响应超时。')))
+  request.once('aborted', () => upstream.destroy())
+  request.once('error', () => upstream.destroy())
+  response.once('close', () => { if (!response.writableEnded) upstream.destroy() })
   request.pipe(upstream)
 }
 
 function writeUpgradeError(socket: Duplex, status: number, message: string): void {
+  if (socket.destroyed) return
   socket.end(`HTTP/1.1 ${status} ${status === 401 ? 'Unauthorized' : status === 403 ? 'Forbidden' : 'Service Unavailable'}\r\ncontent-type: application/json; charset=utf-8\r\nconnection: close\r\n\r\n${JSON.stringify({ error: message })}`)
 }
 
@@ -187,7 +194,10 @@ export async function proxyAgentUpgrade(
     path: upstreamPath(request.url),
     headers: proxyHeaders(request.headers, runtime),
   })
+  const upgradeTimer = setTimeout(() => upstream.destroy(new Error('员工查询实时连接建立超时。')), 10_000)
+  upgradeTimer.unref()
   upstream.once('upgrade', (upstreamResponse, upstreamSocket, upstreamHead) => {
+    clearTimeout(upgradeTimer)
     const status = upstreamResponse.statusCode ?? 101
     const statusMessage = upstreamResponse.statusMessage ?? 'Switching Protocols'
     socket.write(`HTTP/1.1 ${status} ${statusMessage}\r\n${serializedUpgradeHeaders(upstreamResponse.headers)}\r\n\r\n`)
@@ -195,7 +205,12 @@ export async function proxyAgentUpgrade(
     if (upstreamHead.length > 0) socket.write(upstreamHead)
     bridgeUpgradeSockets(socket, upstreamSocket)
   })
-  upstream.once('response', () => writeUpgradeError(socket, 502, '员工查询服务未能建立实时连接。'))
-  upstream.once('error', () => writeUpgradeError(socket, 502, '员工查询服务暂时不可用，请稍后重试。'))
+  upstream.once('response', (upstreamResponse) => {
+    clearTimeout(upgradeTimer)
+    upstreamResponse.resume()
+    writeUpgradeError(socket, 502, '员工查询服务未能建立实时连接。')
+  })
+  upstream.once('error', () => { clearTimeout(upgradeTimer); writeUpgradeError(socket, 502, '员工查询服务暂时不可用，请稍后重试。') })
+  socket.once('close', () => upstream.destroy())
   upstream.end()
 }
