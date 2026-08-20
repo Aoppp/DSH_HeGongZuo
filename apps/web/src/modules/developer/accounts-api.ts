@@ -36,17 +36,15 @@ export class AccountsApiError extends Error {
 }
 
 async function accountsRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('hegongzuo.session.token')
   const response = await fetch(path, {
     ...init,
+    credentials: 'same-origin',
     headers: {
       ...(init?.body ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   })
   if (response.status === 401) {
-    localStorage.removeItem('hegongzuo.session.token')
     window.location.reload()
     throw new AccountsApiError(401, '登录已过期，请重新登录。')
   }

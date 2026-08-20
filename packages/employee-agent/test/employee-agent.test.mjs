@@ -37,11 +37,11 @@ test('不存在的部门返回空结果', () => {
   assert.deepEqual(result.members, [])
 })
 
-test('注册五个模型兼容的只读工具', async () => {
+test('注册六个模型兼容的只读工具', async () => {
   const tools = createEmployeeTools(repository)
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    ['employee_stats', 'contract_alerts', 'employee_search', 'employee_get', 'organization_list_members'],
+    ['employee_stats', 'contract_alerts', 'employee_search', 'employee_get', 'departure_search', 'organization_list_members'],
   )
 
   const search = tools[2]
@@ -141,7 +141,7 @@ test('DSH 插件入口注册工具、系统提示和账号工作区', async () =
     else process.env.HEGONGZUO_AGENT_WORKSPACE = previousWorkspace
   }
 
-  assert.equal(registeredTools.length, 5)
+  assert.equal(registeredTools.length, 6)
   assert.equal(promptSections.length, 1)
   assert.equal(promptSections[0].name, 'hegongzuo:employee-management')
   assert.deepEqual(registeredWorkspaces, [{

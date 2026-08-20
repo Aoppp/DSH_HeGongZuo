@@ -1,12 +1,13 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { spawn } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { AccountValidationError, AccountsService } from './accounts.js'
 import { parsePermissions, type AccountPermissionId } from './account-permissions.js'
 import { AgentRuntimeProxyError, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
-import { AuthError, AuthService, bearerToken, type AuthUser } from './auth.js'
+import { AuthError, AuthService, bearerToken, LoginRateLimitError, type AuthUser } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './employee-input.js'
 import { PostgresEmployeeRepository } from './employee-repository.js'
@@ -43,10 +44,23 @@ function sessionToken(request: IncomingMessage): string | null {
   return bearerToken(request.headers.authorization) ?? cookieToken(request.headers.cookie)
 }
 
-function sessionCookie(token: string, clear = false): string {
-  const secure = process.env.HEGONGZUO_SESSION_COOKIE_SECURE === 'true' ? '; Secure' : ''
+function sessionCookie(request: IncomingMessage, token: string, clear = false): string {
+  const forwardedHeader = request.headers['x-forwarded-proto']
+  const forwardedProtocol = typeof forwardedHeader === 'string'
+    ? forwardedHeader.split(',').map((value) => value.trim()).at(-1)
+    : undefined
+  const secure = forwardedProtocol === 'https' || process.env.HEGONGZUO_SESSION_COOKIE_SECURE === 'true' ? '; Secure' : ''
   const maxAge = clear ? '; Max-Age=0' : '; Max-Age=604800'
   return `hegongzuo_session=${encodeURIComponent(token)}; Path=/api; HttpOnly; SameSite=Strict${secure}${maxAge}`
+}
+
+function loginSourceHash(request: IncomingMessage): string {
+  // API 仅监听回环地址，来源 IP 由 Nginx 写入 X-Forwarded-For；取最右侧由本机 Nginx 追加的地址。
+  const forwarded = request.headers['x-forwarded-for']
+  const source = typeof forwarded === 'string'
+    ? forwarded.split(',').map((value) => value.trim()).at(-1)
+    : request.socket.remoteAddress
+  return createHash('sha256').update(source || 'unknown').digest('hex')
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
@@ -169,8 +183,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (typeof record.accountId !== 'string' || typeof record.password !== 'string') {
       throw new HttpError(400, '请填写账号和密码。')
     }
-    const result = await auth.login(record.accountId, record.password)
-    sendJson(response, 200, result, { 'set-cookie': sessionCookie(result.token) })
+    const result = await auth.login(record.accountId, record.password, loginSourceHash(request))
+    sendJson(response, 200, { user: result.user }, { 'set-cookie': sessionCookie(request, result.token) })
     return
   }
 
@@ -178,7 +192,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const token = sessionToken(request)
     const user = await auth.userForToken(token)
     if (!user) throw new HttpError(401, '登录已过期，请重新登录。')
-    sendJson(response, 200, { user }, token ? { 'set-cookie': sessionCookie(token) } : {})
+    sendJson(response, 200, { user }, token ? { 'set-cookie': sessionCookie(request, token) } : {})
     return
   }
 
@@ -196,7 +210,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
     await auth.logout(sessionToken(request))
-    response.writeHead(204, { 'set-cookie': sessionCookie('', true) })
+    response.writeHead(204, { 'set-cookie': sessionCookie(request, '', true) })
     response.end()
     return
   }
@@ -363,8 +377,13 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof AccountValidationError) {
-      sendJson(response, error instanceof HttpError || error instanceof AgentRuntimeProxyError ? error.status : 400, { error: error.message })
+    if (error instanceof HttpError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError) {
+      const status = error instanceof LoginRateLimitError
+        ? 429
+        : error instanceof HttpError || error instanceof AgentRuntimeProxyError
+          ? error.status
+          : 400
+      sendJson(response, status, { error: error.message })
       return
     }
     const databaseError = postgresErrorStatus(error)

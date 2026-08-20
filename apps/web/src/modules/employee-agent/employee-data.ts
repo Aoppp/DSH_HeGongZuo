@@ -130,18 +130,16 @@ export class EmployeeApiError extends Error {
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = localStorage.getItem('hegongzuo.session.token')
   const response = await fetch(path, {
     ...init,
+    credentials: 'same-origin',
     headers: {
       ...(init?.body ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   })
   if (response.status === 401) {
-    // 会话过期：清除本地登录态并回到登录页
-    localStorage.removeItem('hegongzuo.session.token')
+    // 会话 Cookie 已失效：回到登录页。
     window.location.reload()
     throw new EmployeeApiError(401, '登录已过期，请重新登录。')
   }

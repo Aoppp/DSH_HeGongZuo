@@ -98,10 +98,10 @@ export class AccountDshApiClient extends AbstractApiClient {
   }
 
   async deleteSession(sessionId: string): Promise<void> {
-    const token = localStorage.getItem('hegongzuo.session.token')
     const response = await fetch(`${this.#apiBasePath}/hegongzuo/api/sessions/${encodeURIComponent(sessionId)}`, {
       method: 'DELETE',
-      headers: { accept: 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
     })
     const body = await response.json().catch(() => ({})) as { error?: unknown }
     if (!response.ok) {
@@ -113,9 +113,7 @@ export class AccountDshApiClient extends AbstractApiClient {
     const proxiedUrl = new URL(input)
     proxiedUrl.pathname = `${this.#apiBasePath}${proxiedUrl.pathname}`
     const headers = new Headers(init?.headers)
-    const token = localStorage.getItem('hegongzuo.session.token')
-    if (token) headers.set('authorization', `Bearer ${token}`)
-    return fetch(proxiedUrl, { ...init, headers })
+    return fetch(proxiedUrl, { ...init, credentials: 'same-origin', headers })
   }
 
   protected override openMux(

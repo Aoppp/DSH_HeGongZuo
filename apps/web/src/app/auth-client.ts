@@ -1,21 +1,6 @@
 import type { AuthenticatedUser } from './types'
 
-const tokenStorageKey = 'hegongzuo.session.token'
-
-export function storedToken(): string | null {
-  return localStorage.getItem(tokenStorageKey)
-}
-
-function storeToken(token: string): void {
-  localStorage.setItem(tokenStorageKey, token)
-}
-
-export function clearToken(): void {
-  localStorage.removeItem(tokenStorageKey)
-}
-
 interface AuthResponse {
-  readonly token: string
   readonly user: AuthenticatedUser
 }
 
@@ -37,12 +22,11 @@ export class AuthApiError extends Error {
 }
 
 async function authRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = storedToken()
   const response = await fetch(path, {
     ...init,
+    credentials: 'same-origin',
     headers: {
       ...(init?.body ? { 'content-type': 'application/json' } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },
   })
@@ -65,16 +49,13 @@ export async function apiLogin(accountId: string, password: string): Promise<Aut
     method: 'POST',
     body: JSON.stringify({ accountId, password }),
   })
-  storeToken(result.token)
   return result.user
 }
 
 export async function apiMe(): Promise<AuthenticatedUser | null> {
-  if (!storedToken()) return null
   try {
     return (await authRequest<MeResponse>('/api/auth/me')).user
-  } catch (error) {
-    if (error instanceof AuthApiError && error.status === 401) clearToken()
+  } catch {
     return null
   }
 }
@@ -87,9 +68,5 @@ export async function apiChangePassword(currentPassword: string, newPassword: st
 }
 
 export async function apiLogout(): Promise<void> {
-  try {
-    await authRequest<void>('/api/auth/logout', { method: 'POST' })
-  } finally {
-    clearToken()
-  }
+  await authRequest<void>('/api/auth/logout', { method: 'POST' })
 }
