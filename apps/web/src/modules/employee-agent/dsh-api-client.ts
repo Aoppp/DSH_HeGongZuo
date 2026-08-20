@@ -30,6 +30,55 @@ function ensureRandomUuid(): void {
   Object.defineProperty(cryptoApi, 'randomUUID', { configurable: true, value: fallbackRandomUuid })
 }
 
+// 部分旧版浏览器没有 AbortSignal.timeout / AbortSignal.any；查询连接库会直接使用这两个 API。
+// 在模块加载阶段补齐，确保库首次发起请求前已具备兼容实现。
+function ensureAbortSignalCompatibility(): void {
+  if (typeof globalThis.AbortController !== 'function' || typeof globalThis.AbortSignal === 'undefined') return
+  const abortSignalApi = globalThis.AbortSignal as typeof AbortSignal & {
+    timeout?: (milliseconds: number) => AbortSignal
+    any?: (signals: readonly AbortSignal[]) => AbortSignal
+  }
+  if (typeof abortSignalApi.timeout !== 'function') {
+    Object.defineProperty(abortSignalApi, 'timeout', {
+      configurable: true,
+      value: (milliseconds: number): AbortSignal => {
+        const controller = new AbortController()
+        const delay = Number.isFinite(milliseconds) ? Math.max(0, milliseconds) : 0
+        const timer = globalThis.setTimeout(() => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')), delay)
+        controller.signal.addEventListener('abort', () => globalThis.clearTimeout(timer), { once: true })
+        return controller.signal
+      },
+    })
+  }
+  if (typeof abortSignalApi.any !== 'function') {
+    Object.defineProperty(abortSignalApi, 'any', {
+      configurable: true,
+      value: (signals: readonly AbortSignal[]): AbortSignal => {
+        const controller = new AbortController()
+        const listeners = new Map<AbortSignal, () => void>()
+        const abortFrom = (signal: AbortSignal) => {
+          for (const [candidate, listener] of listeners) candidate.removeEventListener('abort', listener)
+          listeners.clear()
+          controller.abort(signal.reason)
+        }
+        for (const signal of signals) {
+          if (signal.aborted) {
+            abortFrom(signal)
+            break
+          }
+          const listener = () => abortFrom(signal)
+          listeners.set(signal, listener)
+          signal.addEventListener('abort', listener, { once: true })
+        }
+        return controller.signal
+      },
+    })
+  }
+}
+
+ensureRandomUuid()
+ensureAbortSignalCompatibility()
+
 export class DshRequestError extends Error {
   readonly code: string
 
@@ -45,7 +94,6 @@ export class AccountDshApiClient extends AbstractApiClient {
 
   constructor(apiBasePath = '/api/employee-agent') {
     super(20_000)
-    ensureRandomUuid()
     this.#apiBasePath = apiBasePath.replace(/\/$/, '')
   }
 
