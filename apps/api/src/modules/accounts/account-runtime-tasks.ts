@@ -14,8 +14,8 @@ export class AccountRuntimeTasks {
     this.queue = this.queue.catch(() => undefined).then(async () => {
       await this.accounts.setStatus(account.id, 'initializing')
       try {
-        if (account.permissions.includes('employee-query')) await this.run('provision-account-agent-runtime.mjs', [account.accountId])
         await this.run('sync-account-agent-runtimes.mjs')
+        await this.run('provision-account-agent-runtimes.mjs', [account.accountId])
         if (!await this.accounts.setStatus(account.id, 'active')) throw new Error('账号不存在。')
       } catch {
         await this.accounts.setStatus(account.id, 'initialization_failed')

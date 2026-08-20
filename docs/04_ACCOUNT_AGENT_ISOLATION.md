@@ -64,3 +64,18 @@ corepack pnpm verify:agent-isolation
 ## 6. 生产环境路线
 
 “每账号一个本地 DSH 进程”适合当前两个内部测试账号，不是未来大规模部署方案。正式账号增加时，应将会话存储改为服务端强制包含 `tenant_id` 和 `user_id`，由认证中间件决定运行时路由和访问范围。员工业务数据应进入数据库并按公司与权限共享，不能把 Workspace 文件目录当作正式员工数据库。
+
+# Agent 运行时注册约定
+
+每个需要按账号独立运行的 DSH 网页 Agent，在其包目录中添加 `hegongzuo-agent.json`：
+
+```json
+{
+  "id": "example-query",
+  "permissionId": "example-query",
+  "runtime": "dsh-web",
+  "apiBasePath": "/dsh/{accountId}"
+}
+```
+
+部署或账号权限变更时，平台自动扫描 `packages/*/hegongzuo-agent.json`，生成 `.runtime/agent-runtimes.json`，并由 `hegongzuo-agent-sync.path` 自动启停 `hegongzuo-agent@<agent-id>--<account-id>` 实例。新增符合此约定的 Agent 不需要新增 systemd 服务或修改同步脚本；权限定义和对应业务入口仍应按模块边界单独开发。

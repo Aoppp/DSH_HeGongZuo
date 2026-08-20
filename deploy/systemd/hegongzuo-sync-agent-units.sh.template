@@ -3,30 +3,37 @@
 set -eu
 
 PROJECT_DIR=__PROJECT_DIR__
-CONFIG_PATH="$PROJECT_DIR/.runtime/account-agent-runtimes.json"
+CONFIG_PATH="$PROJECT_DIR/.runtime/agent-runtimes.json"
 
 if [ ! -f "$CONFIG_PATH" ]; then
   echo "[和工作] 运行时配置不存在：$CONFIG_PATH" >&2
   exit 1
 fi
 
-desired_accounts=$(/usr/bin/node -e '
+desired_runtimes=$(/usr/bin/node -e '
   const fs = require("node:fs")
   const entries = JSON.parse(fs.readFileSync(process.argv[1], "utf8"))
   if (!Array.isArray(entries)) throw new Error("运行时配置必须为数组")
-  const ids = [...new Set(entries.map((entry) => entry?.accountId).filter((id) => typeof id === "string" && /^[a-z][a-z0-9]{1,31}$/.test(id)))]
+  const ids = [...new Set(entries.map((entry) => entry?.runtimeId).filter((id) => typeof id === "string" && /^[a-z][a-z0-9-]{1,62}--[a-z][a-z0-9]{1,31}$/.test(id)))]
   if (ids.length !== entries.length) throw new Error("运行时配置包含无效账号")
   process.stdout.write(ids.join("\n"))
 ' "$CONFIG_PATH")
 
-running_accounts=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^hegongzuo-agent@\([a-z][a-z0-9]*\)\.service.*/\1/p')
+running_runtimes=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^hegongzuo-agent@\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)\.service.*/\1/p')
+legacy_accounts=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^hegongzuo-agent@\([a-z][a-z0-9]*\)\.service.*/\1/p')
 
-for account in $desired_accounts; do
-  systemctl enable --now "hegongzuo-agent@${account}.service"
+# v2.02 之前的实例仅以账号命名；切换为 agent--account 后必须先停用，
+# 否则会与新实例争用相同端口。
+for account in $legacy_accounts; do
+  systemctl disable --now "hegongzuo-agent@${account}.service"
 done
 
-for account in $running_accounts; do
-  if ! printf '%s\n' "$desired_accounts" | grep -Fxq "$account"; then
-    systemctl disable --now "hegongzuo-agent@${account}.service"
+for runtime in $running_runtimes; do
+  if ! printf '%s\n' "$desired_runtimes" | grep -Fxq "$runtime"; then
+    systemctl disable --now "hegongzuo-agent@${runtime}.service"
   fi
+done
+
+for runtime in $desired_runtimes; do
+  systemctl enable --now "hegongzuo-agent@${runtime}.service"
 done

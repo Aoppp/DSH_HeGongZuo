@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { AccountValidationError, AccountsService } from './accounts.js'
-import { AgentRuntimeProxyError, checkAgentRuntimeHealth, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
+import { AgentRuntimeProxyError, checkConfiguredAgentRuntimeHealth, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
 import { AuthError, AuthService, LoginRateLimitError } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/employee-input.js'
@@ -105,10 +105,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (request.method === 'GET' && url.pathname === '/health') {
     await database.query('SELECT 1')
-    const accountIds = (await accounts.list()).filter((account) => account.status === 'active' && account.permissions.includes('employee-query')).map((account) => account.accountId)
-    const runtimes = await checkAgentRuntimeHealth(accountIds)
+    const runtimes = await checkConfiguredAgentRuntimeHealth()
     const unavailable = runtimes.filter((runtime) => !runtime.available)
-    sendJson(response, unavailable.length ? 503 : 200, { ok: unavailable.length === 0, database: 'postgresql', employeeQueryRuntimes: { expected: runtimes.length, available: runtimes.length - unavailable.length, unavailable: unavailable.map((runtime) => runtime.accountId) } })
+    sendJson(response, unavailable.length ? 503 : 200, { ok: unavailable.length === 0, database: 'postgresql', agentRuntimes: { expected: runtimes.length, available: runtimes.length - unavailable.length, unavailable: unavailable.map((runtime) => runtime.runtimeId) } })
     return
   }
 

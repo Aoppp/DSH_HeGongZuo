@@ -1,5 +1,5 @@
 [Unit]
-Description=和工作员工查询运行时：%i
+Description=和工作 Agent 运行时：%i
 After=network-online.target hegongzuo-api.service
 Wants=network-online.target
 OnFailure=hegongzuo-alert@%n.service
@@ -10,7 +10,7 @@ User=__DEPLOY_USER__
 Group=__DEPLOY_USER__
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=__PROJECT_DIR__/.env
-ExecStart=/usr/bin/env node scripts/run-account-agent-runtime.mjs %i
+ExecStart=/usr/bin/env node scripts/run-agent-runtime.mjs %i
 Restart=on-failure
 RestartSec=5
 MemoryMax=1G

@@ -29,6 +29,7 @@
     "validate:data": "node scripts/validate-employee-fixtures.mjs",
     "verify:agent-isolation": "node scripts/verify-account-agent-isolation.mjs",
     "verify:production-services": "node scripts/verify-production-service-config.mjs",
+    "verify:agent-registry": "node scripts/verify-agent-runtime-registry.mjs",
     "verify:env": "node scripts/verify-environment.mjs",
     "dsh:accounts:sync": "node scripts/sync-account-agent-runtimes.mjs"
   },

@@ -1,0 +1,6 @@
+{
+  "id": "employee-query",
+  "permissionId": "employee-query",
+  "runtime": "dsh-web",
+  "apiBasePath": "/dsh/{accountId}"
+}

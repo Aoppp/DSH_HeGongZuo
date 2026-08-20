@@ -11,6 +11,8 @@ const sourceDirectory = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(sourceDirectory, '../../..')
 const runtimeConfigPath = process.env.HEGONGZUO_AGENT_RUNTIME_CONFIG
   ?? path.join(projectRoot, '.runtime', 'account-agent-runtimes.json')
+const allRuntimeConfigPath = process.env.HEGONGZUO_ALL_AGENT_RUNTIME_CONFIG
+  ?? path.join(projectRoot, '.runtime', 'agent-runtimes.json')
 
 interface AccountAgentRuntime {
   readonly accountId: string
@@ -20,6 +22,11 @@ interface AccountAgentRuntime {
 export interface AgentRuntimeHealth {
   readonly accountId: string
   readonly available: boolean
+}
+
+export interface ConfiguredAgentRuntimeHealth extends AgentRuntimeHealth {
+  readonly runtimeId: string
+  readonly agentId: string
 }
 
 export class AgentRuntimeProxyError extends Error {
@@ -86,6 +93,21 @@ export async function checkAgentRuntimeHealth(accountIds: readonly string[]): Pr
     const runtime = runtimes.find((candidate) => candidate.accountId === accountId)
     return { accountId, available: runtime ? await probeRuntime(runtime) : false }
   }))
+}
+
+/** 检查注册表内全部已启用 Agent 实例，供平台健康检查与告警使用。 */
+export async function checkConfiguredAgentRuntimeHealth(): Promise<readonly ConfiguredAgentRuntimeHealth[]> {
+  try {
+    const definitions: unknown = JSON.parse(await readFile(allRuntimeConfigPath, 'utf8'))
+    if (!Array.isArray(definitions)) return []
+    const runtimes = definitions.filter((candidate): candidate is AccountAgentRuntime & { runtimeId: string, agentId: string } => typeof candidate === 'object' && candidate !== null
+      && 'runtimeId' in candidate && typeof candidate.runtimeId === 'string'
+      && 'agentId' in candidate && typeof candidate.agentId === 'string'
+      && 'accountId' in candidate && typeof candidate.accountId === 'string'
+      && 'port' in candidate && typeof candidate.port === 'number' && Number.isInteger(candidate.port)
+      && candidate.port >= 1024 && candidate.port <= 65535)
+    return Promise.all(runtimes.map(async (runtime) => ({ runtimeId: runtime.runtimeId, agentId: runtime.agentId, accountId: runtime.accountId, available: await probeRuntime(runtime) })))
+  } catch { return [] }
 }
 
 function proxyHeaders(headers: IncomingHttpHeaders, runtime: AccountAgentRuntime): IncomingHttpHeaders {
