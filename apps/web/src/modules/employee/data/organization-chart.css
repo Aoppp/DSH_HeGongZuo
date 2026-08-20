@@ -4,29 +4,30 @@
 .organization-chart__header p { color: var(--ink-500); font-size: 12px; }
 .organization-chart__header strong { display: block; margin-top: 4px; font-size: 13px; }
 .organization-chart__header > div:last-child { display: flex; gap: 8px; }
-.organization-chart__canvas { overflow: auto; min-height: 440px; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 30px; background: linear-gradient(#fafcfb, #f5f8f6); }
-.organization-chart__tree { min-width: 650px; }
+.organization-chart__canvas { overflow: auto; min-height: 440px; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 34px; background: linear-gradient(#fafcfb, #f5f8f6); }
+.organization-chart__tree { position: relative; min-width: 760px; padding-bottom: 10px; }
 .organization-chart__root, .organization-chart__node, .organization-chart__employee-node { position: relative; box-sizing: border-box; }
 .organization-chart__root { display: flex; align-items: center; gap: 10px; width: 230px; margin: 0 auto; border: 1px solid #174f43; border-radius: 10px; padding: 13px 16px; color: #fff; background: #1f5d50; box-shadow: 0 8px 18px rgba(31, 78, 68, .18); }
+.organization-chart__root::after { position: absolute; top: 100%; left: 50%; height: 23px; border-left: 1.5px solid #8da89d; content: ''; }
 .organization-chart__root strong, .organization-chart__node strong, .organization-chart__employee-node strong { display: block; font-size: 14px; }
 .organization-chart__root span, .organization-chart__node span, .organization-chart__employee-node span { display: block; margin-top: 3px; font-size: 11px; }
 .organization-chart__root span { color: rgba(255, 255, 255, .78); }
 .organization-chart__children { position: relative; display: grid; gap: 16px; margin: 0; padding: 20px 0 0 36px; list-style: none; }
 .organization-chart__children::before { position: absolute; top: 0; bottom: 26px; left: 15px; border-left: 1.5px solid #b9c9c1; content: ''; }
-.organization-chart__children--root { display: flex; align-items: flex-start; justify-content: center; width: max-content; min-width: 100%; margin: 0 auto; padding: 46px 0 0; gap: 22px; }
-.organization-chart__children--root::before { top: 23px; right: 0; bottom: auto; left: 0; height: 0; border-top: 1.5px solid #b9c9c1; border-left: 0; }
+.organization-chart__children--root { display: flex; align-items: flex-start; justify-content: center; width: max-content; min-width: 100%; margin: 0 auto; padding: 46px 20px 0; gap: 24px; }
+.organization-chart__children--root::before { top: 23px; right: 145px; bottom: auto; left: 145px; height: 0; border-top: 1.5px solid #8da89d; border-left: 0; }
 .organization-chart__tree > .organization-chart__children--root > .organization-chart__tree-item::before { position: absolute; top: -23px; left: 50%; width: 0; height: 23px; border-top: 0; border-left: 1.5px solid #b9c9c1; content: ''; }
 .organization-chart__children > .organization-chart__tree-item::before, .organization-chart__children--employees > .organization-chart__employee-node::before { position: absolute; top: 26px; left: -21px; width: 21px; border-top: 1.5px solid #b9c9c1; content: ''; }
 .organization-chart__tree-item { position: relative; }
-.organization-chart__tree-item--department { width: 290px; flex: 0 0 290px; }
-.organization-chart__node { display: flex; align-items: center; gap: 8px; width: min(100%, 440px); border: 1px solid #b9c9c1; border-radius: 9px; padding: 10px 13px 10px 8px; background: #fff; box-shadow: 0 2px 5px rgba(20, 44, 34, .04); }
+.organization-chart__tree-item--department { width: 286px; flex: 0 0 286px; }
+.organization-chart__node { display: flex; align-items: center; gap: 8px; width: 100%; border: 1px solid #b9c9c1; border-radius: 9px; padding: 10px 13px 10px 8px; background: #fff; box-shadow: 0 2px 5px rgba(20, 44, 34, .04); }
 .organization-chart__node--department { border-color: #7994b5; color: #183c67; background: #f8fbff; }.organization-chart__node--unit { border-color: #a887ba; color: #513563; background: #fdfaff; }
 .organization-chart__node span { color: var(--ink-500); }
 .organization-chart__toggle { display: inline-grid; flex: 0 0 28px; width: 28px; height: 28px; place-items: center; border: 1px solid currentColor; border-radius: 6px; padding: 0; color: inherit; background: transparent; cursor: pointer; }
 .organization-chart__toggle:hover { background: rgba(21, 64, 53, .07); }
-.organization-chart__children--employees { grid-template-columns: 1fr; gap: 10px; padding-top: 15px; }
+.organization-chart__children--employees { grid-template-columns: 1fr; gap: 8px; padding-top: 14px; }
 .organization-chart__children--employees::before { bottom: auto; height: 15px; }
-.organization-chart__employee-node { min-height: 61px; border: 1px solid #dbb351; border-radius: 8px; padding: 10px 12px; color: #5a430d; background: #fffdf7; }
+.organization-chart__employee-node { min-height: 57px; border: 1px solid #dbb351; border-radius: 8px; padding: 9px 12px; color: #5a430d; background: #fffdf7; }
 .organization-chart__employee-node span { color: #7a6950; }
 .organization-chart__empty { color: var(--ink-500); text-align: center; }
-@media (max-width: 640px) { .organization-chart__header { align-items: flex-start; flex-direction: column; }.organization-chart__header > div:last-child { width: 100%; }.organization-chart__header button { flex: 1; }.organization-chart__canvas { padding: 18px; }.organization-chart__tree { min-width: 520px; } }
+@media (max-width: 640px) { .organization-chart__header { align-items: flex-start; flex-direction: column; }.organization-chart__header > div:last-child { width: 100%; }.organization-chart__header button { flex: 1; }.organization-chart__canvas { padding: 18px; }.organization-chart__tree { min-width: 620px; }.organization-chart__children--root { gap: 18px; } }
