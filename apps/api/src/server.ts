@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createHash } from 'node:crypto'
+import type { Socket } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -356,6 +357,12 @@ const server = createServer((request, response) => {
   })
 })
 
+const openSockets = new Set<Socket>()
+server.on('connection', (socket) => {
+  openSockets.add(socket)
+  socket.once('close', () => openSockets.delete(socket))
+})
+
 server.on('upgrade', (request, socket, head) => {
   if (!isAgentRuntimeRequest(request.url)) {
     socket.destroy()
@@ -384,7 +391,13 @@ server.listen(port, host, () => {
 })
 
 async function shutdown(): Promise<void> {
-  server.close()
+  const closed = new Promise<void>((resolve) => server.close(() => resolve()))
+  const forceCloseTimer = setTimeout(() => {
+    for (const socket of openSockets) socket.destroy()
+  }, 5_000)
+  forceCloseTimer.unref()
+  await closed
+  clearTimeout(forceCloseTimer)
   await database.end()
 }
 
