@@ -1,0 +1,33 @@
+.management-placeholder {
+  display: grid;
+  min-height: 420px;
+  place-items: center;
+}
+
+.management-placeholder__card {
+  display: grid;
+  width: min(100%, 460px);
+  justify-items: center;
+  gap: 14px;
+  padding: 54px 28px;
+  text-align: center;
+}
+
+.management-placeholder__card > span {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 15px;
+  color: var(--jade-700);
+  background: var(--jade-100);
+}
+
+.management-placeholder__card h1 {
+  font-size: 22px;
+}
+
+.management-placeholder__card p {
+  color: var(--ink-500);
+  font-size: 14px;
+}

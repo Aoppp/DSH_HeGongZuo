@@ -246,6 +246,29 @@
   font-size: 11px;
 }
 
+.account-admin__permissions {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+}
+
+.account-admin__permissions legend {
+  padding: 0 4px;
+  color: var(--ink-500);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.account-admin__permissions label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-700);
+  font-size: 13px;
+}
+
 .account-admin__error {
   display: flex;
   align-items: center;

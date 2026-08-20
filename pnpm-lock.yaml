@@ -49,6 +49,9 @@ importers:
       '@deepseek-ai/dsh-host-apiproxy':
         specifier: 0.1.0-rc.6
         version: 0.1.0-rc.6(54ebcfd5493661f914debcfc017ddfe5)
+      '@hegongzuo/employee-domain':
+        specifier: workspace:*
+        version: link:../../packages/employee-domain
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0

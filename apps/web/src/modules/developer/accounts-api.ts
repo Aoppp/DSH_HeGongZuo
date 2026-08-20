@@ -1,5 +1,6 @@
 export type AccountRole = 'owner' | 'developer'
-export type AccountStatus = 'active' | 'disabled'
+export type AccountStatus = 'active' | 'disabled' | 'initializing' | 'initialization_failed'
+export type AccountPermissionId = 'employee-data' | 'employee-query' | 'finance-management' | 'project-management'
 
 export interface AccountRecord {
   readonly id: string
@@ -8,6 +9,7 @@ export interface AccountRecord {
   readonly position: string
   readonly role: AccountRole
   readonly status: AccountStatus
+  readonly permissions: readonly AccountPermissionId[]
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -70,6 +72,7 @@ export async function createAccount(input: {
   readonly displayName: string
   readonly position: string
   readonly role: AccountRole
+  readonly permissions: readonly AccountPermissionId[]
 }): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>('/api/accounts', {
     method: 'POST',
@@ -82,6 +85,7 @@ export async function updateAccount(id: string, input: {
   readonly displayName: string
   readonly position: string
   readonly role: AccountRole
+  readonly permissions: readonly AccountPermissionId[]
 }): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>(`/api/accounts/${encodeURIComponent(id)}`, {
     method: 'PUT',

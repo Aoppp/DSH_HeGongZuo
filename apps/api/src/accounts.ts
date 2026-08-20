@@ -1,6 +1,7 @@
 import type { Pool } from 'pg'
 
 import { hashPassword } from './auth.js'
+import { accountPermissionIds, parsePermissions, type AccountPermissionId } from './account-permissions.js'
 
 export interface AccountRecord {
   readonly id: string
@@ -8,7 +9,8 @@ export interface AccountRecord {
   readonly displayName: string
   readonly position: string
   readonly role: 'owner' | 'developer'
-  readonly status: 'active' | 'disabled'
+  readonly status: 'active' | 'disabled' | 'initializing' | 'initialization_failed'
+  readonly permissions: readonly AccountPermissionId[]
   readonly createdAt: string
   readonly updatedAt: string
 }
@@ -30,7 +32,7 @@ export function validateAccountId(accountId: string): string | null {
 export const defaultAccountPassword = 'wangshuhe123'
 
 const rolePattern = /^(owner|developer)$/
-const statusPattern = /^(active|disabled)$/
+const statusPattern = /^(active|disabled|initializing|initialization_failed)$/
 
 interface AccountRow {
   readonly id: string
@@ -38,7 +40,8 @@ interface AccountRow {
   readonly display_name: string
   readonly position: string
   readonly role: 'owner' | 'developer'
-  readonly status: 'active' | 'disabled'
+  readonly status: 'active' | 'disabled' | 'initializing' | 'initialization_failed'
+  readonly permissions: string[]
   readonly created_at: string | Date
   readonly updated_at: string | Date
 }
@@ -52,6 +55,7 @@ function toAccount(row: AccountRow): AccountRecord {
     position: row.position,
     role: row.role,
     status: row.status,
+    permissions: row.permissions.filter((permission): permission is AccountPermissionId => accountPermissionIds.includes(permission as AccountPermissionId)),
     createdAt: format(row.created_at),
     updatedAt: format(row.updated_at),
   }
@@ -62,9 +66,21 @@ export class AccountsService {
 
   async list(): Promise<AccountRecord[]> {
     const result = await this.pool.query<AccountRow>(
-      'SELECT id, account_id, display_name, position, role, status, created_at, updated_at FROM accounts ORDER BY created_at, id',
+      `SELECT a.id, a.account_id, a.display_name, a.position, a.role, a.status, a.created_at, a.updated_at,
+        COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
+       FROM accounts a ORDER BY a.created_at, a.id`,
     )
     return result.rows.map(toAccount)
+  }
+
+  async findById(id: string): Promise<AccountRecord | null> {
+    const result = await this.pool.query<AccountRow>(
+      `SELECT a.id, a.account_id, a.display_name, a.position, a.role, a.status, a.created_at, a.updated_at,
+        COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
+       FROM accounts a WHERE a.id = $1`,
+      [id],
+    )
+    return result.rows[0] ? toAccount(result.rows[0]) : null
   }
 
   async create(input: {
@@ -72,6 +88,7 @@ export class AccountsService {
     readonly displayName: string
     readonly position: string
     readonly role: string
+    readonly permissions: unknown
   }): Promise<AccountRecord> {
     const accountId = input.accountId.trim()
     const displayName = input.displayName.trim()
@@ -82,16 +99,32 @@ export class AccountsService {
     const idError = validateAccountId(accountId)
     if (idError) throw new AccountValidationError(idError)
     if (!rolePattern.test(input.role)) throw new AccountValidationError('角色无效。')
+    const permissions = parsePermissions(input.permissions)
     const id = await this.nextId()
-    const result = await this.pool.query<AccountRow>(
-      `INSERT INTO accounts (id, account_id, display_name, position, password_hash, role)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, account_id, display_name, position, role, status, created_at, updated_at`,
-      [id, accountId, displayName, position, hashPassword(defaultAccountPassword), input.role],
-    )
-    const row = result.rows[0]
+    const client = await this.pool.connect()
+    let row: AccountRow | undefined
+    try {
+      await client.query('BEGIN')
+      const result = await client.query<AccountRow>(
+        `INSERT INTO accounts (id, account_id, display_name, position, password_hash, role, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'initializing')
+         RETURNING id, account_id, display_name, position, role, status, created_at, updated_at, '{}'::varchar[] AS permissions`,
+        [id, accountId, displayName, position, hashPassword(defaultAccountPassword), input.role],
+      )
+      row = result.rows[0]
+      await client.query(
+        'INSERT INTO account_module_permissions (account_id, permission_id) SELECT $1, unnest($2::varchar[])',
+        [id, permissions],
+      )
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
     if (!row) throw new Error('新增账号后未返回记录。')
-    return toAccount(row)
+    return { ...toAccount(row), permissions }
   }
 
   async update(id: string, input: {
@@ -99,6 +132,7 @@ export class AccountsService {
     readonly displayName: string
     readonly position: string
     readonly role: string
+    readonly permissions: unknown
   }): Promise<AccountRecord | null> {
     const accountId = input.accountId.trim()
     const displayName = input.displayName.trim()
@@ -109,13 +143,28 @@ export class AccountsService {
     const idError = validateAccountId(accountId)
     if (idError) throw new AccountValidationError(idError)
     if (!rolePattern.test(input.role)) throw new AccountValidationError('角色无效。')
-    const result = await this.pool.query<AccountRow>(
-      `UPDATE accounts SET account_id = $2, display_name = $3, position = $4, role = $5, updated_at = now()
-       WHERE id = $1
-       RETURNING id, account_id, display_name, position, role, status, created_at, updated_at`,
-      [id, accountId, displayName, position, input.role],
-    )
-    return result.rows[0] ? toAccount(result.rows[0]) : null
+    const permissions = parsePermissions(input.permissions)
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await client.query<AccountRow>(
+        `UPDATE accounts SET account_id = $2, display_name = $3, position = $4, role = $5, updated_at = now()
+         WHERE id = $1
+         RETURNING id, account_id, display_name, position, role, status, created_at, updated_at, '{}'::varchar[] AS permissions`,
+        [id, accountId, displayName, position, input.role],
+      )
+      const row = result.rows[0]
+      if (!row) { await client.query('ROLLBACK'); return null }
+      await client.query('DELETE FROM account_module_permissions WHERE account_id = $1', [id])
+      await client.query('INSERT INTO account_module_permissions (account_id, permission_id) SELECT $1, unnest($2::varchar[])', [id, permissions])
+      await client.query('COMMIT')
+      return { ...toAccount(row), permissions }
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
   }
 
   async delete(id: string): Promise<boolean> {
@@ -136,7 +185,8 @@ export class AccountsService {
     const result = await this.pool.query<AccountRow>(
       `UPDATE accounts SET status = $2, updated_at = now()
        WHERE id = $1
-       RETURNING id, account_id, display_name, position, role, status, created_at, updated_at`,
+       RETURNING id, account_id, display_name, position, role, status, created_at, updated_at,
+       COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = accounts.id), '{}'::varchar[]) AS permissions`,
       [id, status],
     )
     return result.rows[0] ? toAccount(result.rows[0]) : null

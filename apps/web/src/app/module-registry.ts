@@ -1,9 +1,11 @@
-import { Code2, Gauge, LayoutDashboard, Users } from 'lucide-react'
+import { BriefcaseBusiness, Code2, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
 
 import { DeveloperConsoleModule } from '../modules/developer/DeveloperConsoleModule'
 import { EmployeeAgentModule } from '../modules/employee-agent/EmployeeAgentModule'
 import { EmployeeDataModule } from '../modules/employee-agent/EmployeeDataModule'
 import { ManagementCockpitModule } from '../modules/management-cockpit/ManagementCockpitModule'
+import { FinanceManagementModule } from '../modules/finance-management/FinanceManagementModule'
+import { ProjectManagementModule } from '../modules/project-management/ProjectManagementModule'
 import { OverviewModule } from '../modules/overview/OverviewModule'
 import type { AuthenticatedUser, ModuleId, PlatformModule, RoleId } from './types'
 
@@ -32,6 +34,8 @@ export const platformModules: readonly PlatformModule[] = [
     description: '查看和维护全体员工信息',
     icon: Users,
     allowedRoles: ['owner', 'developer'],
+    requiredPermission: 'employee-data',
+    group: 'employee-management',
     component: EmployeeDataModule,
   },
   {
@@ -40,7 +44,29 @@ export const platformModules: readonly PlatformModule[] = [
     description: '在平台内查询员工与组织信息',
     icon: Users,
     allowedRoles: ['owner', 'developer'],
+    requiredPermission: 'employee-query',
+    group: 'employee-management',
     component: EmployeeAgentModule,
+  },
+  {
+    id: 'finance-management',
+    label: '财务管理',
+    description: '财务数据与业务流程管理',
+    icon: Landmark,
+    allowedRoles: ['owner', 'developer'],
+    requiredPermission: 'finance-management',
+    group: 'finance-management',
+    component: FinanceManagementModule,
+  },
+  {
+    id: 'project-management',
+    label: '项目管理',
+    description: '项目计划与协作管理',
+    icon: BriefcaseBusiness,
+    allowedRoles: ['owner', 'developer'],
+    requiredPermission: 'project-management',
+    group: 'project-management',
+    component: ProjectManagementModule,
   },
   {
     id: 'developer-console',
@@ -55,6 +81,7 @@ export const platformModules: readonly PlatformModule[] = [
 export function getVisibleModules(user: AuthenticatedUser): readonly PlatformModule[] {
   return platformModules.filter((module) => {
     if (!module.allowedRoles.includes(user.role)) return false
+    if (module.requiredPermission && !user.permissions.includes(module.requiredPermission)) return false
     // 管理驾驶舱仅对 CEO 职位开放
     if (module.bossOnly && user.position !== 'CEO') return false
     return true

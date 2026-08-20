@@ -16,7 +16,14 @@ const workspaceRoot = path.join(projectRoot, '.runtime', 'workspaces')
 
 /** @type {{ account_id: string }[]} */
 const accountRows = (await pool.query(
-  `SELECT account_id FROM accounts WHERE status = 'active' ORDER BY created_at, id`,
+  `SELECT a.account_id
+   FROM accounts a
+   WHERE a.status = 'active'
+     AND EXISTS (
+       SELECT 1 FROM account_module_permissions p
+       WHERE p.account_id = a.id AND p.permission_id = 'employee-query'
+     )
+   ORDER BY a.created_at, a.id`,
 )).rows
 /** @type {string[]} */
 const accountIds = accountRows.map((row) => row.account_id)

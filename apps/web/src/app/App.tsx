@@ -46,7 +46,7 @@ export default function App() {
     void apiLogout()
   }
 
-  function updateCurrentUserProfile(profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position'>) {
+  function updateCurrentUserProfile(profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position' | 'role' | 'permissions'>) {
     setUser((current) => current ? { ...current, ...profile } : current)
   }
 

@@ -38,6 +38,34 @@
   opacity: 0.56;
 }
 
+.sidebar__module-group {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 9px;
+  padding-top: 11px;
+}
+
+.sidebar__group-toggle {
+  min-height: 39px !important;
+  color: var(--ink-700) !important;
+  font-weight: 700;
+}
+
+.sidebar__group-toggle > span {
+  flex: 1;
+}
+
+.sidebar__group-links {
+  display: grid;
+  gap: 3px;
+}
+
+.sidebar__nested-link {
+  margin-left: 9px;
+  padding-left: 11px !important;
+}
+
 .access-gate {
   display: grid;
   min-height: 100vh;

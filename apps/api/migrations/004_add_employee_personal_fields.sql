@@ -28,7 +28,6 @@ ALTER TABLE employees ADD COLUMN IF NOT EXISTS contract_end_date date;
 -- 工作地点改为可空：Excel 无工作地点列，正式数据导入时为 NULL
 ALTER TABLE employees ALTER COLUMN work_location DROP NOT NULL;
 
--- 身份证部分唯一索引（含护照号变体）；银行卡刻意不加唯一约束（存在两人共用一张卡）
-CREATE UNIQUE INDEX IF NOT EXISTS employees_id_number_key ON employees(id_number) WHERE id_number IS NOT NULL;
+-- 身份证号可能因历史档案或返聘记录重复，不作为员工任职记录的唯一约束。
 CREATE INDEX IF NOT EXISTS employees_company_name_idx ON employees(company_name);
 CREATE INDEX IF NOT EXISTS employees_contract_end_date_idx ON employees(contract_end_date);

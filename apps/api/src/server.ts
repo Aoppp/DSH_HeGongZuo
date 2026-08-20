@@ -1,6 +1,10 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { spawn } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { AccountValidationError, AccountsService } from './accounts.js'
+import { parsePermissions, type AccountPermissionId } from './account-permissions.js'
 import { AgentRuntimeProxyError, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
 import { AuthError, AuthService, bearerToken, type AuthUser } from './auth.js'
 import { database } from './database.js'
@@ -12,6 +16,7 @@ const auth = new AuthService(database)
 const accounts = new AccountsService(database)
 const port = Number(process.env.HEGONGZUO_API_PORT ?? 4174)
 const host = process.env.HEGONGZUO_API_HOST ?? '127.0.0.1'
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 
 class HttpError extends Error {
   constructor(readonly status: number, message: string) {
@@ -95,6 +100,44 @@ function requireDeveloper(user: AuthUser): void {
   if (user.role !== 'developer') throw new HttpError(403, '仅平台开发者可以管理账号。')
 }
 
+function requirePermission(user: AuthUser, permission: AccountPermissionId): void {
+  if (!user.permissions.includes(permission)) throw new HttpError(403, '当前账号未开通此功能。')
+}
+
+function runProjectScript(script: string, args: readonly string[] = []): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [path.join(projectRoot, 'scripts', script), ...args], {
+      cwd: projectRoot,
+      env: process.env,
+      stdio: 'inherit',
+    })
+    child.once('error', reject)
+    child.once('exit', (code, signal) => code === 0
+      ? resolve()
+      : reject(new Error(`账号初始化脚本执行失败（code=${String(code)}, signal=${String(signal)}）`)))
+  })
+}
+
+async function initializeAccountRuntime(account: { readonly id: string; readonly accountId: string; readonly permissions: readonly AccountPermissionId[] }): Promise<void> {
+  try {
+    await prepareAccountRuntime(account)
+    const enabled = await accounts.setStatus(account.id, 'active')
+    if (!enabled) throw new Error('账号不存在。')
+    await runProjectScript('sync-account-agent-runtimes.mjs')
+  } catch (error) {
+    await accounts.setStatus(account.id, 'initialization_failed')
+    try { await runProjectScript('sync-account-agent-runtimes.mjs') } catch { /* 保留原始初始化错误。 */ }
+    throw new HttpError(500, `账号创建后初始化失败：${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+async function prepareAccountRuntime(account: { readonly accountId: string; readonly permissions: readonly AccountPermissionId[] }): Promise<void> {
+  if (account.permissions.includes('employee-query')) {
+    await runProjectScript('provision-account-agent-runtime.mjs', [account.accountId])
+  }
+  await runProjectScript('sync-account-agent-runtimes.mjs')
+}
+
 function accountId(pathname: string): string | null {
   const match = pathname.match(/^\/api\/accounts\/([^/]+)$/)
   return match?.[1] ? decodeURIComponent(match[1]) : null
@@ -162,6 +205,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const currentUser = await requireAuth(request)
 
   if (isAgentRuntimeRequest(request.url)) {
+    requirePermission(currentUser, 'employee-query')
     await proxyAgentRequest(request, response, currentUser)
     return
   }
@@ -177,13 +221,21 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const body = await readJson(request)
     if (!body || typeof body !== 'object') throw new HttpError(400, '请求必须包含有效 JSON。')
     const record = body as Record<string, unknown>
-    const created = await accounts.create({
-      accountId: typeof record.accountId === 'string' ? record.accountId : '',
-      displayName: typeof record.displayName === 'string' ? record.displayName : '',
-      position: typeof record.position === 'string' ? record.position : '',
-      role: typeof record.role === 'string' ? record.role : '',
-    })
-    sendJson(response, 201, { account: created })
+    let created
+    try {
+      created = await accounts.create({
+        accountId: typeof record.accountId === 'string' ? record.accountId : '',
+        displayName: typeof record.displayName === 'string' ? record.displayName : '',
+        position: typeof record.position === 'string' ? record.position : '',
+        role: typeof record.role === 'string' ? record.role : '',
+        permissions: record.permissions,
+      })
+    } catch (error) {
+      if (error instanceof Error) throw new AccountValidationError(error.message)
+      throw error
+    }
+    await initializeAccountRuntime(created)
+    sendJson(response, 201, { account: await accounts.findById(created.id) ?? created })
     return
   }
 
@@ -198,9 +250,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       displayName: typeof record.displayName === 'string' ? record.displayName : '',
       position: typeof record.position === 'string' ? record.position : '',
       role: typeof record.role === 'string' ? record.role : '',
+      permissions: record.permissions,
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
-    sendJson(response, 200, { account: updated })
+    await prepareAccountRuntime(updated)
+    sendJson(response, 200, { account: await accounts.findById(updated.id) ?? updated })
     return
   }
 
@@ -234,11 +288,13 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (url.pathname === '/api/employees' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-data')
     sendJson(response, 200, { employees: await repository.list(url.searchParams.get('query') ?? '') })
     return
   }
 
   if (url.pathname === '/api/employees' && request.method === 'POST') {
+    requirePermission(currentUser, 'employee-data')
     const created = await repository.create(parseEmployeeInput(await readJson(request)))
     sendJson(response, 201, { employee: created })
     return
@@ -246,6 +302,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   const resumeId = resumeEmployeeId(url.pathname)
   if (resumeId && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-data')
     const resume = await repository.getResume(resumeId)
     if (!resume) throw new HttpError(404, '该员工尚未上传简历。')
     response.writeHead(200, {
@@ -261,6 +318,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   const departureId = departureEmployeeId(url.pathname)
   if (departureId && request.method === 'POST') {
+    requirePermission(currentUser, 'employee-data')
     const { departureDate, departureReason } = departureInput(await readJson(request))
     const employee = await repository.depart(departureId, departureDate, departureReason)
     if (!employee) throw new HttpError(404, '员工不存在。')
@@ -270,6 +328,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   const id = employeeId(url.pathname)
   if (id && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-data')
     const employee = await repository.get(id)
     if (!employee) throw new HttpError(404, '员工不存在。')
     sendJson(response, 200, { employee })
@@ -277,6 +336,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (id && request.method === 'PUT') {
+    requirePermission(currentUser, 'employee-data')
     const input = parseEmployeeInput(await readJson(request))
     const employee = await repository.update(id, input)
     if (!employee) throw new HttpError(404, '员工不存在。')
@@ -326,6 +386,10 @@ server.on('upgrade', (request, socket, head) => {
     const user = await auth.userForToken(sessionToken(request))
     if (!user) {
       socket.end('HTTP/1.1 401 Unauthorized\r\nconnection: close\r\n\r\n')
+      return
+    }
+    if (!user.permissions.includes('employee-query')) {
+      socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n')
       return
     }
     await proxyAgentUpgrade(request, socket, head, user)
