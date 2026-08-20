@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { AccountValidationError, AccountsService } from './accounts.js'
 import { parsePermissions, type AccountPermissionId } from './account-permissions.js'
 import { AgentRuntimeProxyError, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
-import { AuthError, AuthService, bearerToken, LoginRateLimitError, type AuthUser } from './auth.js'
+import { AuthError, AuthService, LoginRateLimitError, type AuthUser } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './employee-input.js'
 import { PostgresEmployeeRepository } from './employee-repository.js'
@@ -41,7 +41,7 @@ function cookieToken(cookieHeader: string | undefined): string | null {
 }
 
 function sessionToken(request: IncomingMessage): string | null {
-  return bearerToken(request.headers.authorization) ?? cookieToken(request.headers.cookie)
+  return cookieToken(request.headers.cookie)
 }
 
 function sessionCookie(request: IncomingMessage, token: string, clear = false): string {
