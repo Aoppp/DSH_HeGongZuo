@@ -41,10 +41,50 @@ sudo systemctl enable --now hegongzuo
 sudo systemctl status hegongzuo
 ```
 
+同时复制 `deploy/systemd/hegongzuo-health.service.template`、`deploy/systemd/hegongzuo-health.timer.template` 与 `deploy/systemd/hegongzuo-alert@.service.template` 到 `/etc/systemd/system/`，替换模板变量后启用：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now hegongzuo-health.timer
+systemctl list-timers hegongzuo-health.timer
+```
+
+主服务模板已包含 CPU、内存、任务数和文件句柄限制。可在 `.env` 中配置 `HEGONGZUO_ALERT_WEBHOOK_URL` 接收故障告警；该值属于运行环境秘密，不得提交。健康检查每分钟分别确认 PostgreSQL、API 和账号运行时可用。
+
+将 `deploy/systemd/journald.conf.d/hegongzuo.conf.template` 复制为 `/etc/systemd/journald.conf.d/hegongzuo.conf` 后重启 journald，可限制服务日志总量、单文件大小和保留时间：
+
+```bash
+sudo systemctl restart systemd-journald
+```
+
 服务日志：
 
 ```bash
 journalctl -u hegongzuo -f
+```
+
+## 独立 API 与账号运行时服务
+
+完成第一阶段验证后，停止旧的组合服务，改用 `hegongzuo-api.service.template` 与 `hegongzuo-agent@.service.template`。API 与每个账号运行时使用独立 systemd cgroup，单个账号故障不会终止 API 或其他账号。
+
+```bash
+sudo systemctl disable --now hegongzuo
+sudo systemctl enable --now hegongzuo-api
+corepack pnpm dsh:accounts:sync
+sudo systemctl enable --now hegongzuo-agent@<账号>.service
+```
+
+对 `.runtime/account-agent-runtimes.json` 中每个启用账号执行最后一条命令。新增、删除或停用账号后，先同步运行时配置，再由运维执行对应的启用、停止或禁用命令；API 不直接管理 systemd 单元。
+
+### 迁移验证与回滚
+
+上线前在预发布服务器执行 `corepack pnpm verify:production-services`，并模拟停止 `hegongzuo-api`、任一 `hegongzuo-agent@账号`、PostgreSQL 三种故障，确认健康 timer 失败、告警到达且未受影响单元保持运行。生产迁移后重复该检查。
+
+如迁移失败，停止独立单元并恢复旧组合服务：
+
+```bash
+sudo systemctl disable --now hegongzuo-api 'hegongzuo-agent@*.service'
+sudo systemctl enable --now hegongzuo
 ```
 
 ## 配置 HTTPS

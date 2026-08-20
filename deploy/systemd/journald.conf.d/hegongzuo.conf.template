@@ -1,0 +1,5 @@
+# 系统级 journald 保留策略；按服务器磁盘容量调整。
+[Journal]
+SystemMaxUse=512M
+SystemMaxFileSize=64M
+MaxRetentionSec=14day

@@ -1,0 +1,12 @@
+[Unit]
+Description=定时检查和工作生产服务健康状态
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=60
+RandomizedDelaySec=10
+Persistent=true
+Unit=hegongzuo-health.service
+
+[Install]
+WantedBy=timers.target

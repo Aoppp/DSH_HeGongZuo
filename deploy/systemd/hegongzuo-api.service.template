@@ -1,5 +1,5 @@
 [Unit]
-Description=和工作平台与员工查询服务
+Description=和工作平台 API
 After=network-online.target postgresql.service
 Wants=network-online.target
 
@@ -9,21 +9,18 @@ User=__DEPLOY_USER__
 Group=__DEPLOY_USER__
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=__PROJECT_DIR__/.env
-ExecStart=/usr/bin/env corepack pnpm platform:production
-Restart=always
+ExecStart=/usr/bin/env corepack pnpm --filter @hegongzuo/api start
+Restart=on-failure
 RestartSec=5
-TimeoutStopSec=30
-KillSignal=SIGTERM
 MemoryMax=1G
-CPUQuota=150%
-TasksMax=512
+CPUQuota=100%
+TasksMax=256
 LimitNOFILE=65536
-OOMPolicy=stop
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=__PROJECT_DIR__/.runtime __PROJECT_DIR__/apps/web/dist
+ReadWritePaths=__PROJECT_DIR__/.runtime
 OnFailure=hegongzuo-alert@%n.service
 
 [Install]

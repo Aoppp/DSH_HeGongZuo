@@ -28,6 +28,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && corepack pnpm --filter './packages/*' --filter './apps/*' --if-present run typecheck",
     "validate:data": "node scripts/validate-employee-fixtures.mjs",
     "verify:agent-isolation": "node scripts/verify-account-agent-isolation.mjs",
+    "verify:production-services": "node scripts/verify-production-service-config.mjs",
     "verify:env": "node scripts/verify-environment.mjs",
     "dsh:accounts:sync": "node scripts/sync-account-agent-runtimes.mjs"
   },

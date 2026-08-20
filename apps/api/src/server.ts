@@ -1,16 +1,17 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
-import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { AccountValidationError, AccountsService } from './accounts.js'
-import { parsePermissions, type AccountPermissionId } from './account-permissions.js'
-import { AgentRuntimeProxyError, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
-import { AuthError, AuthService, LoginRateLimitError, type AuthUser } from './auth.js'
+import { AgentRuntimeProxyError, checkAgentRuntimeHealth, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
+import { AuthError, AuthService, LoginRateLimitError } from './auth.js'
 import { database } from './database.js'
-import { EmployeeValidationError, parseEmployeeInput } from './employee-input.js'
-import { PostgresEmployeeRepository } from './employee-repository.js'
+import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/employee-input.js'
+import { PostgresEmployeeRepository } from './modules/employee/employee-repository.js'
+import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
+import { HttpError, readJson, sendJson } from './http/http.js'
+import { requireAuth, requireDeveloper, requirePermission } from './http/auth-middleware.js'
 
 const repository = new PostgresEmployeeRepository(database)
 const auth = new AuthService(database)
@@ -18,21 +19,8 @@ const accounts = new AccountsService(database)
 const port = Number(process.env.HEGONGZUO_API_PORT ?? 4174)
 const host = process.env.HEGONGZUO_API_HOST ?? '127.0.0.1'
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
 
-class HttpError extends Error {
-  constructor(readonly status: number, message: string) {
-    super(message)
-  }
-}
-
-function sendJson(response: ServerResponse, status: number, value: unknown, headers: Record<string, string> = {}): void {
-  response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-    ...headers,
-  })
-  response.end(JSON.stringify(value))
-}
 
 function cookieToken(cookieHeader: string | undefined): string | null {
   const entry = cookieHeader?.split(';').map((part) => part.trim()).find((part) => part.startsWith('hegongzuo_session='))
@@ -63,18 +51,6 @@ function loginSourceHash(request: IncomingMessage): string {
   return createHash('sha256').update(source || 'unknown').digest('hex')
 }
 
-async function readJson(request: IncomingMessage): Promise<unknown> {
-  let body = ''
-  for await (const chunk of request) {
-    body += String(chunk)
-    if (body.length > 8_000_000) throw new HttpError(413, '请求内容过大。')
-  }
-  try {
-    return JSON.parse(body)
-  } catch {
-    throw new HttpError(400, '请求必须包含有效 JSON。')
-  }
-}
 
 function employeeId(pathname: string): string | null {
   const match = pathname.match(/^\/api\/employees\/([^/]+)$/)
@@ -103,54 +79,6 @@ function departureInput(value: unknown): { departureDate: string; departureReaso
   return { departureDate, departureReason }
 }
 
-async function requireAuth(request: IncomingMessage): Promise<AuthUser> {
-  const token = sessionToken(request)
-  const user = await auth.userForToken(token)
-  if (!user) throw new HttpError(401, '登录已过期，请重新登录。')
-  return user
-}
-
-function requireDeveloper(user: AuthUser): void {
-  if (user.role !== 'developer') throw new HttpError(403, '仅平台开发者可以管理账号。')
-}
-
-function requirePermission(user: AuthUser, permission: AccountPermissionId): void {
-  if (!user.permissions.includes(permission)) throw new HttpError(403, '当前账号未开通此功能。')
-}
-
-function runProjectScript(script: string, args: readonly string[] = []): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [path.join(projectRoot, 'scripts', script), ...args], {
-      cwd: projectRoot,
-      env: process.env,
-      stdio: 'inherit',
-    })
-    child.once('error', reject)
-    child.once('exit', (code, signal) => code === 0
-      ? resolve()
-      : reject(new Error(`账号初始化脚本执行失败（code=${String(code)}, signal=${String(signal)}）`)))
-  })
-}
-
-async function initializeAccountRuntime(account: { readonly id: string; readonly accountId: string; readonly permissions: readonly AccountPermissionId[] }): Promise<void> {
-  try {
-    await prepareAccountRuntime(account)
-    const enabled = await accounts.setStatus(account.id, 'active')
-    if (!enabled) throw new Error('账号不存在。')
-    await runProjectScript('sync-account-agent-runtimes.mjs')
-  } catch (error) {
-    await accounts.setStatus(account.id, 'initialization_failed')
-    try { await runProjectScript('sync-account-agent-runtimes.mjs') } catch { /* 保留原始初始化错误。 */ }
-    throw new HttpError(500, `账号创建后初始化失败：${error instanceof Error ? error.message : String(error)}`)
-  }
-}
-
-async function prepareAccountRuntime(account: { readonly accountId: string; readonly permissions: readonly AccountPermissionId[] }): Promise<void> {
-  if (account.permissions.includes('employee-query')) {
-    await runProjectScript('provision-account-agent-runtime.mjs', [account.accountId])
-  }
-  await runProjectScript('sync-account-agent-runtimes.mjs')
-}
 
 function accountId(pathname: string): string | null {
   const match = pathname.match(/^\/api\/accounts\/([^/]+)$/)
@@ -167,12 +95,20 @@ function accountStatusId(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
+function accountRetryId(pathname: string): string | null {
+  const match = pathname.match(/^\/api\/accounts\/([^/]+)\/retry-initialization$/)
+  return match?.[1] ? decodeURIComponent(match[1]) : null
+}
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost')
 
   if (request.method === 'GET' && url.pathname === '/health') {
     await database.query('SELECT 1')
-    sendJson(response, 200, { ok: true, database: 'postgresql' })
+    const accountIds = (await accounts.list()).filter((account) => account.status === 'active' && account.permissions.includes('employee-query')).map((account) => account.accountId)
+    const runtimes = await checkAgentRuntimeHealth(accountIds)
+    const unavailable = runtimes.filter((runtime) => !runtime.available)
+    sendJson(response, unavailable.length ? 503 : 200, { ok: unavailable.length === 0, database: 'postgresql', employeeQueryRuntimes: { expected: runtimes.length, available: runtimes.length - unavailable.length, unavailable: unavailable.map((runtime) => runtime.accountId) } })
     return
   }
 
@@ -197,7 +133,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (url.pathname === '/api/auth/change-password' && request.method === 'POST') {
-    const changeUser = await requireAuth(request)
+    const changeUser = await requireAuth(auth, request)
     const body = await readJson(request)
     const record = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
     const currentPassword = typeof record.currentPassword === 'string' ? record.currentPassword : ''
@@ -216,7 +152,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   // —— 以下业务接口全部要求登录 ——
-  const currentUser = await requireAuth(request)
+  const currentUser = await requireAuth(auth, request)
 
   if (isAgentRuntimeRequest(request.url)) {
     requirePermission(currentUser, 'employee-query')
@@ -248,8 +184,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       if (error instanceof Error) throw new AccountValidationError(error.message)
       throw error
     }
-    await initializeAccountRuntime(created)
-    sendJson(response, 201, { account: await accounts.findById(created.id) ?? created })
+    accountRuntimeTasks.enqueue(created)
+    sendJson(response, 202, { account: created })
     return
   }
 
@@ -267,8 +203,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       permissions: record.permissions,
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
-    await prepareAccountRuntime(updated)
-    sendJson(response, 200, { account: await accounts.findById(updated.id) ?? updated })
+    accountRuntimeTasks.enqueue(updated)
+    sendJson(response, 202, { account: updated })
     return
   }
 
@@ -301,9 +237,34 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  const retryId = accountRetryId(url.pathname)
+  if (retryId && request.method === 'POST') {
+    requireDeveloper(currentUser)
+    const account = await accounts.findById(retryId)
+    if (!account) throw new HttpError(404, '账号不存在。')
+    accountRuntimeTasks.enqueue(account)
+    sendJson(response, 202, { account: { ...account, status: 'initializing' } })
+    return
+  }
+
   if (url.pathname === '/api/employees' && request.method === 'GET') {
     requirePermission(currentUser, 'employee-data')
-    sendJson(response, 200, { employees: await repository.list(url.searchParams.get('query') ?? '') })
+    const scope = url.searchParams.get('scope') === 'departed' ? 'departed' : 'employed'
+    const sort = url.searchParams.get('sort')
+    const allowedSorts = ['hireDate', 'departureDate', 'tenure', 'displayName', 'departmentName', 'contractEndDate'] as const
+    const page = Number(url.searchParams.get('page') ?? '1')
+    const pageSize = Number(url.searchParams.get('pageSize') ?? '10')
+    const result = await repository.listPage({ query: url.searchParams.get('query') ?? '', scope, page: Number.isInteger(page) && page > 0 ? page : 1, pageSize: Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 10, sort: allowedSorts.includes(sort as (typeof allowedSorts)[number]) ? sort as (typeof allowedSorts)[number] : scope === 'departed' ? 'departureDate' : 'hireDate', ascending: url.searchParams.get('ascending') !== 'false' })
+    sendJson(response, 200, { ...result, page, pageSize })
+    return
+  }
+
+  if (url.pathname === '/api/employees/export' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-data')
+    const scope = url.searchParams.get('scope') === 'departed' ? 'departed' : 'employed'
+    const sort = url.searchParams.get('sort') as 'hireDate' | 'departureDate' | 'tenure' | 'displayName' | 'departmentName' | 'contractEndDate'
+    const allowedSorts = ['hireDate', 'departureDate', 'tenure', 'displayName', 'departmentName', 'contractEndDate']
+    sendJson(response, 200, { employees: await repository.listForExport({ query: url.searchParams.get('query') ?? '', scope, sort: allowedSorts.includes(sort) ? sort : scope === 'departed' ? 'departureDate' : 'hireDate', ascending: url.searchParams.get('ascending') !== 'false' }) })
     return
   }
 

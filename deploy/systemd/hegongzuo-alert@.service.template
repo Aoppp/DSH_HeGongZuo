@@ -1,0 +1,10 @@
+[Unit]
+Description=和工作故障告警：%i
+
+[Service]
+Type=oneshot
+User=__DEPLOY_USER__
+Group=__DEPLOY_USER__
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=__PROJECT_DIR__/.env
+ExecStart=/usr/bin/env node scripts/send-service-alert.mjs %i

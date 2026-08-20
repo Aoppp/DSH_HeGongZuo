@@ -6,7 +6,7 @@ import {
   employeeAge,
   maskValue,
   tenureMonths,
-} from '../src/modules/employee-agent/employee-data.ts'
+} from '../src/modules/employee/data/employee-data.ts'
 
 function localDate(offsetDays) {
   const date = new Date()
@@ -66,7 +66,7 @@ test('工龄按月计算', () => {
 })
 
 // —— 列表排序 ——
-import { compareEmployees } from '../src/modules/employee-agent/employee-sort.ts'
+import { compareEmployees } from '../src/modules/employee/data/employee-sort.ts'
 
 function record(overrides) {
   return {

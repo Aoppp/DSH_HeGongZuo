@@ -1,12 +1,12 @@
 import { BriefcaseBusiness, Code2, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
 
-import { DeveloperConsoleModule } from '../modules/developer/DeveloperConsoleModule'
-import { EmployeeAgentModule } from '../modules/employee-agent/EmployeeAgentModule'
-import { EmployeeDataModule } from '../modules/employee-agent/EmployeeDataModule'
-import { ManagementCockpitModule } from '../modules/management-cockpit/ManagementCockpitModule'
-import { FinanceManagementModule } from '../modules/finance-management/FinanceManagementModule'
-import { ProjectManagementModule } from '../modules/project-management/ProjectManagementModule'
-import { OverviewModule } from '../modules/overview/OverviewModule'
+import { DeveloperConsoleModule } from '../modules/developer/console/DeveloperConsoleModule'
+import { EmployeeAgentModule } from '../modules/employee/agent/EmployeeAgentModule'
+import { EmployeeDataModule } from '../modules/employee/data/EmployeeDataModule'
+import { ManagementCockpitModule } from '../modules/management/cockpit/ManagementCockpitModule'
+import { FinanceManagementModule } from '../modules/finance/management/FinanceManagementModule'
+import { ProjectManagementModule } from '../modules/project/management/ProjectManagementModule'
+import { OverviewModule } from '../modules/overview/main/OverviewModule'
 import type { AuthenticatedUser, ModuleId, PlatformModule, RoleId } from './types'
 
 // 每个功能只在此注册一次。删除该项即可从导航和路由中同时移除功能。

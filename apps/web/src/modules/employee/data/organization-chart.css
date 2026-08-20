@@ -1,0 +1,18 @@
+/* 员工管理 / 组织架构样式。 */
+.organization-chart { display: grid; gap: 16px; }
+.organization-chart__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.organization-chart__header p { color: var(--ink-500); font-size: 12px; }
+.organization-chart__header strong { display: block; margin-top: 4px; font-size: 13px; }
+.organization-chart__header > div:last-child { display: flex; gap: 8px; }
+.organization-chart__canvas { display: grid; gap: 18px; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 26px; background: #fbfdfc; }
+.organization-chart__mindmap { justify-items: center; }
+.organization-chart__root { position: relative; display: grid; min-width: 150px; justify-items: center; gap: 3px; border-radius: 14px; padding: 14px 24px; color: white; background: linear-gradient(135deg, var(--jade-700), var(--blue-700)); box-shadow: 0 8px 20px rgba(31, 78, 68, .18); }
+.organization-chart__root strong { font-size: 16px; }.organization-chart__root span { font-size: 11px; opacity: .78; }
+.organization-chart__branch { position: relative; width: min(100%, 920px); border-left: 2px solid #badbd0; padding: 0 0 0 22px; }
+.organization-chart__branch::before { position: absolute; top: 24px; left: 0; width: 21px; border-top: 2px solid #badbd0; content: ''; }
+.organization-chart__branch h2 { display: inline-block; border: 1px solid #9fcbbd; border-radius: 10px; margin-bottom: 13px; padding: 9px 14px; color: var(--jade-900); font-size: 15px; background: white; }
+.organization-chart__units { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 12px; }
+.organization-chart__unit { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 9px; background: white; }.organization-chart__unit::before { position: absolute; top: 21px; left: -13px; width: 13px; border-top: 1px solid #d1e5dd; content: ''; }
+.organization-chart__unit h3 { padding: 10px 12px; color: var(--jade-800); font-size: 13px; background: var(--jade-100); }.organization-chart__unit ul { display: grid; gap: 6px; padding: 9px 11px; }
+.organization-chart__unit li { display: grid; gap: 3px; border-radius: 7px; padding: 7px 8px; background: #f7faf9; }.organization-chart__unit strong { font-size: 13px; }.organization-chart__unit span { color: var(--ink-500); font-size: 11px; }.organization-chart__empty { color: var(--ink-500); text-align: center; }
+@media (max-width: 640px) { .organization-chart__header { align-items: flex-start; flex-direction: column; }.organization-chart__header > div:last-child { width: 100%; }.organization-chart__header button { flex: 1; }.organization-chart__canvas { padding: 16px; }.organization-chart__branch { padding-left: 16px; }.organization-chart__branch::before { width: 15px; }.organization-chart__units { grid-template-columns: 1fr; } }

@@ -17,6 +17,11 @@ interface AccountAgentRuntime {
   readonly port: number
 }
 
+export interface AgentRuntimeHealth {
+  readonly accountId: string
+  readonly available: boolean
+}
+
 export class AgentRuntimeProxyError extends Error {
   constructor(readonly status: number, message: string) {
     super(message)
@@ -56,6 +61,31 @@ async function runtimeFor(user: AuthUser): Promise<AccountAgentRuntime> {
   ))
   if (!runtime) throw new AgentRuntimeProxyError(503, '当前账号尚未配置员工查询服务。')
   return runtime
+}
+
+async function configuredRuntimes(): Promise<readonly AccountAgentRuntime[]> {
+  try {
+    const definitions: unknown = JSON.parse(await readFile(runtimeConfigPath, 'utf8'))
+    if (!Array.isArray(definitions)) return []
+    return definitions.filter((candidate): candidate is AccountAgentRuntime => typeof candidate === 'object' && candidate !== null && 'accountId' in candidate && 'port' in candidate && typeof candidate.accountId === 'string' && typeof candidate.port === 'number' && Number.isInteger(candidate.port) && candidate.port >= 1024 && candidate.port <= 65535)
+  } catch { return [] }
+}
+
+function probeRuntime(runtime: AccountAgentRuntime): Promise<boolean> {
+  return new Promise((resolve) => {
+    const request = createRequest({ host: '127.0.0.1', port: runtime.port, path: '/', method: 'GET', timeout: 2_000 }, (response) => { response.resume(); resolve((response.statusCode ?? 500) < 500) })
+    request.once('timeout', () => { request.destroy(); resolve(false) })
+    request.once('error', () => resolve(false))
+    request.end()
+  })
+}
+
+export async function checkAgentRuntimeHealth(accountIds: readonly string[]): Promise<readonly AgentRuntimeHealth[]> {
+  const runtimes = await configuredRuntimes()
+  return Promise.all(accountIds.map(async (accountId) => {
+    const runtime = runtimes.find((candidate) => candidate.accountId === accountId)
+    return { accountId, available: runtime ? await probeRuntime(runtime) : false }
+  }))
 }
 
 function proxyHeaders(headers: IncomingHttpHeaders, runtime: AccountAgentRuntime): IncomingHttpHeaders {

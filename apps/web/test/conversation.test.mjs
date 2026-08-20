@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { buildConversation } from '../src/modules/employee-agent/conversation.ts'
+import { buildConversation } from '../src/modules/employee/agent/conversation.ts'
 
 test('将 DSH 原始事件转换为和工作对话消息', () => {
   const entries = [
