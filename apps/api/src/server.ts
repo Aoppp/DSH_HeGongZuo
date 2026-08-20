@@ -398,7 +398,12 @@ async function shutdown(): Promise<void> {
   forceCloseTimer.unref()
   await closed
   clearTimeout(forceCloseTimer)
-  await database.end()
+  // 数据库驱动在网络异常或遗留事务下可能无限等待；部署时必须在固定期限内退出。
+  await Promise.race([
+    database.end().catch((error: unknown) => console.error('[和工作 API] 关闭数据库连接时发生错误：', error)),
+    new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
+  ])
+  process.exit(0)
 }
 
 process.once('SIGINT', () => { void shutdown() })
