@@ -1,13 +1,12 @@
 // 员工管理 / 组织架构展示。
 import { ArrowLeft, ChevronDown, ChevronRight, Download, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import type { EmployeeRecord } from './employee-data'
+import { readEmployeesForExport, type EmployeeRecord } from './employee-data'
 import { buildOrganizationChart, exportOrganizationChartToPdf, type OrganizationDepartment, type OrganizationUnit } from './organization-chart'
 import './organization-chart.css'
 
 interface OrganizationChartProps {
-  readonly employees: readonly EmployeeRecord[]
   readonly onBack: () => void
 }
 
@@ -42,7 +41,16 @@ function DepartmentBranch({ department }: { readonly department: OrganizationDep
   </li>
 }
 
-export function OrganizationChart({ employees, onBack }: OrganizationChartProps) {
+export function OrganizationChart({ onBack }: OrganizationChartProps) {
+  const [employees, setEmployees] = useState<readonly EmployeeRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const loadOrganization = async () => {
+    setLoading(true)
+    setError(null)
+    try { setEmployees(await readEmployeesForExport({ query: '', scope: 'employed', sort: 'departmentName', ascending: true })) } catch (loadError) { setError(loadError instanceof Error ? loadError.message : String(loadError)) } finally { setLoading(false) }
+  }
+  useEffect(() => { void loadOrganization() }, [])
   const departments = buildOrganizationChart(employees)
   const employeeCount = departments.reduce((count, department) => count + department.units.reduce((unitCount, unit) => unitCount + unit.employees.length, 0), 0)
   return (
@@ -52,7 +60,7 @@ export function OrganizationChart({ employees, onBack }: OrganizationChartProps)
         <div><button className="employee-data__secondary" type="button" onClick={onBack}><ArrowLeft size={15} /> 返回员工信息</button><button className="employee-data__primary" type="button" onClick={() => exportOrganizationChartToPdf(departments)}><Download size={15} /> 导出 PDF</button></div>
       </header>
       <div className="organization-chart__canvas" aria-label="组织架构图">
-        {departments.length > 0 ? <div className="organization-chart__tree"><article className="organization-chart__root"><Users size={20} /><div><strong>组织架构</strong><span>在职员工 {employeeCount} 名</span></div></article><ul className="organization-chart__children organization-chart__children--root">{departments.map((department) => <DepartmentBranch key={department.name} department={department} />)}</ul></div> : <p className="organization-chart__empty">暂无在职员工组织信息。</p>}
+        {loading ? <p className="organization-chart__empty">正在加载组织架构…</p> : error ? <div className="organization-chart__empty"><p>{error}</p><button className="employee-data__secondary" type="button" onClick={() => void loadOrganization()}>重新加载</button></div> : departments.length > 0 ? <div className="organization-chart__tree"><article className="organization-chart__root"><Users size={20} /><div><strong>组织架构</strong><span>在职员工 {employeeCount} 名</span></div></article><ul className="organization-chart__children organization-chart__children--root">{departments.map((department) => <DepartmentBranch key={department.name} department={department} />)}</ul></div> : <p className="organization-chart__empty">暂无在职员工组织信息。</p>}
       </div>
     </section>
   )
