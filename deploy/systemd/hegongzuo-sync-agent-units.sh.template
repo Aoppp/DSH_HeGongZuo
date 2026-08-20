@@ -19,8 +19,8 @@ desired_runtimes=$(/usr/bin/node -e '
   process.stdout.write(ids.join("\n"))
 ' "$CONFIG_PATH")
 
-running_runtimes=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^hegongzuo-agent@\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)\.service.*/\1/p')
-legacy_accounts=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^hegongzuo-agent@\([a-z][a-z0-9]*\)\.service.*/\1/p')
+running_runtimes=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^[[:space:]]*hegongzuo-agent@\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)\.service.*/\1/p')
+legacy_accounts=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^[[:space:]]*hegongzuo-agent@\([a-z][a-z0-9]*\)\.service.*/\1/p')
 
 # v2.02 之前的实例仅以账号命名；切换为 agent--account 后必须先停用，
 # 否则会与新实例争用相同端口。
