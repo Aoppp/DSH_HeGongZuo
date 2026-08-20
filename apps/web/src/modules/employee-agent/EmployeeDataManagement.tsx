@@ -537,9 +537,7 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
         <div className="employee-data__header-actions">
           {pageMode === 'directory' ? (
             <><button className="employee-data__secondary" type="button" onClick={() => setPageMode('organization')}><Network size={16} /> 组织架构</button><button className="employee-data__primary" type="button" onClick={() => setPageMode('maintenance')}><Settings2 size={16} /> 进入维护</button></>
-          ) : pageMode === 'organization' ? (
-            <button className="employee-data__secondary" type="button" onClick={() => setPageMode('directory')}><ArrowLeft size={16} /> 返回员工信息</button>
-          ) : (
+          ) : pageMode === 'organization' ? null : (
             <button className="employee-data__secondary" type="button" onClick={() => { setPageMode('directory'); closeEditor() }}><Eye size={16} /> 退出维护</button>
           )}
         </div>

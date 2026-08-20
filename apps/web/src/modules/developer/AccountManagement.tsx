@@ -208,19 +208,27 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
               <button type="button" onClick={closeEditor} title="关闭"><X size={18} /></button>
             </header>
             <form onSubmit={(event) => { event.preventDefault(); void saveDraft() }}>
-              <div className="employee-editor__fields account-admin__fields">
-                <label>姓名<input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} placeholder="如：张三" /></label>
-                <label>账号名<input value={draft.accountId} onChange={(event) => setDraft({ ...draft, accountId: event.target.value })} placeholder="姓名拼音，如：zhangsan" /></label>
-                <label>职位<input value={draft.position} onChange={(event) => setDraft({ ...draft, position: event.target.value })} placeholder="如：研发工程师、财务经理" /></label>
-                <label className="account-admin__permission"><input type="checkbox" checked={draft.role === 'developer'} onChange={(event) => setDraft({ ...draft, role: event.target.checked ? 'developer' : 'owner' })} />开发者权限（可管理账号与开发控制台）</label>
-                <fieldset className="account-admin__permissions">
-                  <legend>员工管理</legend>
-                  {employeeManagementPermissionIds.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
-                </fieldset>
-                <fieldset className="account-admin__permissions">
-                  <legend>其他管理</legend>
-                  {otherManagementPermissions.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
-                </fieldset>
+              <div className="account-admin__form-section">
+                <div className="account-admin__form-heading"><strong>基本信息</strong><span>用于登录与工作台展示</span></div>
+                <div className="employee-editor__fields account-admin__fields">
+                  <label>姓名<input value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} placeholder="如：张三" /></label>
+                  <label>账号名<input value={draft.accountId} onChange={(event) => setDraft({ ...draft, accountId: event.target.value })} placeholder="姓名拼音，如：zhangsan" /></label>
+                  <label>职位<input value={draft.position} onChange={(event) => setDraft({ ...draft, position: event.target.value })} placeholder="如：研发工程师、财务经理" /></label>
+                </div>
+              </div>
+              <div className="account-admin__form-section">
+                <div className="account-admin__form-heading"><strong>功能权限</strong><span>开通后显示对应管理入口</span></div>
+                <div className="account-admin__fields">
+                  <label className="account-admin__permission"><input type="checkbox" checked={draft.role === 'developer'} onChange={(event) => setDraft({ ...draft, role: event.target.checked ? 'developer' : 'owner' })} />开发者权限（可管理账号与开发控制台）</label>
+                  <fieldset className="account-admin__permissions">
+                    <legend>员工管理</legend>
+                    {employeeManagementPermissionIds.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
+                  </fieldset>
+                  <fieldset className="account-admin__permissions">
+                    <legend>其他管理</legend>
+                    {otherManagementPermissions.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
+                  </fieldset>
+                </div>
               </div>
               <p className="account-admin__hint">登录名规则：姓名拼音（小写字母开头，可含数字）。新账号初始密码统一为 wangshuhe123，请告知使用者登录后自行修改。</p>
               {formError && <p className="employee-editor__error">{formError}</p>}

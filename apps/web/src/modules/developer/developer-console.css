@@ -380,7 +380,7 @@
   color: var(--ink-400);
 }
 
-.employee-editor__fields label.account-admin__permission {
+.account-admin__fields .account-admin__permission {
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -396,7 +396,7 @@
   cursor: pointer;
 }
 
-.employee-editor__fields .account-admin__permission input {
+.account-admin__fields .account-admin__permission input {
   flex: 0 0 auto;
   width: 16px;
   min-height: 16px;
@@ -467,11 +467,32 @@
   text-align: center;
 }
 
-.employee-editor__fields.account-admin__fields {
+.account-admin__fields {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
 }
+
+.account-admin__form-section {
+  display: grid;
+  gap: 13px;
+  border-bottom: 1px solid var(--line);
+  padding: 0 0 18px;
+}
+
+.account-admin__form-section + .account-admin__form-section {
+  padding-top: 18px;
+}
+
+.account-admin__form-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account-admin__form-heading strong { font-size: 13px; }
+.account-admin__form-heading span { color: var(--ink-400); font-size: 11px; }
 
 @media (max-width: 720px) {
   .account-admin__header {
