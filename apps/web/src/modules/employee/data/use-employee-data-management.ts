@@ -1,11 +1,16 @@
 // 员工管理 / 数据状态与数据访问边界。
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { createEmployeeRecord, departEmployeeRecord, nextEmployeeIdentity, readEmployeeRecords, resumeUploadPayload, updateEmployeeRecord, type EmployeeRecord } from './employee-data'
 import { type SortField } from './employee-sort'
 import { type EditorMode, type EmployeeScope, pageSizeOptions } from './employee-data-types'
 
 const optionalTextFields = ['companyName', 'gender', 'idNumber', 'personalEmail', 'education', 'major', 'school', 'maritalStatus', 'hasChildren', 'hometown', 'emergencyContact', 'emergencyContactPhone', 'residentialAddress', 'idAddress', 'bankAccount', 'bankName', 'archiveNo', 'notes', 'departmentLevel2', 'birthDate', 'graduationDate', 'expectedRegularDate', 'actualRegularDate', 'contractEndDate'] as const
+
+type EmployeeRequest = { readonly query: string, readonly scope: EmployeeScope, readonly page: number, readonly pageSize: number, readonly sort: SortField, readonly ascending: boolean }
+type CachedEmployeePage = { readonly employees: EmployeeRecord[], readonly total: number }
+
+function employeeRequestKey(request: EmployeeRequest): string { return `${request.scope}\u0000${request.query}\u0000${request.page}\u0000${request.pageSize}\u0000${request.sort}\u0000${request.ascending}` }
 
 function emptyEmployee(employees: readonly EmployeeRecord[]): EmployeeRecord {
   return { ...nextEmployeeIdentity(employees), displayName: '', workEmail: null, workPhone: '', departmentName: '', jobTitle: '', employmentType: 'full_time', status: 'active', hireDate: '', workLocation: '', responsibilities: '', resumeFileName: null, resumeMimeType: null, resumeSize: null, companyName: null, gender: null, idNumber: null, birthDate: null, personalEmail: null, education: null, major: null, school: null, graduationDate: null, maritalStatus: null, hasChildren: null, hometown: null, emergencyContact: null, emergencyContactPhone: null, residentialAddress: null, idAddress: null, bankAccount: null, bankName: null, archiveNo: null, notes: null, departmentLevel2: null, probationMonths: null, expectedRegularDate: null, actualRegularDate: null, contractEndDate: null }
@@ -49,9 +54,14 @@ export function useEmployeeDataManagement() {
   const [resumeInputKey, setResumeInputKey] = useState(0)
   const tableWrapRef = useRef<HTMLDivElement>(null!)
   const requestSequence = useRef(0)
-  const requestKey = `${employeeScope}\u0000${query}\u0000${currentPage}\u0000${employeesPerPage}\u0000${sortField}\u0000${sortAscending}`
-  const loadEmployees = useCallback(async () => { const sequence = ++requestSequence.current; setLoading(true); setDataError(null); try { const result = await readEmployeeRecords({ query, scope: employeeScope, page: currentPage, pageSize: employeesPerPage, sort: sortField, ascending: sortAscending }); if (sequence !== requestSequence.current) return; setEmployees(result.employees); setTotalEmployees(result.total); setLoadedRequestKey(requestKey) } catch (error) { if (sequence !== requestSequence.current) return; setDataError(error instanceof Error ? error.message : String(error)); setLoadedRequestKey(requestKey) } finally { if (sequence === requestSequence.current) setLoading(false) } }, [currentPage, employeeScope, employeesPerPage, query, requestKey, sortAscending, sortField])
+  const pageCache = useRef(new Map<string, CachedEmployeePage>())
+  const prefetching = useRef(new Set<string>())
+  const request = useMemo<EmployeeRequest>(() => ({ query, scope: employeeScope, page: currentPage, pageSize: employeesPerPage, sort: sortField, ascending: sortAscending }), [currentPage, employeeScope, employeesPerPage, query, sortAscending, sortField])
+  const requestKey = employeeRequestKey(request)
+  const loadEmployees = useCallback(async () => { const sequence = ++requestSequence.current; const cached = pageCache.current.get(requestKey); if (cached) { setEmployees(cached.employees); setTotalEmployees(cached.total); setLoadedRequestKey(requestKey); setLoading(false); setDataError(null) } else { setLoading(true); setDataError(null) } try { const result = await readEmployeeRecords(request); const next = { employees: result.employees, total: result.total }; pageCache.current.set(requestKey, next); if (sequence !== requestSequence.current) return; setEmployees(next.employees); setTotalEmployees(next.total); setLoadedRequestKey(requestKey) } catch (error) { if (sequence !== requestSequence.current) return; if (!cached) { setDataError(error instanceof Error ? error.message : String(error)); setLoadedRequestKey(requestKey) } } finally { if (sequence === requestSequence.current) setLoading(false) } }, [request, requestKey])
   useEffect(() => { void loadEmployees() }, [loadEmployees])
+  const prefetchScope = useCallback(async (scope: EmployeeScope) => { const prefetchRequest: EmployeeRequest = { query, scope, page: 1, pageSize: employeesPerPage, sort: scope === 'departed' ? 'departureDate' : 'hireDate', ascending: scope !== 'departed' }; const prefetchKey = employeeRequestKey(prefetchRequest); if (pageCache.current.has(prefetchKey) || prefetching.current.has(prefetchKey)) return; prefetching.current.add(prefetchKey); try { const result = await readEmployeeRecords(prefetchRequest); pageCache.current.set(prefetchKey, { employees: result.employees, total: result.total }) } catch { /* 预加载失败不影响当前列表。 */ } finally { prefetching.current.delete(prefetchKey) } }, [employeesPerPage, query])
+  useEffect(() => { void prefetchScope(employeeScope === 'employed' ? 'departed' : 'employed') }, [employeeScope, prefetchScope])
   const totalPages = Math.max(1, Math.ceil(totalEmployees / employeesPerPage))
   useEffect(() => { setCurrentPage(1) }, [employeeScope, query, sortField, sortAscending, employeesPerPage])
   useEffect(() => { setCurrentPage((page) => Math.min(page, totalPages)) }, [totalPages])
