@@ -18,10 +18,8 @@ export function EmployeeDataManagement({ backLabel = '返回员工查询', onBac
   const [pageMode, setPageMode] = useState<PageMode>('directory')
   const management = useEmployeeDataManagement()
   const departed = management.employeeScope === 'departed'
-  const employedCount = management.employees.filter((employee) => employee.status !== 'inactive').length
-  const departedCount = management.employees.length - employedCount
   const pageTitle = pageMode === 'organization' ? '组织架构图' : pageMode === 'maintenance' ? '员工数据维护' : departed ? '离职人员档案' : '在职员工信息'
-  const pageDescription = pageMode === 'organization' ? null : pageMode === 'maintenance' ? '在系统中查询、新增、查看、编辑或办理员工离职。' : departed ? `当前共 ${departedCount} 名离职人员，按离职时间排序。` : `当前共 ${employedCount} 名在职员工，查看员工档案与组织信息。`
+  const pageDescription = pageMode === 'organization' ? null : pageMode === 'maintenance' ? '在系统中查询、新增、查看、编辑或办理员工离职。' : departed ? `当前共 ${management.totalEmployees} 名离职人员，按离职时间排序。` : `当前共 ${management.totalEmployees} 名在职员工，查看员工档案与组织信息。`
   const switchScope = (scope: typeof management.employeeScope) => { management.setEmployeeScope(scope); management.setSortField(scope === 'departed' ? 'departureDate' : 'hireDate'); management.setSortAscending(scope !== 'departed') }
   const changePage = (page: number) => { management.setCurrentPage(page); requestAnimationFrame(() => management.tableWrapRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })) }
   const editPreview = () => { if (!management.draft) return; setPageMode('maintenance'); management.openEditor('edit', management.draft) }
