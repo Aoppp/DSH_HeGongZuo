@@ -1,18 +1,8 @@
 // 员工查询消息渲染。
 import { type ReactNode } from 'react'
 
+import { decodeHtmlEntities } from './html-entities'
 import { parseMarkdownBlocks } from './markdown-blocks'
-
-// 轻量 Markdown 渲染：加粗、斜体、行内代码、表格、无序列表、代码块与段落。
-// 所有文本先做 HTML 转义，避免模型输出注入脚本。
-function escapeHtml(text: string): string {
-  return text
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;')
-}
 
 const inlinePattern = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`)/g
 
@@ -26,9 +16,9 @@ function renderInline(text: string): ReactNode[] {
       return <em key={index}>{renderInline(part.slice(1, -1))}</em>
     }
     if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
-      return <code key={index}>{escapeHtml(part.slice(1, -1))}</code>
+      return <code key={index}>{decodeHtmlEntities(part.slice(1, -1))}</code>
     }
-    return escapeHtml(part)
+    return decodeHtmlEntities(part)
   })
 }
 
@@ -39,7 +29,7 @@ interface MarkdownTextProps {
 export function MarkdownText({ text }: MarkdownTextProps) {
   return <div className="md-content">{parseMarkdownBlocks(text).map((block, blockIndex) => {
     if (block.type === 'code') {
-      return <pre key={blockIndex}><code>{escapeHtml(block.text)}</code></pre>
+      return <pre key={blockIndex}><code>{decodeHtmlEntities(block.text)}</code></pre>
     }
     if (block.type === 'table') {
       return (
