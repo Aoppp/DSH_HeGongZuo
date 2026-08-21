@@ -337,7 +337,8 @@
   letter-spacing: 0.14em;
 }
 
-.sidebar__navigation button {
+.sidebar__navigation button,
+.sidebar__navigation a {
   display: flex;
   min-height: 45px;
   align-items: center;
@@ -350,23 +351,27 @@
   background: transparent;
 }
 
-.sidebar__navigation button:hover {
+.sidebar__navigation button:hover,
+.sidebar__navigation a:hover {
   color: var(--ink-900);
   background: var(--canvas);
 }
 
-.sidebar__navigation button.is-active {
+.sidebar__navigation button.is-active,
+.sidebar__navigation a.is-active {
   color: var(--jade-900);
   background: var(--jade-100);
 }
 
-.sidebar__navigation button span {
+.sidebar__navigation button span,
+.sidebar__navigation a span {
   flex: 1;
   font-size: 13px;
   font-weight: 650;
 }
 
-.sidebar__navigation button small {
+.sidebar__navigation button small,
+.sidebar__navigation a small {
   border-radius: 5px;
   padding: 3px 5px;
   font-size: 12px;
@@ -374,7 +379,8 @@
   background: var(--jade-100);
 }
 
-.platform-shell--collapsed .sidebar__navigation button {
+.platform-shell--collapsed .sidebar__navigation button,
+.platform-shell--collapsed .sidebar__navigation a {
   justify-content: center;
   padding: 0;
 }
@@ -576,11 +582,14 @@
   .sidebar__navigation > p,
   .sidebar__navigation button span,
   .sidebar__navigation button small,
+  .sidebar__navigation a span,
+  .sidebar__navigation a small,
   .sidebar__scope {
     display: none;
   }
 
-  .sidebar__navigation button {
+  .sidebar__navigation button,
+  .sidebar__navigation a {
     justify-content: center;
     padding: 0;
   }

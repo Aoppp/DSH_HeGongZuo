@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronLeft, ChevronRight, FolderKanban, Landmark, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type MouseEvent } from 'react'
 
 import type { ModuleGroupId, ModuleId, PlatformModule } from '../app/types'
 import { BrandMark } from './BrandMark'
@@ -22,19 +22,25 @@ export function Sidebar({ activeModule, collapsed, modules, onNavigate, onToggle
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<ModuleGroupId>>(() => new Set(['employee-management']))
   const renderedGroups = new Set<ModuleGroupId>()
 
+  function followModuleLink(event: MouseEvent<HTMLAnchorElement>, moduleId: ModuleId) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    event.preventDefault()
+    onNavigate(moduleId)
+  }
+
   function moduleButton(module: PlatformModule) {
     const Icon = module.icon
     return (
-      <button
-        type="button"
+      <a
+        href={module.path}
         className={`${activeModule === module.id ? 'is-active' : ''} sidebar__nested-link`}
         title={collapsed ? module.label : undefined}
-        onClick={() => onNavigate(module.id)}
+        onClick={(event) => followModuleLink(event, module.id)}
         key={module.id}
       >
         <Icon size={17} />
         {!collapsed && <span>{module.label}</span>}
-      </button>
+      </a>
     )
   }
 
@@ -59,11 +65,11 @@ export function Sidebar({ activeModule, collapsed, modules, onNavigate, onToggle
           if (!module.group) {
             const Icon = module.icon
             return (
-              <button type="button" className={activeModule === module.id ? 'is-active' : ''} title={collapsed ? module.label : undefined} onClick={() => onNavigate(module.id)} key={module.id}>
+              <a href={module.path} className={activeModule === module.id ? 'is-active' : ''} title={collapsed ? module.label : undefined} onClick={(event) => followModuleLink(event, module.id)} key={module.id}>
                 <Icon size={19} />
                 {!collapsed && <span>{module.label}</span>}
                 {!collapsed && module.badge && <small>{module.badge}</small>}
-              </button>
+              </a>
             )
           }
           if (renderedGroups.has(module.group)) return null

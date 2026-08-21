@@ -13,6 +13,7 @@ import type { AuthenticatedUser, ModuleId, PlatformModule, RoleId } from './type
 export const platformModules: readonly PlatformModule[] = [
   {
     id: 'management-cockpit',
+    path: '/management',
     label: '管理驾驶舱',
     description: '公司整体运行情况的一屏总览',
     icon: Gauge,
@@ -22,6 +23,7 @@ export const platformModules: readonly PlatformModule[] = [
   },
   {
     id: 'overview',
+    path: '/overview',
     label: '概览',
     description: '当前角色的工作入口',
     icon: LayoutDashboard,
@@ -30,6 +32,7 @@ export const platformModules: readonly PlatformModule[] = [
   },
   {
     id: 'employee-data',
+    path: '/employee/data',
     label: '员工数据',
     description: '查看和维护全体员工信息',
     icon: Users,
@@ -40,6 +43,7 @@ export const platformModules: readonly PlatformModule[] = [
   },
   {
     id: 'employee-agent',
+    path: '/employee/query',
     label: '员工查询',
     description: '在平台内查询员工与组织信息',
     icon: Users,
@@ -50,6 +54,7 @@ export const platformModules: readonly PlatformModule[] = [
   },
   {
     id: 'finance-management',
+    path: '/finance',
     label: '财务管理',
     description: '财务数据与业务流程管理',
     icon: Landmark,
@@ -60,6 +65,7 @@ export const platformModules: readonly PlatformModule[] = [
   },
   {
     id: 'project-management',
+    path: '/projects',
     label: '项目管理',
     description: '项目计划与协作管理',
     icon: BriefcaseBusiness,
@@ -70,6 +76,7 @@ export const platformModules: readonly PlatformModule[] = [
   },
   {
     id: 'developer-console',
+    path: '/developer',
     label: '开发控制台',
     description: '查看开发环境与模块结构',
     icon: Code2,

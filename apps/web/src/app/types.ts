@@ -33,6 +33,7 @@ export interface ModuleProps {
 
 export interface PlatformModule {
   readonly id: ModuleId
+  readonly path: string
   readonly label: string
   readonly description: string
   readonly icon: LucideIcon

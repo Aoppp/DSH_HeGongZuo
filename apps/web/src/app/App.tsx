@@ -4,7 +4,8 @@ import { apiLogout, apiMe } from './auth-client'
 import { AccountLogin } from '../components/AccountLogin'
 import { Sidebar } from '../components/Sidebar'
 import { Topbar } from '../components/Topbar'
-import { getModule, getVisibleModules } from './module-registry'
+import { getModule, getVisibleModules, platformModules } from './module-registry'
+import { accessibleModuleForPath, defaultModuleIdForUser } from './module-routes'
 import type { AuthenticatedUser, ModuleId } from './types'
 
 export default function App() {
@@ -17,13 +18,28 @@ export default function App() {
     void apiMe().then((restoredUser) => {
       if (restoredUser) {
         setUser(restoredUser)
-        setActiveModuleId(restoredUser.position === 'CEO' ? 'management-cockpit' : 'overview')
       }
       setRestoring(false)
     })
   }, [])
 
   const visibleModules = useMemo(() => user ? getVisibleModules(user) : [], [user])
+
+  useEffect(() => {
+    if (!user) return
+    const currentUser = user
+
+    function synchronizeLocation() {
+      const fallbackModuleId = defaultModuleIdForUser(currentUser.position, visibleModules)
+      const module = accessibleModuleForPath(platformModules, visibleModules, window.location.pathname, fallbackModuleId)
+      setActiveModuleId(module.id)
+      if (window.location.pathname !== module.path) window.history.replaceState(null, '', module.path)
+    }
+
+    synchronizeLocation()
+    window.addEventListener('popstate', synchronizeLocation)
+    return () => window.removeEventListener('popstate', synchronizeLocation)
+  }, [user, visibleModules])
 
   if (restoring) {
     return <div className="platform-boot">正在加载平台…</div>
@@ -32,9 +48,10 @@ export default function App() {
   if (!user) {
     return <AccountLogin onAuthenticated={(authenticatedUser) => {
       setUser(authenticatedUser)
-      setActiveModuleId(authenticatedUser.position === 'CEO' ? 'management-cockpit' : 'overview')
     }} />
   }
+
+  const currentUser = user
 
   const activeModule = getModule(activeModuleId)
   const ActiveComponent = activeModule.component
@@ -43,7 +60,16 @@ export default function App() {
     setUser(null)
     setActiveModuleId('overview')
     setSidebarCollapsed(false)
+    window.history.replaceState(null, '', '/overview')
     void apiLogout()
+  }
+
+  function navigate(moduleId: ModuleId) {
+    const fallbackModuleId = defaultModuleIdForUser(currentUser.position, visibleModules)
+    const module = accessibleModuleForPath(platformModules, visibleModules, getModule(moduleId).path, fallbackModuleId)
+    if (window.location.pathname !== module.path) window.history.pushState(null, '', module.path)
+    setActiveModuleId(module.id)
+    window.scrollTo(0, 0)
   }
 
   function updateCurrentUserProfile(profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position' | 'role' | 'permissions'>) {
@@ -56,13 +82,13 @@ export default function App() {
         activeModule={activeModuleId}
         collapsed={sidebarCollapsed}
         modules={visibleModules}
-        onNavigate={setActiveModuleId}
+        onNavigate={navigate}
         onToggle={() => setSidebarCollapsed((value) => !value)}
       />
       <div className="platform-shell__main">
         <Topbar activeModule={activeModule} user={user} onExit={exitPreview} />
         <main className="platform-content">
-          <ActiveComponent user={user} onNavigate={setActiveModuleId} onUserProfileUpdated={updateCurrentUserProfile} />
+          <ActiveComponent user={currentUser} onNavigate={navigate} onUserProfileUpdated={updateCurrentUserProfile} />
         </main>
       </div>
     </div>
