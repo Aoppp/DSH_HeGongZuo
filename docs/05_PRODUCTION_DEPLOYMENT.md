@@ -107,6 +107,20 @@ sudo systemctl enable --now nginx
 
 Nginx 只代理 `/api/` 到 127.0.0.1:4174。员工查询的 HTTP 与 WebSocket 请求会由平台 API 校验登录会话后转发至当前账号对应的本机服务；不要添加任何将 `/dsh/`、3180 起端口或 PostgreSQL 直接公开的 Nginx 规则。
 
+## 企业微信原生日报同步准备
+
+员工管理模块的企业微信回调地址为 `https://hgzuo.com/api/integrations/wecom/callback`。在企业微信自建应用的“接收消息”中配置该地址，以完成企业可信 IP 的前置校验；该回调仅校验企业微信请求并确认接收，不保存聊天消息或日报内容。
+
+在服务器 `.env` 中配置以下值后重启 `hegongzuo-api`：
+
+```text
+HEGONGZUO_WECOM_CORP_ID=<企业微信企业ID>
+HEGONGZUO_WECOM_CALLBACK_TOKEN=<接收消息配置中的Token>
+HEGONGZUO_WECOM_CALLBACK_AES_KEY=<接收消息配置中的EncodingAESKey>
+```
+
+这些值属于秘密配置，不得提交 Git、写入开发日志或发送到非受控渠道。企业微信验证回调地址成功后，在同一应用的“企业可信 IP”中添加服务器公网出口 IP。日报数据的定时读取需要另行配置具备汇报数据权限的应用凭证。
+
 ## 更新步骤
 
 ```bash

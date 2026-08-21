@@ -10,6 +10,7 @@ import { AuthError, AuthService, LoginRateLimitError } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/employee-input.js'
 import { PostgresEmployeeRepository } from './modules/employee/employee-repository.js'
+import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
 import { requireAuth, requireDeveloper, requirePermission } from './http/auth-middleware.js'
@@ -103,6 +104,11 @@ function accountRetryId(pathname: string): string | null {
 
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost')
+
+  if (url.pathname === callbackPath) {
+    await handleWeComCallback(request, response, url)
+    return
+  }
 
   if (request.method === 'GET' && url.pathname === '/health') {
     await database.query('SELECT 1')
@@ -338,10 +344,10 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError) {
+    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError) {
       const status = error instanceof LoginRateLimitError
         ? 429
-        : error instanceof HttpError || error instanceof AgentRuntimeProxyError
+        : error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError
           ? error.status
           : 400
       sendJson(response, status, { error: error.message })
