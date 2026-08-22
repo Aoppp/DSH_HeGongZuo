@@ -18,7 +18,7 @@ interface AccountRow {
   readonly display_name: string
   readonly position: string
   readonly password_hash: string
-  readonly status: 'active' | 'disabled'
+  readonly status: 'active' | 'disabled' | 'initializing' | 'initialization_failed'
   readonly failed_login_count: number
   readonly locked_until: Date | string | null
   readonly permissions: string[]
@@ -79,9 +79,9 @@ export class AuthService {
       if (account) await this.recordAccountFailure(account.id)
       throw new AuthError('账号或密码不正确。')
     }
-    if (account.status !== 'active') {
-      throw new AuthError('该账号已停用，请联系管理员。')
-    }
+    if (account.status === 'disabled') throw new AuthError('该账号已停用，请联系管理员。')
+    if (account.status === 'initializing') throw new AuthError('账号正在初始化，请稍后再试。')
+    if (account.status === 'initialization_failed') throw new AuthError('账号初始化失败，请联系管理员在平台管理中重试。')
     const token = randomBytes(32).toString('hex')
     const client = await this.pool.connect()
     try {
