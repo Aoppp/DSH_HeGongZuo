@@ -317,6 +317,14 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/employees/contract-expiry-alerts' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
+    const alerts = await repository.listContractExpiryAlerts(7)
+    sendJson(response, 200, { alerts })
+    return
+  }
+
   if (url.pathname === '/api/employees' && request.method === 'POST') {
     requirePermission(currentUser, 'employee-data')
     await platformManagement.assertModuleEnabled('employee-data')

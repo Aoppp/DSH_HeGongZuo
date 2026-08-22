@@ -3,14 +3,16 @@ import { useState, type FormEvent } from 'react'
 
 import { apiChangePassword } from '../app/auth-client'
 import type { AuthenticatedUser, PlatformModule } from '../app/types'
+import { ContractExpiryNotice } from '../modules/employee/contract-alerts/ContractExpiryNotice'
 
 interface TopbarProps {
   readonly activeModule: PlatformModule
   readonly user: AuthenticatedUser
+  readonly onNavigateToEmployeeData: () => void
   readonly onExit: () => void
 }
 
-export function Topbar({ activeModule, user, onExit }: TopbarProps) {
+export function Topbar({ activeModule, user, onNavigateToEmployeeData, onExit }: TopbarProps) {
   const positionLabel = user.position || '成员'
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
@@ -65,6 +67,7 @@ export function Topbar({ activeModule, user, onExit }: TopbarProps) {
             <small>{positionLabel}</small>
           </span>
         </div>
+        <ContractExpiryNotice user={user} onNavigateToEmployeeData={onNavigateToEmployeeData} />
         <button type="button" className="icon-button" onClick={() => { setPasswordOpen(true); setFormError(null) }} title="修改密码" aria-label="修改密码"><KeyRound size={17} /></button>
         <button type="button" className="icon-button" onClick={onExit} title="退出登录" aria-label="退出登录"><LogOut size={18} /></button>
       </div>

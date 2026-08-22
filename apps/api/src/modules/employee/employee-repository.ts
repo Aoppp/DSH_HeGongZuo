@@ -67,6 +67,24 @@ export interface EmployeeResume {
   readonly data: Buffer
 }
 
+export interface ContractExpiryAlert {
+  readonly employeeId: string
+  readonly displayName: string
+  readonly departmentName: string
+  readonly jobTitle: string
+  readonly contractEndDate: string
+  readonly daysLeft: number
+}
+
+interface ContractExpiryAlertRow {
+  readonly employee_id: string
+  readonly display_name: string
+  readonly department_name: string
+  readonly job_title: string
+  readonly contract_end_date: string | Date
+  readonly days_left: number
+}
+
 const columns = `
   id, display_name, work_email, work_phone,
   department_name, job_title,
@@ -213,6 +231,27 @@ export class PostgresEmployeeRepository {
     if (options.query.trim()) { values.push(`%${options.query.trim()}%`); filters.push('(display_name ILIKE $1 OR work_email ILIKE $1 OR personal_email ILIKE $1 OR department_name ILIKE $1 OR department_level2 ILIKE $1 OR job_title ILIKE $1 OR work_location ILIKE $1 OR company_name ILIKE $1)') }
     const result = await this.pool.query<EmployeeRow>(`SELECT ${columns} FROM employees WHERE ${filters.join(' AND ')} ORDER BY ${sortColumns[options.sort]} ${options.ascending ? 'ASC' : 'DESC'} NULLS LAST, id ASC`, values)
     return result.rows.map(toEmployee)
+  }
+
+  async listContractExpiryAlerts(days = 7): Promise<ContractExpiryAlert[]> {
+    const result = await this.pool.query<ContractExpiryAlertRow>(
+      `SELECT id AS employee_id, display_name, department_name, job_title, contract_end_date,
+              (contract_end_date - CURRENT_DATE)::integer AS days_left
+         FROM employees
+        WHERE status <> 'inactive'
+          AND contract_end_date >= CURRENT_DATE
+          AND contract_end_date <= CURRENT_DATE + $1 * INTERVAL '1 day'
+        ORDER BY contract_end_date ASC, id ASC`,
+      [days],
+    )
+    return result.rows.map((row) => ({
+      employeeId: row.employee_id,
+      displayName: row.display_name,
+      departmentName: row.department_name,
+      jobTitle: row.job_title,
+      contractEndDate: toDate(row.contract_end_date) ?? '',
+      daysLeft: row.days_left,
+    }))
   }
 
   async get(id: string): Promise<EmployeeRecord | null> {

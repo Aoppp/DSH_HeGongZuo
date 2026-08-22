@@ -91,7 +91,7 @@ export default function App() {
         onToggle={() => setSidebarCollapsed((value) => !value)}
       />
       <div className="platform-shell__main">
-        <Topbar activeModule={activeModule} user={user} onExit={exitPreview} />
+        <Topbar activeModule={activeModule} user={user} onNavigateToEmployeeData={() => navigate('employee-data')} onExit={exitPreview} />
         <main className="platform-content">
           <ActiveComponent user={currentUser} onNavigate={navigate} onUserProfileUpdated={updateCurrentUserProfile} onModuleSettingsUpdated={setDisabledModuleIds} />
         </main>
