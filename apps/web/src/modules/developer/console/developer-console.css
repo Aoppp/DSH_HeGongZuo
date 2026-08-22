@@ -247,12 +247,20 @@
   font-size: 11px;
 }
 
+.account-admin__permission-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .account-admin__permissions {
   display: grid;
   gap: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 12px;
+  min-height: 78px;
+  padding: 12px 14px;
+  background: #f8fbfa;
 }
 
 .account-admin__permissions legend {
@@ -268,6 +276,12 @@
   gap: 8px;
   color: var(--ink-700);
   font-size: 13px;
+}
+
+@media (max-width: 620px) {
+  .account-admin__permission-groups {
+    grid-template-columns: 1fr;
+  }
 }
 
 .account-admin__error {

@@ -1,8 +1,6 @@
 // 开发控制台 / 账号管理。
 import { KeyRound, LoaderCircle, Pencil, Plus, Trash2, UserCog, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { employeeManagementPermissionIds, platformManagementPermissionIds } from '@hegongzuo/employee-domain'
-
 import type { AuthenticatedUser } from '../../../app/types'
 import {
   createAccount,
@@ -23,6 +21,23 @@ interface AccountManagementProps {
 
 type EditorMode = 'create' | 'edit' | null
 const employeePermissionLabels: Record<AccountPermissionId, string> = {
+  'employee-data': '档案维护',
+  'employee-query': '数据查询',
+  'finance-management': '待开发',
+  'project-management': '待开发',
+  'management-cockpit': '驾驶舱',
+  'platform-administration': '平台与账号管理',
+}
+
+const permissionGroups: readonly { readonly label: string; readonly permissions: readonly AccountPermissionId[] }[] = [
+  { label: '员工管理', permissions: ['employee-data', 'employee-query'] },
+  { label: '财务管理', permissions: ['finance-management'] },
+  { label: '项目管理', permissions: ['project-management'] },
+  { label: '其他', permissions: ['management-cockpit', 'platform-administration'] },
+]
+
+const accountPermissionLabels: Record<AccountPermissionId, string> = {
+  ...employeePermissionLabels,
   'employee-data': '员工档案维护',
   'employee-query': '员工查询',
   'finance-management': '财务管理',
@@ -30,7 +45,6 @@ const employeePermissionLabels: Record<AccountPermissionId, string> = {
   'management-cockpit': '管理驾驶舱',
   'platform-administration': '平台管理与账号管理',
 }
-const otherManagementPermissions = platformManagementPermissionIds.filter((permission) => !employeeManagementPermissionIds.includes(permission as typeof employeeManagementPermissionIds[number]))
 
 export function AccountManagement({ user, onCurrentUserProfileUpdated }: AccountManagementProps) {
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
@@ -186,7 +200,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                 <td><strong>{account.displayName}</strong>{account.id === user.id && <small>当前账号</small>}</td>
                 <td><code>{account.accountId}</code></td>
                 <td>{account.position || <span className="account-admin__muted">未填写</span>}</td>
-                <td><small>{account.permissions.map((permission) => employeePermissionLabels[permission]).join(' · ') || '未开通功能'}</small></td>
+                <td><small>{account.permissions.map((permission) => accountPermissionLabels[permission]).join(' · ') || '未开通功能'}</small></td>
                 <td><span className={`account-status account-status--${account.status}`}>{account.status === 'active' ? '正常' : account.status === 'disabled' ? '已停用' : account.status === 'initializing' ? '初始化中' : '初始化失败'}</span></td>
                 <td><small>{account.createdAt.slice(0, 10)}</small></td>
                 <td>
@@ -224,15 +238,13 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
               </div>
               <div className="account-admin__form-section">
                 <div className="account-admin__form-heading"><strong>功能权限</strong><span>开通后显示对应管理入口</span></div>
-                <div className="account-admin__fields">
-                  <fieldset className="account-admin__permissions">
-                    <legend>员工管理</legend>
-                    {employeeManagementPermissionIds.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
-                  </fieldset>
-                  <fieldset className="account-admin__permissions">
-                    <legend>管理与平台</legend>
-                    {otherManagementPermissions.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
-                  </fieldset>
+                <div className="account-admin__permission-groups">
+                  {permissionGroups.map((group) => (
+                    <fieldset className="account-admin__permissions" key={group.label}>
+                      <legend>{group.label}</legend>
+                      {group.permissions.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
+                    </fieldset>
+                  ))}
                 </div>
               </div>
               <p className="account-admin__hint">登录名规则：姓名拼音（小写字母开头，可含数字）。新账号初始密码统一为 wangshuhe123，请告知使用者登录后自行修改。</p>
