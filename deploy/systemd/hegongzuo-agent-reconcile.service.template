@@ -16,5 +16,6 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-BindReadOnlyPaths=/home/__DEPLOY_USER__/.cache/node/corepack
+# 初始化能力包会更新 Corepack 的本地元数据；仅向协调任务开放该缓存目录。
+BindPaths=/home/__DEPLOY_USER__/.cache/node/corepack
 ReadWritePaths=__PROJECT_DIR__/.runtime
