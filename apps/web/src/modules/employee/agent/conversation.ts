@@ -10,6 +10,9 @@ export interface ConversationItem {
   readonly time: number
 }
 
+export const maximumConversationTurns = 30
+export const maximumSavedConversations = 3
+
 function visibleText(content: readonly { readonly type: string; readonly text?: string }[]): string {
   return content
     .filter((block) => block.type === 'text' && typeof block.text === 'string')
@@ -136,6 +139,10 @@ export function buildConversation(entries: readonly HistoryEntry[]): Conversatio
   }
 
   return items
+}
+
+export function countUserConversationTurns(entries: readonly HistoryEntry[]): number {
+  return buildConversation(entries).filter((item) => item.kind === 'user').length
 }
 
 export function appendSessionEvent(entries: readonly HistoryEntry[], event: SessionEvent): HistoryEntry[] {

@@ -12,7 +12,7 @@ import {
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
-import { buildConversation } from './conversation'
+import { buildConversation, maximumConversationTurns, maximumSavedConversations } from './conversation'
 import { MarkdownText } from './markdown'
 import { useEmployeeAgent } from './use-employee-agent'
 import './employee-agent.css'
@@ -31,6 +31,9 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
   const agent = useEmployeeAgent()
   const conversation = useMemo(() => buildConversation(agent.history), [agent.history])
   const activeSession = agent.sessions.find((session) => session.id === agent.activeSessionId)
+  const conversationTurnCount = conversation.filter((message) => message.kind === 'user').length
+  const conversationLimitReached = conversationTurnCount >= maximumConversationTurns
+  const sessionLimitReached = agent.sessions.length >= maximumSavedConversations
 
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
@@ -38,7 +41,7 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
 
   function submit(text = draft) {
     const content = text.trim()
-    if (!content || agent.sending || agent.connectionState !== 'connected') return
+    if (!content || conversationLimitReached || agent.sending || agent.connectionState !== 'connected') return
     setDraft('')
     void agent.sendPrompt(content)
   }
@@ -73,10 +76,10 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
 
       <section className="agent-workbench">
         <aside className="agent-sessions">
-          <button className="new-session-button" type="button" onClick={() => void agent.createSession().catch(() => undefined)} disabled={!agent.workspace}>
+          <button className="new-session-button" type="button" onClick={() => void agent.createSession().catch(() => undefined)} disabled={!agent.workspace || sessionLimitReached} title={sessionLimitReached ? `最多只能保存 ${maximumSavedConversations} 个对话，请先删除一个已结束的对话。` : '新建对话'}>
             <MessageSquarePlus size={16} /> 新建对话
           </button>
-          <div className="agent-sessions__heading">最近对话</div>
+          <div className="agent-sessions__heading">最近对话（{agent.sessions.length} / {maximumSavedConversations}）</div>
           <div className="agent-session-list">
             {agent.sessions.length === 0 ? (
               <p className="agent-session-list__empty">还没有历史对话</p>
@@ -151,6 +154,8 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
 
           {agent.error && <div className="agent-error"><AlertCircle size={15} /><span>{agent.error}</span></div>}
 
+          {conversationLimitReached && <div className="agent-conversation-limit"><AlertCircle size={15} /><span>当前对话已达到 {maximumConversationTurns} 轮，请新开对话继续。</span><button type="button" onClick={() => void agent.createSession().catch(() => undefined)} disabled={!agent.workspace}>新开对话</button></div>}
+
           <div className="agent-composer">
             <div className="agent-composer__box">
               <textarea
@@ -158,15 +163,15 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={agent.connectionState === 'connected' ? '输入员工、部门或组织信息查询…' : '正在连接员工信息服务…'}
+                placeholder={conversationLimitReached ? `当前对话已达到 ${maximumConversationTurns} 轮，请新开对话继续。` : agent.connectionState === 'connected' ? '输入员工、部门或组织信息查询…' : '正在连接员工信息服务…'}
                 rows={2}
-                disabled={agent.connectionState !== 'connected'}
+                disabled={conversationLimitReached || agent.connectionState !== 'connected'}
               />
-              <button type="button" onClick={() => submit()} disabled={!draft.trim() || agent.sending || agent.connectionState !== 'connected'} title="发送">
+              <button type="button" onClick={() => submit()} disabled={conversationLimitReached || !draft.trim() || agent.sending || agent.connectionState !== 'connected'} title="发送">
                 {agent.sending ? <LoaderCircle className="spin" size={18} /> : <Send size={18} />}
               </button>
             </div>
-            <p><Database size={12} /> 员工数据由系统统一管理 · Enter 发送，Shift + Enter 换行</p>
+            <p><Database size={12} /> 本对话 {conversationTurnCount} / {maximumConversationTurns} 轮 · Enter 发送，Shift + Enter 换行</p>
           </div>
         </div>
       </section>

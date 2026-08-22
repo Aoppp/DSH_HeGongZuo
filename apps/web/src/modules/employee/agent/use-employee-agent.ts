@@ -8,7 +8,7 @@ import type {
 } from '@deepseek-ai/dsh-client-connection/client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { appendSessionEvents } from './conversation'
+import { appendSessionEvents, countUserConversationTurns, maximumConversationTurns, maximumSavedConversations } from './conversation'
 import { AccountDshApiClient, unwrapDshResponse } from './dsh-api-client'
 
 export type AgentConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'error'
@@ -121,6 +121,9 @@ export function useEmployeeAgent() {
   const createSession = useCallback(async () => {
     try {
       if (!api || !workspaceRef.current) throw new Error('员工查询服务尚未就绪。')
+      if (sessions.length >= maximumSavedConversations) {
+        throw new Error(`最多只能保存 ${maximumSavedConversations} 个对话，请先删除一个已结束的对话。`)
+      }
       const response = unwrapDshResponse(await api.sessions.create({ workspaceId: workspaceRef.current.workspaceId }))
       await refreshSessions(workspaceRef.current)
       await selectSession(response.sessionId)
@@ -129,10 +132,14 @@ export function useEmployeeAgent() {
       setError(reason instanceof Error ? reason.message : String(reason))
       throw reason
     }
-  }, [api, refreshSessions, selectSession])
+  }, [api, refreshSessions, selectSession, sessions.length])
 
   const sendPrompt = useCallback(async (text: string) => {
     if (!api) return
+    if (countUserConversationTurns(history) >= maximumConversationTurns) {
+      setError(`当前对话已达到 ${maximumConversationTurns} 轮，请新开对话继续。`)
+      return
+    }
     setSending(true)
     setError(null)
     try {
@@ -152,7 +159,7 @@ export function useEmployeeAgent() {
     } finally {
       setSending(false)
     }
-  }, [api, createSession, loadHistory, refreshSessions])
+  }, [api, createSession, history, loadHistory, refreshSessions])
 
   const deleteSession = useCallback(async (sessionId: SessionId) => {
     if (!api) return

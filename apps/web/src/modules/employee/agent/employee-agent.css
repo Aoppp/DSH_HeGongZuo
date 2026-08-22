@@ -546,6 +546,33 @@
   background: #fff8f7;
 }
 
+.agent-conversation-limit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-top: 1px solid #edcfca;
+  padding: 10px clamp(18px, 4vw, 50px);
+  color: var(--danger-600);
+  font-size: 12px;
+  background: #fff8f7;
+}
+
+.agent-conversation-limit span { flex: 1; }
+
+.agent-conversation-limit button {
+  flex: 0 0 auto;
+  border: 1px solid #edcfca;
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: var(--danger-600);
+  font: inherit;
+  font-weight: 700;
+  background: white;
+  cursor: pointer;
+}
+
+.agent-conversation-limit button:disabled { cursor: not-allowed; opacity: 0.55; }
+
 .agent-composer {
   border-top: 1px solid var(--line);
   padding: 12px clamp(18px, 4vw, 50px) 10px;
