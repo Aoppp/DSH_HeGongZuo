@@ -239,7 +239,7 @@ export class PostgresEmployeeRepository {
               (contract_end_date - CURRENT_DATE)::integer AS days_left
          FROM employees
         WHERE status <> 'inactive'
-          AND contract_end_date >= CURRENT_DATE
+          AND contract_end_date >= CURRENT_DATE - $1 * INTERVAL '1 day'
           AND contract_end_date <= CURRENT_DATE + $1 * INTERVAL '1 day'
         ORDER BY contract_end_date ASC, id ASC`,
       [days],

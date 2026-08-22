@@ -12,7 +12,7 @@ interface ContractExpiryNoticeProps {
 }
 
 function daysLabel(daysLeft: number): string {
-  return daysLeft === 0 ? '今日到期' : `剩余 ${daysLeft} 天`
+  return daysLeft < 0 ? `已逾期 ${-daysLeft} 天` : daysLeft === 0 ? '今日到期' : `剩余 ${daysLeft} 天`
 }
 
 export function ContractExpiryNotice({ user, onNavigateToEmployeeData }: ContractExpiryNoticeProps) {
@@ -36,7 +36,7 @@ export function ContractExpiryNotice({ user, onNavigateToEmployeeData }: Contrac
       <span>{alerts.length > 99 ? '99+' : alerts.length}</span>
     </button>
     {open && <section className="contract-expiry-notice__panel" aria-label="合同到期提醒">
-      <header><div><strong>合同到期提醒</strong><small>未来 7 天内到期的在职员工</small></div><button type="button" onClick={() => setOpen(false)} aria-label="关闭合同到期提醒"><X size={16} /></button></header>
+      <header><div><strong>合同到期提醒</strong><small>已逾期 7 天至未来 7 天内的在职员工</small></div><button type="button" onClick={() => setOpen(false)} aria-label="关闭合同到期提醒"><X size={16} /></button></header>
       <ul>{alerts.map((alert) => <li key={alert.employeeId}><div><strong>{alert.displayName}</strong><small>{alert.departmentName} · {alert.jobTitle}</small></div><div><time dateTime={alert.contractEndDate}>{alert.contractEndDate}</time><span className={alert.daysLeft <= 1 ? 'is-urgent' : ''}>{daysLabel(alert.daysLeft)}</span></div></li>)}</ul>
       <button className="contract-expiry-notice__all" type="button" onClick={() => { setOpen(false); onNavigateToEmployeeData() }}>查看员工档案 <ChevronRight size={15} /></button>
     </section>}
