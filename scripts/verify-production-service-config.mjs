@@ -15,8 +15,8 @@ const requiredTemplates = [
   'deploy/systemd/hegongzuo-sync-agent-units.sh.template',
   'deploy/systemd/journald.conf.d/hegongzuo.conf.template',
 ]
-const requiredApiSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOFILE=', 'OnFailure=']
-const requiredAgentSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOFILE=', 'OnFailure=', 'run-agent-runtime.mjs']
+const requiredApiSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOFILE=', 'OnFailure=', 'BindReadOnlyPaths=/home/__DEPLOY_USER__/.cache/node/corepack']
+const requiredAgentSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOFILE=', 'OnFailure=', 'run-agent-runtime.mjs', 'BindReadOnlyPaths=/home/__DEPLOY_USER__/.cache/node/corepack']
 
 for (const relativePath of requiredTemplates) await access(path.join(root, relativePath))
 const apiTemplate = await readFile(path.join(root, apiTemplatePath), 'utf8')
