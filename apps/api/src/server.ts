@@ -13,6 +13,7 @@ import { PostgresEmployeeRepository } from './modules/employee/employee-reposito
 import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
 import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtime-change.js'
+import { registeredAgentPermissionIds } from './modules/accounts/agent-runtime-permissions.js'
 import { PlatformManagementError, PlatformManagementService } from './modules/platform/platform-management.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
@@ -219,7 +220,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       if (error instanceof Error) throw new AccountValidationError(error.message)
       throw error
     }
-    accountRuntimeTasks.enqueue(created, { transitionStatus: true, provision: created.permissions.includes('employee-query') })
+    const agentPermissionIds = await registeredAgentPermissionIds(projectRoot)
+    accountRuntimeTasks.enqueue(created, { transitionStatus: true, provision: created.permissions.some((permission) => agentPermissionIds.includes(permission)) })
     await platformManagement.record(currentUser.id, '新增账号', '账号', created.id, { accountId: created.accountId, displayName: created.displayName })
     sendJson(response, 202, { account: created })
     return
@@ -233,6 +235,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const record = body as Record<string, unknown>
     const existing = await accounts.findById(accountIdPath)
     if (!existing) throw new HttpError(404, '账号不存在。')
+    const agentPermissionIds = await registeredAgentPermissionIds(projectRoot)
     const updated = await accounts.update(accountIdPath, {
       accountId: typeof record.accountId === 'string' ? record.accountId : '',
       displayName: typeof record.displayName === 'string' ? record.displayName : '',
@@ -240,7 +243,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       permissions: record.permissions,
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
-    const runtimeChange = runtimeChangeForAccountUpdate(existing, updated)
+    const runtimeChange = runtimeChangeForAccountUpdate(existing, updated, agentPermissionIds)
     if (runtimeChange.sync) accountRuntimeTasks.enqueue(updated, { transitionStatus: false, provision: runtimeChange.provision })
     await platformManagement.record(currentUser.id, '更新账号', '账号', updated.id, { accountId: updated.accountId, displayName: updated.displayName, permissions: updated.permissions })
     sendJson(response, 202, { account: updated })
@@ -284,7 +287,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePlatformAdministration(currentUser)
     const account = await accounts.findById(retryId)
     if (!account) throw new HttpError(404, '账号不存在。')
-    accountRuntimeTasks.enqueue(account, { transitionStatus: true, provision: account.permissions.includes('employee-query') })
+    const agentPermissionIds = await registeredAgentPermissionIds(projectRoot)
+    accountRuntimeTasks.enqueue(account, { transitionStatus: true, provision: account.permissions.some((permission) => agentPermissionIds.includes(permission)) })
     await platformManagement.record(currentUser.id, '重试账号初始化', '账号', account.id, { displayName: account.displayName })
     sendJson(response, 202, { account: { ...account, status: 'initializing' } })
     return

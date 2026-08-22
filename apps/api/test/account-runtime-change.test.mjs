@@ -11,12 +11,15 @@ function account(overrides = {}) {
   }
 }
 
-test('普通功能权限调整不会触发员工查询运行时初始化', () => {
-  assert.deepEqual(runtimeChangeForAccountUpdate(account(), account({ permissions: ['employee-data', 'employee-query', 'finance-management'] })), { sync: false, provision: false })
+const agentPermissions = ['employee-query', 'finance-agent']
+
+test('普通功能权限调整不会触发任何 Agent 运行时初始化', () => {
+  assert.deepEqual(runtimeChangeForAccountUpdate(account(), account({ permissions: ['employee-data', 'employee-query', 'finance-management'] }), agentPermissions), { sync: false, provision: false })
 })
 
-test('员工查询权限或账号名变化才同步运行时', () => {
-  assert.deepEqual(runtimeChangeForAccountUpdate(account({ permissions: ['employee-data'] }), account()), { sync: true, provision: true })
-  assert.deepEqual(runtimeChangeForAccountUpdate(account(), account({ permissions: ['employee-data'] })), { sync: true, provision: false })
-  assert.deepEqual(runtimeChangeForAccountUpdate(account(), account({ accountId: 'lisi' })), { sync: true, provision: true })
+test('任一已注册 Agent 权限或账号名变化才同步运行时', () => {
+  assert.deepEqual(runtimeChangeForAccountUpdate(account({ permissions: ['employee-data'] }), account(), agentPermissions), { sync: true, provision: true })
+  assert.deepEqual(runtimeChangeForAccountUpdate(account(), account({ permissions: ['employee-data'] }), agentPermissions), { sync: true, provision: false })
+  assert.deepEqual(runtimeChangeForAccountUpdate(account(), account({ permissions: ['employee-data', 'employee-query', 'finance-agent'] }), agentPermissions), { sync: true, provision: true })
+  assert.deepEqual(runtimeChangeForAccountUpdate(account(), account({ accountId: 'lisi' }), agentPermissions), { sync: true, provision: true })
 })
