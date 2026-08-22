@@ -80,8 +80,10 @@ export const platformModules: readonly PlatformModule[] = [
   },
 ]
 
-export function getVisibleModules(user: AuthenticatedUser): readonly PlatformModule[] {
+export function getVisibleModules(user: AuthenticatedUser, disabledModuleIds: readonly ModuleId[] = []): readonly PlatformModule[] {
+  const disabled = new Set(disabledModuleIds)
   return platformModules.filter((module) => {
+    if (disabled.has(module.id)) return false
     if (module.requiredPermission && !user.permissions.includes(module.requiredPermission)) return false
     // 管理驾驶舱仅对 CEO 职位开放
     if (module.bossOnly && user.position !== 'CEO') return false

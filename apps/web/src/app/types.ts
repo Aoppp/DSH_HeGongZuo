@@ -18,6 +18,7 @@ export interface ModuleProps {
   readonly user: AuthenticatedUser
   readonly onNavigate: (moduleId: ModuleId) => void
   readonly onUserProfileUpdated?: (profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position' | 'permissions'>) => void
+  readonly onModuleSettingsUpdated?: (disabledModuleIds: readonly ModuleId[]) => void
 }
 
 export interface PlatformModule {

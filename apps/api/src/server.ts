@@ -12,6 +12,7 @@ import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/
 import { PostgresEmployeeRepository } from './modules/employee/employee-repository.js'
 import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
+import { PlatformManagementError, PlatformManagementService } from './modules/platform/platform-management.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
 
@@ -22,6 +23,7 @@ const port = Number(process.env.HEGONGZUO_API_PORT ?? 4174)
 const host = process.env.HEGONGZUO_API_HOST ?? '127.0.0.1'
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
+const platformManagement = new PlatformManagementService(database)
 
 
 function cookieToken(cookieHeader: string | undefined): string | null {
@@ -102,6 +104,11 @@ function accountRetryId(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
+function platformModuleId(pathname: string): string | null {
+  const match = pathname.match(/^\/api\/platform\/modules\/([^/]+)$/)
+  return match?.[1] ? decodeURIComponent(match[1]) : null
+}
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost')
 
@@ -160,8 +167,30 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   // —— 以下业务接口全部要求登录 ——
   const currentUser = await requireAuth(auth, request)
 
+  if (url.pathname === '/api/platform/access' && request.method === 'GET') {
+    sendJson(response, 200, { disabledModuleIds: await platformManagement.disabledModuleIds() })
+    return
+  }
+
+  if (url.pathname === '/api/platform/status' && request.method === 'GET') {
+    requirePlatformAdministration(currentUser)
+    sendJson(response, 200, await platformManagement.status())
+    return
+  }
+
+  const managedModuleId = platformModuleId(url.pathname)
+  if (managedModuleId && request.method === 'PATCH') {
+    requirePlatformAdministration(currentUser)
+    const body = await readJson(request)
+    const record = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
+    await platformManagement.setModuleEnabled(managedModuleId, record.enabled, currentUser.id)
+    sendJson(response, 200, await platformManagement.status())
+    return
+  }
+
   if (isAgentRuntimeRequest(request.url)) {
     requirePermission(currentUser, 'employee-query')
+    await platformManagement.assertModuleEnabled('employee-agent')
     await proxyAgentRequest(request, response, currentUser)
     return
   }
@@ -190,6 +219,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       throw error
     }
     accountRuntimeTasks.enqueue(created)
+    await platformManagement.record(currentUser.id, '新增账号', '账号', created.id, { accountId: created.accountId, displayName: created.displayName })
     sendJson(response, 202, { account: created })
     return
   }
@@ -208,6 +238,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
     accountRuntimeTasks.enqueue(updated)
+    await platformManagement.record(currentUser.id, '更新账号', '账号', updated.id, { accountId: updated.accountId, displayName: updated.displayName, permissions: updated.permissions })
     sendJson(response, 202, { account: updated })
     return
   }
@@ -216,6 +247,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePlatformAdministration(currentUser)
     if (accountIdPath === currentUser.id) throw new HttpError(400, '不能删除当前登录的账号。')
     if (!await accounts.delete(accountIdPath)) throw new HttpError(404, '账号不存在。')
+    await platformManagement.record(currentUser.id, '删除账号', '账号', accountIdPath)
     sendJson(response, 200, { ok: true })
     return
   }
@@ -224,6 +256,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (resetPasswordId && request.method === 'POST') {
     requirePlatformAdministration(currentUser)
     if (!await accounts.resetPassword(resetPasswordId)) throw new HttpError(404, '账号不存在。')
+    await platformManagement.record(currentUser.id, '重置账号密码', '账号', resetPasswordId)
     sendJson(response, 200, { ok: true })
     return
   }
@@ -237,6 +270,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const status = typeof record.status === 'string' ? record.status : ''
     const updated = await accounts.setStatus(statusId, status)
     if (!updated) throw new HttpError(404, '账号不存在。')
+    await platformManagement.record(currentUser.id, status === 'disabled' ? '停用账号' : '启用账号', '账号', updated.id, { displayName: updated.displayName })
     sendJson(response, 200, { account: updated })
     return
   }
@@ -247,12 +281,14 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const account = await accounts.findById(retryId)
     if (!account) throw new HttpError(404, '账号不存在。')
     accountRuntimeTasks.enqueue(account)
+    await platformManagement.record(currentUser.id, '重试账号初始化', '账号', account.id, { displayName: account.displayName })
     sendJson(response, 202, { account: { ...account, status: 'initializing' } })
     return
   }
 
   if (url.pathname === '/api/employees' && request.method === 'GET') {
     requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
     const scope = url.searchParams.get('scope') === 'departed' ? 'departed' : 'employed'
     const sort = url.searchParams.get('sort')
     const allowedSorts = ['hireDate', 'departureDate', 'tenure', 'displayName', 'departmentName', 'contractEndDate'] as const
@@ -265,6 +301,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (url.pathname === '/api/employees/export' && request.method === 'GET') {
     requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
     const scope = url.searchParams.get('scope') === 'departed' ? 'departed' : 'employed'
     const sort = url.searchParams.get('sort') as 'hireDate' | 'departureDate' | 'tenure' | 'displayName' | 'departmentName' | 'contractEndDate'
     const allowedSorts = ['hireDate', 'departureDate', 'tenure', 'displayName', 'departmentName', 'contractEndDate']
@@ -274,6 +311,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (url.pathname === '/api/employees' && request.method === 'POST') {
     requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
     const created = await repository.create(parseEmployeeInput(await readJson(request)))
     sendJson(response, 201, { employee: created })
     return
@@ -282,6 +320,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const resumeId = resumeEmployeeId(url.pathname)
   if (resumeId && request.method === 'GET') {
     requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
     const resume = await repository.getResume(resumeId)
     if (!resume) throw new HttpError(404, '该员工尚未上传简历。')
     response.writeHead(200, {
@@ -298,6 +337,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const departureId = departureEmployeeId(url.pathname)
   if (departureId && request.method === 'POST') {
     requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
     const { departureDate, departureReason } = departureInput(await readJson(request))
     const employee = await repository.depart(departureId, departureDate, departureReason)
     if (!employee) throw new HttpError(404, '员工不存在。')
@@ -308,6 +348,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const id = employeeId(url.pathname)
   if (id && request.method === 'GET') {
     requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
     const employee = await repository.get(id)
     if (!employee) throw new HttpError(404, '员工不存在。')
     sendJson(response, 200, { employee })
@@ -316,6 +357,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (id && request.method === 'PUT') {
     requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
     const input = parseEmployeeInput(await readJson(request))
     const employee = await repository.update(id, input)
     if (!employee) throw new HttpError(404, '员工不存在。')
@@ -342,7 +384,7 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError) {
+    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
       const status = error instanceof LoginRateLimitError
         ? 429
         : error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError
@@ -384,6 +426,7 @@ server.on('upgrade', (request, socket, head) => {
       socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n')
       return
     }
+    await platformManagement.assertModuleEnabled('employee-agent')
     await proxyAgentUpgrade(request, socket, head, user)
   })().catch((error: unknown) => {
     const status = error instanceof AgentRuntimeProxyError ? error.status : 502

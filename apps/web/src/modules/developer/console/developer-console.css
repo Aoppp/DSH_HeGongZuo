@@ -278,6 +278,115 @@
   font-size: 13px;
 }
 
+.platform-management {
+  margin-bottom: 18px;
+  padding: 20px;
+}
+
+.platform-management__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.platform-management__header h2 {
+  font-size: 16px;
+}
+
+.platform-management__header p {
+  margin-top: 4px;
+  color: var(--ink-400);
+  font-size: 12px;
+}
+
+.platform-management__health {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.platform-management__health article,
+.platform-management__modules article,
+.platform-management__audit article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: #f8fbfa;
+}
+
+.platform-management__health article > span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--jade-700);
+  background: var(--jade-100);
+}
+
+.platform-management__health article > div {
+  flex: 1;
+}
+
+.platform-management__health small,
+.platform-management__modules small,
+.platform-management__audit small {
+  display: block;
+  color: var(--ink-400);
+  font-size: 11px;
+}
+
+.platform-management__health strong,
+.platform-management__modules strong,
+.platform-management__audit strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink-800);
+  font-size: 13px;
+}
+
+.platform-management__health em {
+  display: block;
+  margin-top: 3px;
+  color: var(--danger-600);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.platform-management__modules,
+.platform-management__audit {
+  display: grid;
+  gap: 8px;
+}
+
+.platform-management__modules article > div,
+.platform-management__audit article > div {
+  min-width: 0;
+}
+
+.platform-management__audit article > span {
+  flex: 0 0 auto;
+  color: var(--ink-400);
+  font-size: 11px;
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .platform-management__health {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-management__audit article > span {
+    max-width: 42%;
+  }
+}
+
 @media (max-width: 620px) {
   .account-admin__permission-groups {
     grid-template-columns: 1fr;

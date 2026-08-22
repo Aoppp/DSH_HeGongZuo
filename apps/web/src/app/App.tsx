@@ -7,23 +7,26 @@ import { Topbar } from '../components/Topbar'
 import { getModule, getVisibleModules, platformModules } from './module-registry'
 import { accessibleModuleForPath, defaultModuleIdForUser } from './module-routes'
 import type { AuthenticatedUser, ModuleId } from './types'
+import { readPlatformAccess } from './platform-access-api'
 
 export default function App() {
   const [user, setUser] = useState<AuthenticatedUser | null>(null)
   const [restoring, setRestoring] = useState(true)
   const [activeModuleId, setActiveModuleId] = useState<ModuleId>('overview')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [disabledModuleIds, setDisabledModuleIds] = useState<readonly ModuleId[]>([])
 
   useEffect(() => {
     void apiMe().then((restoredUser) => {
       if (restoredUser) {
         setUser(restoredUser)
+        void readPlatformAccess().then(setDisabledModuleIds).catch(() => setDisabledModuleIds([]))
       }
       setRestoring(false)
     })
   }, [])
 
-  const visibleModules = useMemo(() => user ? getVisibleModules(user) : [], [user])
+  const visibleModules = useMemo(() => user ? getVisibleModules(user, disabledModuleIds) : [], [user, disabledModuleIds])
 
   useEffect(() => {
     if (!user) return
@@ -48,6 +51,7 @@ export default function App() {
   if (!user) {
     return <AccountLogin onAuthenticated={(authenticatedUser) => {
       setUser(authenticatedUser)
+      void readPlatformAccess().then(setDisabledModuleIds).catch(() => setDisabledModuleIds([]))
     }} />
   }
 
@@ -60,6 +64,7 @@ export default function App() {
     setUser(null)
     setActiveModuleId('overview')
     setSidebarCollapsed(false)
+    setDisabledModuleIds([])
     window.history.replaceState(null, '', '/overview')
     void apiLogout()
   }
@@ -88,7 +93,7 @@ export default function App() {
       <div className="platform-shell__main">
         <Topbar activeModule={activeModule} user={user} onExit={exitPreview} />
         <main className="platform-content">
-          <ActiveComponent user={currentUser} onNavigate={navigate} onUserProfileUpdated={updateCurrentUserProfile} />
+          <ActiveComponent user={currentUser} onNavigate={navigate} onUserProfileUpdated={updateCurrentUserProfile} onModuleSettingsUpdated={setDisabledModuleIds} />
         </main>
       </div>
     </div>
