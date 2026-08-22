@@ -12,6 +12,8 @@ const requiredTemplates = [
   'deploy/systemd/hegongzuo-alert@.service.template',
   'deploy/systemd/hegongzuo-agent-sync.service.template',
   'deploy/systemd/hegongzuo-agent-sync.path.template',
+  'deploy/systemd/hegongzuo-agent-reconcile.service.template',
+  'deploy/systemd/hegongzuo-agent-reconcile.timer.template',
   'deploy/systemd/hegongzuo-sync-agent-units.sh.template',
   'deploy/systemd/journald.conf.d/hegongzuo.conf.template',
 ]

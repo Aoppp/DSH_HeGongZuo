@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { AccountValidationError, AccountsService } from './accounts.js'
-import { AgentRuntimeProxyError, checkConfiguredAgentRuntimeHealth, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
+import { AgentRuntimeProxyError, agentRuntimeRequest, checkConfiguredAgentRuntimeHealth, isAgentRuntimeRequest, permissionForAgentRuntime, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
 import { AuthError, AuthService, LoginRateLimitError } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/employee-input.js'
@@ -13,7 +13,7 @@ import { PostgresEmployeeRepository } from './modules/employee/employee-reposito
 import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
 import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtime-change.js'
-import { registeredAgentPermissionIds } from './modules/accounts/agent-runtime-permissions.js'
+import { registeredAgentPermissionIds, registeredAgentPermissions } from './modules/accounts/agent-runtime-permissions.js'
 import { PlatformManagementError, PlatformManagementService } from './modules/platform/platform-management.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
@@ -190,16 +190,37 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
-  if (isAgentRuntimeRequest(request.url)) {
-    requirePermission(currentUser, 'employee-query')
-    await platformManagement.assertModuleEnabled('employee-agent')
-    await proxyAgentRequest(request, response, currentUser)
+  const runtimeRequest = agentRuntimeRequest(request.url)
+  if (runtimeRequest) {
+    const permissionId = await permissionForAgentRuntime(runtimeRequest.agentId)
+    if (!permissionId) throw new HttpError(503, '该功能服务尚未完成运行时配置。')
+    requirePermission(currentUser, permissionId)
+    if (runtimeRequest.agentId === 'employee-query') await platformManagement.assertModuleEnabled('employee-agent')
+    await proxyAgentRequest(request, response, currentUser, runtimeRequest)
     return
   }
 
   if (url.pathname === '/api/accounts' && request.method === 'GET') {
     requirePlatformAdministration(currentUser)
     sendJson(response, 200, { accounts: await accounts.list() })
+    return
+  }
+
+  if (url.pathname === '/api/accounts/permission-catalog' && request.method === 'GET') {
+    requirePlatformAdministration(currentUser)
+    const basePermissions = [
+      { id: 'employee-data', label: '档案维护', group: '员工管理' },
+      { id: 'employee-query', label: '数据查询', group: '员工管理' },
+      { id: 'finance-management', label: '待开发', group: '财务管理' },
+      { id: 'project-management', label: '待开发', group: '项目管理' },
+      { id: 'management-cockpit', label: '驾驶舱', group: '其他' },
+      { id: 'platform-administration', label: '平台与账号管理', group: '其他' },
+    ]
+    const existingIds = new Set(basePermissions.map((permission) => permission.id))
+    const extensions = (await registeredAgentPermissions(projectRoot))
+      .filter((agent) => !existingIds.has(agent.permissionId))
+      .map((agent) => ({ id: agent.permissionId, label: agent.label, group: '扩展功能' }))
+    sendJson(response, 200, { permissions: [...basePermissions, ...extensions] })
     return
   }
 
@@ -428,7 +449,8 @@ server.on('connection', (socket) => {
 server.on('upgrade', (request, socket, head) => {
   // 认证与上游连接建立前浏览器也可能主动断开；必须接管错误，避免 ECONNRESET 退出 API。
   socket.on('error', () => undefined)
-  if (!isAgentRuntimeRequest(request.url)) {
+  const runtimeRequest = agentRuntimeRequest(request.url)
+  if (!runtimeRequest) {
     socket.destroy()
     return
   }
@@ -438,12 +460,13 @@ server.on('upgrade', (request, socket, head) => {
       socket.end('HTTP/1.1 401 Unauthorized\r\nconnection: close\r\n\r\n')
       return
     }
-    if (!user.permissions.includes('employee-query')) {
+    const permissionId = await permissionForAgentRuntime(runtimeRequest.agentId)
+    if (!permissionId || !user.permissions.includes(permissionId)) {
       socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n')
       return
     }
-    await platformManagement.assertModuleEnabled('employee-agent')
-    await proxyAgentUpgrade(request, socket, head, user)
+    if (runtimeRequest.agentId === 'employee-query') await platformManagement.assertModuleEnabled('employee-agent')
+    await proxyAgentUpgrade(request, socket, head, user, runtimeRequest)
   })().catch((error: unknown) => {
     const status = error instanceof AgentRuntimeProxyError ? error.status : 502
     const message = error instanceof Error ? error.message : '员工查询服务暂时不可用。'
@@ -453,7 +476,13 @@ server.on('upgrade', (request, socket, head) => {
 
 server.listen(port, host, () => {
   console.log(`[和工作 API] PostgreSQL 员工服务：http://${host}:${port}`)
+  // 新建账号的初始化在后台队列执行；若 API 在队列完成前重启，启动后自动续办。
+  accountRuntimeTasks.recoverPending()
 })
+
+// 作为 systemd 定时协调的补充，持续恢复因短暂外部运行时故障而留在待初始化状态的账号。
+const runtimeRecoveryTimer = setInterval(() => accountRuntimeTasks.recoverPending(), 2 * 60_000)
+runtimeRecoveryTimer.unref()
 
 async function shutdown(): Promise<void> {
   const closed = new Promise<void>((resolve) => server.close(() => resolve()))

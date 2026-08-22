@@ -1,7 +1,7 @@
 import type { Pool } from 'pg'
 
 import { hashPassword } from './auth.js'
-import { accountPermissionIds, parsePermissions, type AccountPermissionId } from './account-permissions.js'
+import { isAccountPermissionId, parsePermissions, type AccountPermissionId } from './account-permissions.js'
 
 export interface AccountRecord {
   readonly id: string
@@ -51,7 +51,7 @@ function toAccount(row: AccountRow): AccountRecord {
     displayName: row.display_name,
     position: row.position,
     status: row.status,
-    permissions: row.permissions.filter((permission): permission is AccountPermissionId => accountPermissionIds.includes(permission as AccountPermissionId)),
+    permissions: row.permissions.filter(isAccountPermissionId),
     createdAt: format(row.created_at),
     updatedAt: format(row.updated_at),
   }

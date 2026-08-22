@@ -6,12 +6,14 @@ import {
   createAccount,
   deleteAccount,
   readAccounts,
+  readPermissionCatalog,
   resetAccountPassword,
   retryAccountInitialization,
   setAccountStatus,
   updateAccount,
   type AccountRecord,
   type AccountPermissionId,
+  type PermissionCatalogEntry,
 } from './accounts-api'
 
 interface AccountManagementProps {
@@ -20,7 +22,7 @@ interface AccountManagementProps {
 }
 
 type EditorMode = 'create' | 'edit' | null
-const employeePermissionLabels: Record<AccountPermissionId, string> = {
+const employeePermissionLabels: Record<string, string> = {
   'employee-data': '档案维护',
   'employee-query': '数据查询',
   'finance-management': '待开发',
@@ -36,7 +38,7 @@ const permissionGroups: readonly { readonly label: string; readonly permissions:
   { label: '其他', permissions: ['management-cockpit', 'platform-administration'] },
 ]
 
-const accountPermissionLabels: Record<AccountPermissionId, string> = {
+const accountPermissionLabels: Record<string, string> = {
   ...employeePermissionLabels,
   'employee-data': '员工档案维护',
   'employee-query': '员工查询',
@@ -48,6 +50,7 @@ const accountPermissionLabels: Record<AccountPermissionId, string> = {
 
 export function AccountManagement({ user, onCurrentUserProfileUpdated }: AccountManagementProps) {
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
+  const [permissionCatalog, setPermissionCatalog] = useState<PermissionCatalogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editorMode, setEditorMode] = useState<EditorMode>(null)
@@ -59,7 +62,9 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
     setLoading(true)
     setError(null)
     try {
-      setAccounts(await readAccounts())
+      const [nextAccounts, nextCatalog] = await Promise.all([readAccounts(), readPermissionCatalog()])
+      setAccounts(nextAccounts)
+      setPermissionCatalog(nextCatalog)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError))
     } finally {
@@ -174,6 +179,14 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
     })
   }
 
+  const catalogLabels = new Map(permissionCatalog.map((permission) => [permission.id, permission.label]))
+  const catalogGroups = permissionCatalog.reduce<{ label: string; permissions: AccountPermissionId[] }[]>((groups, permission) => {
+    const group = groups.find((item) => item.label === permission.group)
+    if (group) group.permissions.push(permission.id)
+    else groups.push({ label: permission.group, permissions: [permission.id] })
+    return groups
+  }, [])
+
   return (
     <section className="account-admin panel-card">
       <header className="account-admin__header">
@@ -200,7 +213,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                 <td><strong>{account.displayName}</strong>{account.id === user.id && <small>当前账号</small>}</td>
                 <td><code>{account.accountId}</code></td>
                 <td>{account.position || <span className="account-admin__muted">未填写</span>}</td>
-                <td><small>{account.permissions.map((permission) => accountPermissionLabels[permission]).join(' · ') || '未开通功能'}</small></td>
+                <td><small>{account.permissions.map((permission) => catalogLabels.get(permission) ?? accountPermissionLabels[permission] ?? permission).join(' · ') || '未开通功能'}</small></td>
                 <td><span className={`account-status account-status--${account.status}`}>{account.status === 'active' ? '正常' : account.status === 'disabled' ? '已停用' : account.status === 'initializing' ? '初始化中' : '初始化失败'}</span></td>
                 <td><small>{account.createdAt.slice(0, 10)}</small></td>
                 <td>
@@ -239,10 +252,10 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
               <div className="account-admin__form-section">
                 <div className="account-admin__form-heading"><strong>功能权限</strong><span>开通后显示对应管理入口</span></div>
                 <div className="account-admin__permission-groups">
-                  {permissionGroups.map((group) => (
+                  {(catalogGroups.length > 0 ? catalogGroups : permissionGroups).map((group) => (
                     <fieldset className="account-admin__permissions" key={group.label}>
                       <legend>{group.label}</legend>
-                      {group.permissions.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
+                      {group.permissions.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{catalogLabels.get(permission) ?? employeePermissionLabels[permission] ?? permission}</label>)}
                     </fieldset>
                   ))}
                 </div>

@@ -6,7 +6,8 @@ import type { Duplex } from 'node:stream'
 
 import type { AuthUser } from './auth.js'
 
-const agentPathPrefix = '/api/employee-agent'
+const legacyEmployeeAgentPathPrefix = '/api/employee-agent'
+const genericAgentPathPrefix = '/api/agents/'
 const boundedRequestTimeoutMs = 30_000
 const agentTaskTimeoutMs = 5 * 60_000 + 30_000
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -19,6 +20,16 @@ const allRuntimeConfigPath = process.env.HEGONGZUO_ALL_AGENT_RUNTIME_CONFIG
 interface AccountAgentRuntime {
   readonly accountId: string
   readonly port: number
+}
+
+export interface AgentRuntimeRequest {
+  readonly agentId: string
+  readonly pathPrefix: string
+}
+
+interface RegisteredAccountAgentRuntime extends AccountAgentRuntime {
+  readonly agentId: string
+  readonly permissionId: string
 }
 
 export interface AgentRuntimeHealth {
@@ -38,44 +49,73 @@ export class AgentRuntimeProxyError extends Error {
 }
 
 export function isAgentRuntimeRequest(requestUrl: string | undefined): boolean {
-  const pathname = new URL(requestUrl ?? '/', 'http://localhost').pathname
-  return pathname === agentPathPrefix || pathname.startsWith(`${agentPathPrefix}/`)
+  return agentRuntimeRequest(requestUrl) !== null
 }
 
-function upstreamPath(requestUrl: string | undefined): string {
+/**
+ * 兼容既有员工查询地址，同时为后续能力提供统一的 /api/agents/<agent-id> 入口。
+ * 新增 Agent 无需再向 API 入口增加专用路由。
+ */
+export function agentRuntimeRequest(requestUrl: string | undefined): AgentRuntimeRequest | null {
+  const pathname = new URL(requestUrl ?? '/', 'http://localhost').pathname
+  if (pathname === legacyEmployeeAgentPathPrefix || pathname.startsWith(`${legacyEmployeeAgentPathPrefix}/`)) {
+    return { agentId: 'employee-query', pathPrefix: legacyEmployeeAgentPathPrefix }
+  }
+  const match = pathname.match(/^\/api\/agents\/([a-z][a-z0-9-]{1,62})(?:\/|$)/)
+  const agentId = match?.[1]
+  return agentId ? { agentId, pathPrefix: `${genericAgentPathPrefix}${agentId}` } : null
+}
+
+function upstreamPath(requestUrl: string | undefined, pathPrefix: string): string {
   const url = new URL(requestUrl ?? '/', 'http://localhost')
   url.searchParams.delete('access_token')
-  const pathname = url.pathname.slice(agentPathPrefix.length) || '/'
+  const pathname = url.pathname.slice(pathPrefix.length) || '/'
   return `${pathname}${url.search}`
 }
 
-function upstreamTimeout(requestUrl: string | undefined): number {
-  return upstreamPath(requestUrl).split('?', 1)[0] === '/api/session.prompt'
+function upstreamTimeout(requestUrl: string | undefined, pathPrefix: string): number {
+  return upstreamPath(requestUrl, pathPrefix).split('?', 1)[0] === '/api/session.prompt'
     ? agentTaskTimeoutMs
     : boundedRequestTimeoutMs
 }
 
-async function runtimeFor(user: AuthUser): Promise<AccountAgentRuntime> {
+async function runtimeFor(user: AuthUser, agentId: string): Promise<RegisteredAccountAgentRuntime> {
   let definitions: unknown
   try {
-    definitions = JSON.parse(await readFile(runtimeConfigPath, 'utf8'))
+    definitions = JSON.parse(await readFile(allRuntimeConfigPath, 'utf8'))
   } catch {
-    throw new AgentRuntimeProxyError(503, '员工查询服务尚未完成运行时配置。')
+    throw new AgentRuntimeProxyError(503, '功能服务尚未完成运行时配置。')
   }
-  if (!Array.isArray(definitions)) throw new AgentRuntimeProxyError(503, '员工查询服务配置无效。')
-  const runtime = definitions.find((candidate): candidate is AccountAgentRuntime => (
+  if (!Array.isArray(definitions)) throw new AgentRuntimeProxyError(503, '功能服务配置无效。')
+  const runtime = definitions.find((candidate): candidate is RegisteredAccountAgentRuntime => (
     typeof candidate === 'object'
     && candidate !== null
     && 'accountId' in candidate
     && 'port' in candidate
+    && 'agentId' in candidate
+    && 'permissionId' in candidate
     && candidate.accountId === user.accountId
+    && candidate.agentId === agentId
     && typeof candidate.port === 'number'
+    && typeof candidate.agentId === 'string'
+    && typeof candidate.permissionId === 'string'
     && Number.isInteger(candidate.port)
     && candidate.port >= 1024
     && candidate.port <= 65535
   ))
-  if (!runtime) throw new AgentRuntimeProxyError(503, '当前账号尚未配置员工查询服务。')
+  if (!runtime) throw new AgentRuntimeProxyError(503, '当前账号尚未配置该功能服务。')
   return runtime
+}
+
+export async function permissionForAgentRuntime(agentId: string): Promise<string | null> {
+  try {
+    const definitions: unknown = JSON.parse(await readFile(allRuntimeConfigPath, 'utf8'))
+    if (!Array.isArray(definitions)) return null
+    const runtime = definitions.find((candidate) => typeof candidate === 'object' && candidate !== null
+      && 'agentId' in candidate && candidate.agentId === agentId
+      && 'permissionId' in candidate && typeof candidate.permissionId === 'string')
+    return runtime && typeof runtime === 'object' && 'permissionId' in runtime && typeof runtime.permissionId === 'string' ? runtime.permissionId : null
+  } catch { return null }
 }
 
 async function configuredRuntimes(): Promise<readonly AccountAgentRuntime[]> {
@@ -130,20 +170,21 @@ function unavailable(response: ServerResponse): void {
     return
   }
   response.writeHead(502, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
-  response.end(JSON.stringify({ error: '员工查询服务暂时不可用，请稍后重试。' }))
+  response.end(JSON.stringify({ error: '功能服务暂时不可用，请稍后重试。' }))
 }
 
 export async function proxyAgentRequest(
   request: IncomingMessage,
   response: ServerResponse,
   user: AuthUser,
+  agent: AgentRuntimeRequest,
 ): Promise<void> {
-  const runtime = await runtimeFor(user)
+  const runtime = await runtimeFor(user, agent.agentId)
   const upstream = createRequest({
     host: '127.0.0.1',
     port: runtime.port,
     method: request.method,
-    path: upstreamPath(request.url),
+    path: upstreamPath(request.url, agent.pathPrefix),
     headers: proxyHeaders(request.headers, runtime),
   }, (upstreamResponse) => {
     response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers)
@@ -152,7 +193,7 @@ export async function proxyAgentRequest(
     upstreamResponse.pipe(response)
   })
   upstream.once('error', () => unavailable(response))
-  upstream.setTimeout(upstreamTimeout(request.url), () => upstream.destroy(new Error('员工查询服务响应超时。')))
+  upstream.setTimeout(upstreamTimeout(request.url, agent.pathPrefix), () => upstream.destroy(new Error('功能服务响应超时。')))
   request.once('aborted', () => upstream.destroy())
   request.once('error', () => upstream.destroy())
   response.once('close', () => { if (!response.writableEnded) upstream.destroy() })
@@ -193,16 +234,17 @@ export async function proxyAgentUpgrade(
   socket: Duplex,
   head: Buffer,
   user: AuthUser,
+  agent: AgentRuntimeRequest,
 ): Promise<void> {
-  const runtime = await runtimeFor(user)
+  const runtime = await runtimeFor(user, agent.agentId)
   const upstream = createRequest({
     host: '127.0.0.1',
     port: runtime.port,
     method: request.method,
-    path: upstreamPath(request.url),
+    path: upstreamPath(request.url, agent.pathPrefix),
     headers: proxyHeaders(request.headers, runtime),
   })
-  const upgradeTimer = setTimeout(() => upstream.destroy(new Error('员工查询实时连接建立超时。')), 10_000)
+  const upgradeTimer = setTimeout(() => upstream.destroy(new Error('功能服务实时连接建立超时。')), 10_000)
   upgradeTimer.unref()
   upstream.once('upgrade', (upstreamResponse, upstreamSocket, upstreamHead) => {
     clearTimeout(upgradeTimer)
@@ -216,9 +258,9 @@ export async function proxyAgentUpgrade(
   upstream.once('response', (upstreamResponse) => {
     clearTimeout(upgradeTimer)
     upstreamResponse.resume()
-    writeUpgradeError(socket, 502, '员工查询服务未能建立实时连接。')
+    writeUpgradeError(socket, 502, '功能服务未能建立实时连接。')
   })
-  upstream.once('error', () => { clearTimeout(upgradeTimer); writeUpgradeError(socket, 502, '员工查询服务暂时不可用，请稍后重试。') })
+  upstream.once('error', () => { clearTimeout(upgradeTimer); writeUpgradeError(socket, 502, '功能服务暂时不可用，请稍后重试。') })
   socket.once('close', () => upstream.destroy())
   upstream.end()
 }

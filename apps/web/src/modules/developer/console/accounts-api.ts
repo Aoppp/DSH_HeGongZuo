@@ -1,6 +1,6 @@
 // 开发控制台账号数据访问。
 export type AccountStatus = 'active' | 'disabled' | 'initializing' | 'initialization_failed'
-export type AccountPermissionId = 'employee-data' | 'employee-query' | 'finance-management' | 'project-management' | 'management-cockpit' | 'platform-administration'
+export type AccountPermissionId = string
 
 export interface AccountRecord {
   readonly id: string
@@ -15,6 +15,16 @@ export interface AccountRecord {
 
 interface AccountsResponse {
   readonly accounts: AccountRecord[]
+}
+
+export interface PermissionCatalogEntry {
+  readonly id: AccountPermissionId
+  readonly label: string
+  readonly group: string
+}
+
+interface PermissionCatalogResponse {
+  readonly permissions: PermissionCatalogEntry[]
 }
 
 interface AccountResponse {
@@ -62,6 +72,10 @@ async function accountsRequest<T>(path: string, init?: RequestInit): Promise<T> 
 
 export async function readAccounts(): Promise<AccountRecord[]> {
   return (await accountsRequest<AccountsResponse>('/api/accounts')).accounts
+}
+
+export async function readPermissionCatalog(): Promise<PermissionCatalogEntry[]> {
+  return (await accountsRequest<PermissionCatalogResponse>('/api/accounts/permission-catalog')).permissions
 }
 
 export async function createAccount(input: {

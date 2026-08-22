@@ -2,7 +2,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 
 import type { Pool } from 'pg'
 
-import { accountPermissionIds, type AccountPermissionId } from './account-permissions.js'
+import { isAccountPermissionId, type AccountPermissionId } from './account-permissions.js'
 
 export interface AuthUser {
   readonly id: string
@@ -24,9 +24,7 @@ interface AccountRow {
   readonly permissions: string[]
 }
 
-function permissionsFor(row: AccountRow): AccountPermissionId[] {
-  return row.permissions.filter((permission): permission is AccountPermissionId => accountPermissionIds.includes(permission as AccountPermissionId))
-}
+function permissionsFor(row: AccountRow): AccountPermissionId[] { return row.permissions.filter(isAccountPermissionId) }
 
 export const sessionTtlDays = 7
 const maximumFailedLogins = 5

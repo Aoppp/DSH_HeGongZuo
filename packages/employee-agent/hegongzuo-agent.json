@@ -1,6 +1,7 @@
 {
   "id": "employee-query",
   "permissionId": "employee-query",
+  "label": "员工查询",
   "runtime": "dsh-web",
   "apiBasePath": "/dsh/{accountId}"
 }

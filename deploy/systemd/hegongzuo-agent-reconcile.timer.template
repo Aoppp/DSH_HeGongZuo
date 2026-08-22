@@ -1,0 +1,12 @@
+[Unit]
+Description=定时协调和工作 Agent 运行空间
+
+[Timer]
+OnBootSec=90
+OnUnitActiveSec=10min
+RandomizedDelaySec=20
+Persistent=true
+Unit=hegongzuo-agent-reconcile.service
+
+[Install]
+WantedBy=timers.target
