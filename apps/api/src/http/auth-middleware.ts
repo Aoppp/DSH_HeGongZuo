@@ -15,5 +15,5 @@ export async function requireAuth(auth: AuthService, request: IncomingMessage): 
   return user
 }
 
-export function requireDeveloper(user: AuthUser): void { if (user.role !== 'developer') throw new HttpError(403, '仅平台开发者可以管理账号。') }
 export function requirePermission(user: AuthUser, permission: AccountPermissionId): void { if (!user.permissions.includes(permission)) throw new HttpError(403, '当前账号未开通此功能。') }
+export function requirePlatformAdministration(user: AuthUser): void { requirePermission(user, 'platform-administration') }

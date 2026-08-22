@@ -2,7 +2,6 @@ import { KeyRound, LoaderCircle, LogOut, X } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 
 import { apiChangePassword } from '../app/auth-client'
-import { roles } from '../app/roles'
 import type { AuthenticatedUser, PlatformModule } from '../app/types'
 
 interface TopbarProps {
@@ -12,8 +11,7 @@ interface TopbarProps {
 }
 
 export function Topbar({ activeModule, user, onExit }: TopbarProps) {
-  const currentRole = roles[user.role]
-  const positionLabel = user.position || currentRole.label
+  const positionLabel = user.position || '成员'
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')

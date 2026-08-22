@@ -9,7 +9,6 @@ export interface AuthUser {
   readonly accountId: string
   readonly displayName: string
   readonly position: string
-  readonly role: 'owner' | 'developer'
   readonly permissions: readonly AccountPermissionId[]
 }
 
@@ -19,7 +18,6 @@ interface AccountRow {
   readonly display_name: string
   readonly position: string
   readonly password_hash: string
-  readonly role: 'owner' | 'developer'
   readonly status: 'active' | 'disabled'
   readonly failed_login_count: number
   readonly locked_until: Date | string | null
@@ -65,7 +63,7 @@ export class AuthService {
     await this.assertSourceCanAttempt(sourceHash)
     const normalized = accountId.trim()
     const result = await this.pool.query<AccountRow>(
-      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.role, a.status, a.failed_login_count, a.locked_until,
+      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.status, a.failed_login_count, a.locked_until,
         COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
        FROM accounts a WHERE a.account_id = $1`,
       [normalized],
@@ -108,7 +106,6 @@ export class AuthService {
         accountId: account.account_id,
         displayName: account.display_name,
         position: account.position,
-        role: account.role,
         permissions: permissionsFor(account),
       },
     }
@@ -117,7 +114,7 @@ export class AuthService {
   async userForToken(token: string | null | undefined): Promise<AuthUser | null> {
     if (!token) return null
     const result = await this.pool.query<AccountRow>(
-      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.role, a.status, a.failed_login_count, a.locked_until,
+      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.status, a.failed_login_count, a.locked_until,
         COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
        FROM sessions s
        JOIN accounts a ON a.id = s.account_id
@@ -131,7 +128,6 @@ export class AuthService {
       accountId: account.account_id,
       displayName: account.display_name,
       position: account.position,
-      role: account.role,
       permissions: permissionsFor(account),
     }
   }
@@ -139,7 +135,7 @@ export class AuthService {
   async changePassword(id: string, currentPassword: string, newPassword: string): Promise<void> {
     if (newPassword.length < 6) throw new AuthError('新密码至少 6 位。')
     const result = await this.pool.query<AccountRow>(
-      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.role, a.status, a.failed_login_count, a.locked_until,
+      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.status, a.failed_login_count, a.locked_until,
         COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
        FROM accounts a WHERE a.id = $1`,
       [id],

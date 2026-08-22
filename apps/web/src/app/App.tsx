@@ -72,7 +72,7 @@ export default function App() {
     window.scrollTo(0, 0)
   }
 
-  function updateCurrentUserProfile(profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position' | 'role' | 'permissions'>) {
+  function updateCurrentUserProfile(profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position' | 'permissions'>) {
     setUser((current) => current ? { ...current, ...profile } : current)
   }
 

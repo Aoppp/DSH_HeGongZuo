@@ -8,7 +8,6 @@ export interface AccountRecord {
   readonly accountId: string
   readonly displayName: string
   readonly position: string
-  readonly role: 'owner' | 'developer'
   readonly status: 'active' | 'disabled' | 'initializing' | 'initialization_failed'
   readonly permissions: readonly AccountPermissionId[]
   readonly createdAt: string
@@ -31,7 +30,6 @@ export function validateAccountId(accountId: string): string | null {
 // 新建账号与一键重置使用的默认密码
 export const defaultAccountPassword = 'wangshuhe123'
 
-const rolePattern = /^(owner|developer)$/
 const statusPattern = /^(active|disabled|initializing|initialization_failed)$/
 
 interface AccountRow {
@@ -39,7 +37,6 @@ interface AccountRow {
   readonly account_id: string
   readonly display_name: string
   readonly position: string
-  readonly role: 'owner' | 'developer'
   readonly status: 'active' | 'disabled' | 'initializing' | 'initialization_failed'
   readonly permissions: string[]
   readonly created_at: string | Date
@@ -53,7 +50,6 @@ function toAccount(row: AccountRow): AccountRecord {
     accountId: row.account_id,
     displayName: row.display_name,
     position: row.position,
-    role: row.role,
     status: row.status,
     permissions: row.permissions.filter((permission): permission is AccountPermissionId => accountPermissionIds.includes(permission as AccountPermissionId)),
     createdAt: format(row.created_at),
@@ -66,7 +62,7 @@ export class AccountsService {
 
   async list(): Promise<AccountRecord[]> {
     const result = await this.pool.query<AccountRow>(
-      `SELECT a.id, a.account_id, a.display_name, a.position, a.role, a.status, a.created_at, a.updated_at,
+      `SELECT a.id, a.account_id, a.display_name, a.position, a.status, a.created_at, a.updated_at,
         COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
        FROM accounts a ORDER BY a.created_at, a.id`,
     )
@@ -75,7 +71,7 @@ export class AccountsService {
 
   async findById(id: string): Promise<AccountRecord | null> {
     const result = await this.pool.query<AccountRow>(
-      `SELECT a.id, a.account_id, a.display_name, a.position, a.role, a.status, a.created_at, a.updated_at,
+      `SELECT a.id, a.account_id, a.display_name, a.position, a.status, a.created_at, a.updated_at,
         COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
        FROM accounts a WHERE a.id = $1`,
       [id],
@@ -87,7 +83,6 @@ export class AccountsService {
     readonly accountId: string
     readonly displayName: string
     readonly position: string
-    readonly role: string
     readonly permissions: unknown
   }): Promise<AccountRecord> {
     const accountId = input.accountId.trim()
@@ -98,7 +93,6 @@ export class AccountsService {
     if (position.length > 120) throw new AccountValidationError('职位不能超过 120 个字符。')
     const idError = validateAccountId(accountId)
     if (idError) throw new AccountValidationError(idError)
-    if (!rolePattern.test(input.role)) throw new AccountValidationError('角色无效。')
     const permissions = parsePermissions(input.permissions)
     const id = await this.nextId()
     const client = await this.pool.connect()
@@ -106,10 +100,10 @@ export class AccountsService {
     try {
       await client.query('BEGIN')
       const result = await client.query<AccountRow>(
-        `INSERT INTO accounts (id, account_id, display_name, position, password_hash, role, status)
-         VALUES ($1, $2, $3, $4, $5, $6, 'initializing')
-         RETURNING id, account_id, display_name, position, role, status, created_at, updated_at, '{}'::varchar[] AS permissions`,
-        [id, accountId, displayName, position, hashPassword(defaultAccountPassword), input.role],
+        `INSERT INTO accounts (id, account_id, display_name, position, password_hash, status)
+         VALUES ($1, $2, $3, $4, $5, 'initializing')
+         RETURNING id, account_id, display_name, position, status, created_at, updated_at, '{}'::varchar[] AS permissions`,
+        [id, accountId, displayName, position, hashPassword(defaultAccountPassword)],
       )
       row = result.rows[0]
       await client.query(
@@ -131,7 +125,6 @@ export class AccountsService {
     readonly accountId: string
     readonly displayName: string
     readonly position: string
-    readonly role: string
     readonly permissions: unknown
   }): Promise<AccountRecord | null> {
     const accountId = input.accountId.trim()
@@ -142,16 +135,15 @@ export class AccountsService {
     if (position.length > 120) throw new AccountValidationError('职位不能超过 120 个字符。')
     const idError = validateAccountId(accountId)
     if (idError) throw new AccountValidationError(idError)
-    if (!rolePattern.test(input.role)) throw new AccountValidationError('角色无效。')
     const permissions = parsePermissions(input.permissions)
     const client = await this.pool.connect()
     try {
       await client.query('BEGIN')
       const result = await client.query<AccountRow>(
-        `UPDATE accounts SET account_id = $2, display_name = $3, position = $4, role = $5, updated_at = now()
+        `UPDATE accounts SET account_id = $2, display_name = $3, position = $4, updated_at = now()
          WHERE id = $1
-         RETURNING id, account_id, display_name, position, role, status, created_at, updated_at, '{}'::varchar[] AS permissions`,
-        [id, accountId, displayName, position, input.role],
+         RETURNING id, account_id, display_name, position, status, created_at, updated_at, '{}'::varchar[] AS permissions`,
+        [id, accountId, displayName, position],
       )
       const row = result.rows[0]
       if (!row) { await client.query('ROLLBACK'); return null }
@@ -185,7 +177,7 @@ export class AccountsService {
     const result = await this.pool.query<AccountRow>(
       `UPDATE accounts SET status = $2, updated_at = now()
        WHERE id = $1
-       RETURNING id, account_id, display_name, position, role, status, created_at, updated_at,
+       RETURNING id, account_id, display_name, position, status, created_at, updated_at,
        COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = accounts.id), '{}'::varchar[]) AS permissions`,
       [id, status],
     )

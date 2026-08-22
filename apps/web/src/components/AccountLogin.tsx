@@ -64,7 +64,7 @@ export function AccountLogin({ onAuthenticated }: AccountLoginProps) {
             {submitting ? <LoaderCircle className="spin" size={18} /> : <>登录 <ArrowRight size={18} /></>}
           </button>
         </form>
-        <p className="access-card__notice">登录状态保持 7 天。账号问题请联系平台开发者。</p>
+        <p className="access-card__notice">登录状态保持 7 天。账号问题请联系平台管理员。</p>
       </section>
     </main>
   )

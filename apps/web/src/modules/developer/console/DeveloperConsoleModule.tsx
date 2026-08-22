@@ -10,8 +10,8 @@ export function DeveloperConsoleModule({ user, onUserProfileUpdated }: ModulePro
   return (
     <div className="developer-console module-page">
       <section className="developer-console__heading">
-        <h1>开发控制台</h1>
-        <p>当前只展示与模块化结构和员工查询服务集成相关的必要信息。</p>
+        <h1>平台管理</h1>
+        <p>统一管理账号权限、模块配置与服务状态。</p>
       </section>
 
       <section className="developer-status-grid">
@@ -34,7 +34,7 @@ export function DeveloperConsoleModule({ user, onUserProfileUpdated }: ModulePro
               <article key={module.id}>
                 <span><Icon size={18} /></span>
                 <div><strong>{module.label}</strong><small>{module.id}</small></div>
-                <p>{module.allowedRoles.map((role) => role === 'owner' ? '普通' : '开发者').join(' · ')}</p>
+                <p>{module.requiredPermission ?? '所有已登录账号'}</p>
                 <CheckCircle2 size={17} />
               </article>
             )
@@ -47,7 +47,7 @@ export function DeveloperConsoleModule({ user, onUserProfileUpdated }: ModulePro
         <ol>
           <li><span>1</span><p>在 <code>src/modules</code> 中新增或删除独立功能目录。</p></li>
           <li><span>2</span><p>在 <code>module-registry.ts</code> 中增加或删除一条模块注册。</p></li>
-          <li><span>3</span><p>通过 <code>allowedRoles</code> 声明哪些账号角色可以看到该模块。</p></li>
+          <li><span>3</span><p>通过 <code>requiredPermission</code> 声明账号需要开通的功能权限。</p></li>
         </ol>
       </section>
     </div>

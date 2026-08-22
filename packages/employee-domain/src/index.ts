@@ -16,6 +16,8 @@ export const platformManagementPermissionIds = [
   ...employeeManagementPermissionIds,
   'finance-management',
   'project-management',
+  'management-cockpit',
+  'platform-administration',
 ] as const
 export type PlatformManagementPermissionId = (typeof platformManagementPermissionIds)[number]
 

@@ -94,7 +94,7 @@ export function Sidebar({ activeModule, collapsed, modules, onNavigate, onToggle
         {!collapsed && (
           <>
             <span><i /> 内部开发阶段</span>
-            <p>当前开放管理员与开发者账号</p>
+            <p>按账号已开通功能显示</p>
           </>
         )}
       </div>

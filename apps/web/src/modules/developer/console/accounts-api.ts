@@ -1,14 +1,12 @@
 // 开发控制台账号数据访问。
-export type AccountRole = 'owner' | 'developer'
 export type AccountStatus = 'active' | 'disabled' | 'initializing' | 'initialization_failed'
-export type AccountPermissionId = 'employee-data' | 'employee-query' | 'finance-management' | 'project-management'
+export type AccountPermissionId = 'employee-data' | 'employee-query' | 'finance-management' | 'project-management' | 'management-cockpit' | 'platform-administration'
 
 export interface AccountRecord {
   readonly id: string
   readonly accountId: string
   readonly displayName: string
   readonly position: string
-  readonly role: AccountRole
   readonly status: AccountStatus
   readonly permissions: readonly AccountPermissionId[]
   readonly createdAt: string
@@ -70,7 +68,6 @@ export async function createAccount(input: {
   readonly accountId: string
   readonly displayName: string
   readonly position: string
-  readonly role: AccountRole
   readonly permissions: readonly AccountPermissionId[]
 }): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>('/api/accounts', {
@@ -83,7 +80,6 @@ export async function updateAccount(id: string, input: {
   readonly accountId: string
   readonly displayName: string
   readonly position: string
-  readonly role: AccountRole
   readonly permissions: readonly AccountPermissionId[]
 }): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>(`/api/accounts/${encodeURIComponent(id)}`, {

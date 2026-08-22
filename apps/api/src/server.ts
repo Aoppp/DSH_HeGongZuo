@@ -13,7 +13,7 @@ import { PostgresEmployeeRepository } from './modules/employee/employee-reposito
 import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
-import { requireAuth, requireDeveloper, requirePermission } from './http/auth-middleware.js'
+import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
 
 const repository = new PostgresEmployeeRepository(database)
 const auth = new AuthService(database)
@@ -167,13 +167,13 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (url.pathname === '/api/accounts' && request.method === 'GET') {
-    requireDeveloper(currentUser)
+    requirePlatformAdministration(currentUser)
     sendJson(response, 200, { accounts: await accounts.list() })
     return
   }
 
   if (url.pathname === '/api/accounts' && request.method === 'POST') {
-    requireDeveloper(currentUser)
+    requirePlatformAdministration(currentUser)
     const body = await readJson(request)
     if (!body || typeof body !== 'object') throw new HttpError(400, '请求必须包含有效 JSON。')
     const record = body as Record<string, unknown>
@@ -183,7 +183,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
         accountId: typeof record.accountId === 'string' ? record.accountId : '',
         displayName: typeof record.displayName === 'string' ? record.displayName : '',
         position: typeof record.position === 'string' ? record.position : '',
-        role: typeof record.role === 'string' ? record.role : '',
         permissions: record.permissions,
       })
     } catch (error) {
@@ -197,7 +196,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   const accountIdPath = accountId(url.pathname)
   if (accountIdPath && request.method === 'PUT') {
-    requireDeveloper(currentUser)
+    requirePlatformAdministration(currentUser)
     const body = await readJson(request)
     if (!body || typeof body !== 'object') throw new HttpError(400, '请求必须包含有效 JSON。')
     const record = body as Record<string, unknown>
@@ -205,7 +204,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       accountId: typeof record.accountId === 'string' ? record.accountId : '',
       displayName: typeof record.displayName === 'string' ? record.displayName : '',
       position: typeof record.position === 'string' ? record.position : '',
-      role: typeof record.role === 'string' ? record.role : '',
       permissions: record.permissions,
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
@@ -215,7 +213,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (accountIdPath && request.method === 'DELETE') {
-    requireDeveloper(currentUser)
+    requirePlatformAdministration(currentUser)
     if (accountIdPath === currentUser.id) throw new HttpError(400, '不能删除当前登录的账号。')
     if (!await accounts.delete(accountIdPath)) throw new HttpError(404, '账号不存在。')
     sendJson(response, 200, { ok: true })
@@ -224,7 +222,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   const resetPasswordId = accountResetPasswordId(url.pathname)
   if (resetPasswordId && request.method === 'POST') {
-    requireDeveloper(currentUser)
+    requirePlatformAdministration(currentUser)
     if (!await accounts.resetPassword(resetPasswordId)) throw new HttpError(404, '账号不存在。')
     sendJson(response, 200, { ok: true })
     return
@@ -232,7 +230,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   const statusId = accountStatusId(url.pathname)
   if (statusId && request.method === 'POST') {
-    requireDeveloper(currentUser)
+    requirePlatformAdministration(currentUser)
     if (statusId === currentUser.id) throw new HttpError(400, '不能停用自己的账号。')
     const body = await readJson(request)
     const record = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
@@ -245,7 +243,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   const retryId = accountRetryId(url.pathname)
   if (retryId && request.method === 'POST') {
-    requireDeveloper(currentUser)
+    requirePlatformAdministration(currentUser)
     const account = await accounts.findById(retryId)
     if (!account) throw new HttpError(404, '账号不存在。')
     accountRuntimeTasks.enqueue(account)

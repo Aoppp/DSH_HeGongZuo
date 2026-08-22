@@ -13,17 +13,12 @@ import {
   setAccountStatus,
   updateAccount,
   type AccountRecord,
-  type AccountPermissionId, type AccountRole,
+  type AccountPermissionId,
 } from './accounts-api'
-
-const roleLabels: Record<AccountRole, string> = {
-  owner: '老板',
-  developer: '开发者',
-}
 
 interface AccountManagementProps {
   readonly user: AuthenticatedUser
-  readonly onCurrentUserProfileUpdated?: (profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position' | 'role' | 'permissions'>) => void
+  readonly onCurrentUserProfileUpdated?: (profile: Pick<AuthenticatedUser, 'accountId' | 'displayName' | 'position' | 'permissions'>) => void
 }
 
 type EditorMode = 'create' | 'edit' | null
@@ -32,6 +27,8 @@ const employeePermissionLabels: Record<AccountPermissionId, string> = {
   'employee-query': '员工查询',
   'finance-management': '财务管理',
   'project-management': '项目管理',
+  'management-cockpit': '管理驾驶舱',
+  'platform-administration': '平台管理与账号管理',
 }
 const otherManagementPermissions = platformManagementPermissionIds.filter((permission) => !employeeManagementPermissionIds.includes(permission as typeof employeeManagementPermissionIds[number]))
 
@@ -40,7 +37,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editorMode, setEditorMode] = useState<EditorMode>(null)
-  const [draft, setDraft] = useState<{ id?: string; accountId: string; displayName: string; position: string; role: AccountRole; permissions: AccountPermissionId[] } | null>(null)
+  const [draft, setDraft] = useState<{ id?: string; accountId: string; displayName: string; position: string; permissions: AccountPermissionId[] } | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
@@ -61,13 +58,13 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
   }, [loadAccounts])
 
   function openCreate() {
-    setDraft({ accountId: '', displayName: '', position: '', role: 'owner', permissions: ['employee-data', 'employee-query'] })
+    setDraft({ accountId: '', displayName: '', position: '', permissions: [] })
     setEditorMode('create')
     setFormError(null)
   }
 
   function openEdit(account: AccountRecord) {
-    setDraft({ id: account.id, accountId: account.accountId, displayName: account.displayName, position: account.position, role: account.role, permissions: [...account.permissions] })
+    setDraft({ id: account.id, accountId: account.accountId, displayName: account.displayName, position: account.position, permissions: [...account.permissions] })
     setEditorMode('edit')
     setFormError(null)
   }
@@ -88,14 +85,12 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           accountId: draft.accountId.trim(),
           displayName: draft.displayName.trim(),
           position: draft.position.trim(),
-          role: draft.role,
           permissions: draft.permissions,
         })
         : draft.id ? await updateAccount(draft.id, {
           accountId: draft.accountId.trim(),
           displayName: draft.displayName.trim(),
           position: draft.position.trim(),
-          role: draft.role,
           permissions: draft.permissions,
         }) : null
       if (saved?.id === user.id) {
@@ -103,7 +98,6 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           accountId: saved.accountId,
           displayName: saved.displayName,
           position: saved.position,
-          role: saved.role,
           permissions: saved.permissions,
         })
       }
@@ -173,7 +167,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           <span><UserCog size={19} /></span>
           <div>
             <h2>账号管理</h2>
-            <p>新增、停用、重置密码与分配权限。仅开发者可用。</p>
+            <p>新增、停用、重置密码与分配账号功能权限。</p>
           </div>
         </div>
         <button className="employee-data__primary" type="button" onClick={openCreate}><Plus size={16} /> 新增账号</button>
@@ -192,7 +186,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                 <td><strong>{account.displayName}</strong>{account.id === user.id && <small>当前账号</small>}</td>
                 <td><code>{account.accountId}</code></td>
                 <td>{account.position || <span className="account-admin__muted">未填写</span>}</td>
-                <td><span className={`account-role account-role--${account.role}`}>{roleLabels[account.role]}</span><small>{account.permissions.map((permission) => employeePermissionLabels[permission]).join(' · ') || '未开通模块'}</small></td>
+                <td><small>{account.permissions.map((permission) => employeePermissionLabels[permission]).join(' · ') || '未开通功能'}</small></td>
                 <td><span className={`account-status account-status--${account.status}`}>{account.status === 'active' ? '正常' : account.status === 'disabled' ? '已停用' : account.status === 'initializing' ? '初始化中' : '初始化失败'}</span></td>
                 <td><small>{account.createdAt.slice(0, 10)}</small></td>
                 <td>
@@ -231,13 +225,12 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
               <div className="account-admin__form-section">
                 <div className="account-admin__form-heading"><strong>功能权限</strong><span>开通后显示对应管理入口</span></div>
                 <div className="account-admin__fields">
-                  <label className="account-admin__permission"><input type="checkbox" checked={draft.role === 'developer'} onChange={(event) => setDraft({ ...draft, role: event.target.checked ? 'developer' : 'owner' })} />开发者权限（可管理账号与开发控制台）</label>
                   <fieldset className="account-admin__permissions">
                     <legend>员工管理</legend>
                     {employeeManagementPermissionIds.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
                   </fieldset>
                   <fieldset className="account-admin__permissions">
-                    <legend>其他管理</legend>
+                    <legend>管理与平台</legend>
                     {otherManagementPermissions.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{employeePermissionLabels[permission]}</label>)}
                   </fieldset>
                 </div>
