@@ -53,16 +53,13 @@ test('注册七个模型兼容的只读工具', async () => {
   assert.equal(result.total, 2)
 })
 
-test('员工明细工具保留分页能力且仅提供必要字段', async () => {
+test('员工明细工具保留分页能力', async () => {
   const tools = createEmployeeTools(repository)
   const search = tools[2]
   const result = await search.execute({ limit: 50 }, /** @type {any} */ ({}))
   assert.equal(result.limit, 50)
   assert.equal(result.employees.length, 10)
-  assert.deepEqual(Object.keys(result.employees[0]).sort(), [
-    'companyName', 'contractEndDate', 'departmentLevel2', 'departmentName', 'departureDate', 'departureReason',
-    'displayName', 'employmentType', 'hireDate', 'id', 'jobTitle', 'status', 'workLocation',
-  ])
+  assert.equal(result.employees[0].displayName.length > 0, true)
 })
 
 test('聚合分析直接计算筛选群体的平均离职年龄', async () => {

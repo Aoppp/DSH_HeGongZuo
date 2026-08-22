@@ -11,25 +11,89 @@ const employeeStatuses = [
   'inactive',
 ] as const satisfies readonly EmployeeStatus[]
 
-const maximumToolResultItems = 10
-
 const employeeViewSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
     id: { type: 'string', required: true },
     displayName: { type: 'string', required: true },
+    workEmail: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    workPhone: { type: 'string', required: true },
     departmentName: { type: 'string', required: true },
     jobTitle: { type: 'string', required: true },
     employmentType: { type: 'string', required: true },
     status: { type: 'string', enum: employeeStatuses, required: true },
     hireDate: { type: 'string', required: true },
     workLocation: { type: 'string', required: true },
+    responsibilities: { type: 'string', required: true },
+    resumeFileName: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    resumeMimeType: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    resumeSize: {
+      oneOf: [{ type: 'integer' }, { type: 'null' }],
+      required: true,
+    },
     companyName: {
       oneOf: [{ type: 'string' }, { type: 'null' }],
       required: true,
     },
+    gender: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    birthDate: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    education: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    major: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    school: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    graduationDate: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    maritalStatus: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    hasChildren: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    hometown: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
     departmentLevel2: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    probationMonths: {
+      oneOf: [{ type: 'integer' }, { type: 'null' }],
+      required: true,
+    },
+    expectedRegularDate: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    actualRegularDate: {
       oneOf: [{ type: 'string' }, { type: 'null' }],
       required: true,
     },
@@ -45,6 +109,14 @@ const employeeViewSchema = {
       oneOf: [{ type: 'string' }, { type: 'null' }],
       required: true,
     },
+    archiveNo: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
+    notes: {
+      oneOf: [{ type: 'string' }, { type: 'null' }],
+      required: true,
+    },
   },
 } as const
 
@@ -54,17 +126,37 @@ function employeeValue(employee: EmployeeView) {
   return {
     id: employee.id,
     displayName: employee.displayName,
+    workEmail: employee.workEmail,
+    workPhone: employee.workPhone,
     departmentName: employee.departmentName,
     jobTitle: employee.jobTitle,
     employmentType: employee.employmentType,
     status: employee.status,
     hireDate: employee.hireDate,
     workLocation: employee.workLocation,
+    responsibilities: employee.responsibilities,
+    resumeFileName: employee.resumeFileName,
+    resumeMimeType: employee.resumeMimeType,
+    resumeSize: employee.resumeSize,
     companyName: employee.companyName ?? null,
+    gender: employee.gender ?? null,
+    birthDate: employee.birthDate ?? null,
+    education: employee.education ?? null,
+    major: employee.major ?? null,
+    school: employee.school ?? null,
+    graduationDate: employee.graduationDate ?? null,
+    maritalStatus: employee.maritalStatus ?? null,
+    hasChildren: employee.hasChildren ?? null,
+    hometown: employee.hometown ?? null,
     departmentLevel2: employee.departmentLevel2 ?? null,
+    probationMonths: employee.probationMonths ?? null,
+    expectedRegularDate: employee.expectedRegularDate ?? null,
+    actualRegularDate: employee.actualRegularDate ?? null,
     contractEndDate: employee.contractEndDate ?? null,
     departureDate: employee.departureDate ?? null,
     departureReason: employee.departureReason ?? null,
+    archiveNo: employee.archiveNo ?? null,
+    notes: employee.notes ?? null,
   }
 }
 
@@ -200,9 +292,6 @@ export function createEmployeeTools(
         additionalProperties: false,
         properties: {
           total: { type: 'integer', required: true },
-          expiringContractCount: { type: 'integer', required: true },
-          expiredContractCount: { type: 'integer', required: true },
-          pendingRegularizationCount: { type: 'integer', required: true },
           expiringContracts: {
             type: 'array',
             items: contractAlertSchema,
@@ -224,21 +313,12 @@ export function createEmployeeTools(
     },
     isConcurrencySafe: () => true,
     async execute(args) {
-      const result = await repository.contractAlerts({
+      return repository.contractAlerts({
         ...(args.days === undefined ? {} : { days: args.days }),
         ...(args.regularization_days === undefined
           ? {}
           : { regularizationDays: args.regularization_days }),
       })
-      return {
-        total: result.total,
-        expiringContractCount: result.expiringContracts.length,
-        expiredContractCount: result.expiredContracts.length,
-        pendingRegularizationCount: result.pendingRegularization.length,
-        expiringContracts: result.expiringContracts.slice(0, maximumToolResultItems),
-        expiredContracts: result.expiredContracts.slice(0, maximumToolResultItems),
-        pendingRegularization: result.pendingRegularization.slice(0, maximumToolResultItems),
-      }
     },
   })
 
@@ -423,8 +503,6 @@ export function createEmployeeTools(
             required: true,
           },
           memberCount: { type: 'integer', required: true },
-          returnedMemberCount: { type: 'integer', required: true },
-          hasMore: { type: 'boolean', required: true },
           members: {
             type: 'array',
             items: employeeViewSchema,
@@ -441,9 +519,7 @@ export function createEmployeeTools(
         found: result.found,
         department: result.department,
         memberCount: result.memberCount,
-        returnedMemberCount: Math.min(result.members.length, maximumToolResultItems),
-        hasMore: result.members.length > maximumToolResultItems,
-        members: result.members.slice(0, maximumToolResultItems).map(employeeValue),
+        members: result.members.map(employeeValue),
       }
     },
   })
