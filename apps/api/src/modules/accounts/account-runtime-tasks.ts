@@ -17,6 +17,8 @@ export class AccountRuntimeTasks {
         await this.run('sync-account-agent-runtimes.mjs')
         await this.run('provision-account-agent-runtimes.mjs', [account.accountId])
         if (!await this.accounts.setStatus(account.id, 'active')) throw new Error('账号不存在。')
+        // 账号回到正常状态后再同步一次，让服务管理器按最终配置启动运行空间。
+        await this.run('sync-account-agent-runtimes.mjs')
       } catch {
         await this.accounts.setStatus(account.id, 'initialization_failed')
         try { await this.run('sync-account-agent-runtimes.mjs') } catch { /* 保留失败状态，供管理员重试。 */ }

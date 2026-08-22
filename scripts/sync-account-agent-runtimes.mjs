@@ -19,7 +19,9 @@ const rows = permissionIds.length === 0 ? [] : (await pool.query(
   `SELECT a.account_id, a.created_at, a.id, p.permission_id
    FROM accounts a
    JOIN account_module_permissions p ON p.account_id = a.id
-   WHERE a.status = 'active' AND p.permission_id = ANY($1::text[])
+   -- 初始化期间也必须保留运行时定义：否则同步器会清理正在更新账号的服务目录，
+   -- 导致账号恢复为正常后仍无法重新连接。
+   WHERE a.status IN ('active', 'initializing') AND p.permission_id = ANY($1::text[])
    ORDER BY a.created_at, a.id, p.permission_id`,
   [permissionIds],
 )).rows
