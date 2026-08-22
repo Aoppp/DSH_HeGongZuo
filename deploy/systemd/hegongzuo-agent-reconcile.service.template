@@ -15,7 +15,7 @@ TimeoutStartSec=10min
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
-# 初始化能力包会更新 Corepack 的本地元数据；仅向协调任务开放该缓存目录。
-BindPaths=/home/__DEPLOY_USER__/.cache/node/corepack
+# 能力包初始化会更新当前服务账号的 Corepack 元数据；该任务不对外提供服务，
+# 因此在此处允许访问服务账号目录，运行中的独立能力服务仍保持 ProtectHome 隔离。
+ProtectHome=false
 ReadWritePaths=__PROJECT_DIR__/.runtime

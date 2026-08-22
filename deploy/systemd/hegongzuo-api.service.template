@@ -20,9 +20,8 @@ LimitNOFILE=65536
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
-# API 仅在账号运行时初始化时读取已安装的 Corepack/Pnpm；其余用户目录继续隔离。
-BindReadOnlyPaths=/home/__DEPLOY_USER__/.cache/node/corepack
+# 新账号初始化会更新当前服务账号的 Corepack 元数据；API 以此完成运行空间安装。
+ProtectHome=false
 ReadWritePaths=__PROJECT_DIR__/.runtime
 
 [Install]
