@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { latestTurnFinished, mergeHistoryMessages, messagesFromHistory, parseMarkdownTable } from '../src/modules/work-assistant/main/conversation.ts'
+import { latestTurnFinished, mergeHistoryMessages, mergeHistoryWindow, messagesFromHistory, parseMarkdownTable } from '../src/modules/work-assistant/main/conversation.ts'
 
 test('工作助理在服务端历史尚未写入时保留刚发送的消息', () => {
   const history = [{ id: 'user-saved', kind: 'user', text: '之前的消息' }]
@@ -25,6 +25,20 @@ test('工作助理从服务端补齐完成回复时替换本地流式片段', ()
   const current = [{ id: 'assistant-2-1', kind: 'assistant', text: '完整回', state: 'running' }]
 
   assert.deepEqual(mergeHistoryMessages(history, current), history)
+})
+
+test('工作助理使用最新历史窗口对账时保留较早对话', () => {
+  const current = [
+    { id: 'user-old', kind: 'user', text: '较早的问题' },
+    { id: 'assistant-1-1', kind: 'assistant', text: '较早的回答' },
+    { id: 'user-new', kind: 'user', text: '当前问题' },
+    { id: 'assistant-2-1', kind: 'assistant', text: '半截', state: 'running' },
+  ]
+  const latest = [
+    { id: 'user-new', kind: 'user', text: '当前问题' },
+    { id: 'assistant-2-1', kind: 'assistant', text: '完整回答' },
+  ]
+  assert.deepEqual(mergeHistoryWindow(latest, current), [current[0], current[1], ...latest])
 })
 
 test('工作助理显示尚未完成的回复片段', () => {

@@ -91,6 +91,19 @@ export function mergeHistoryMessages(history: readonly AssistantMessage[], curre
   return [...history, ...inFlight, ...pending]
 }
 
+/** 用最新历史窗口更新末尾消息，同时保留窗口之前已经加载的对话。 */
+export function mergeHistoryWindow(history: readonly AssistantMessage[], current: readonly AssistantMessage[]): readonly AssistantMessage[] {
+  if (history.length === 0) return current
+  const historyIds = new Set(history.map((message) => message.id))
+  const firstOverlap = current.findIndex((message) => historyIds.has(message.id))
+  const prefix = firstOverlap < 0
+    ? current.filter((message) => !message.id.startsWith('pending-'))
+    : current.slice(0, firstOverlap).filter((message) => !message.id.startsWith('pending-'))
+  const persistedUsers = new Set(history.filter((message) => message.kind === 'user').map((message) => message.text))
+  const pending = current.filter((message) => message.id.startsWith('pending-') && !persistedUsers.has(message.text))
+  return [...prefix, ...history, ...pending]
+}
+
 /** 当前最新一轮已有结束事件时，不应继续依赖可能延迟更新的会话 running 标记。 */
 export function latestTurnFinished(entries: readonly HistoryEntry[]): boolean {
   let latestObservedTurn = -1

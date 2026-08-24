@@ -4,7 +4,7 @@ import { type ChangeEvent, type DragEvent, type KeyboardEvent, useCallback, useE
 
 import type { ModuleProps } from '../../../app/types'
 import { AccountDshApiClient, unwrapDshResponse } from '../../../shared/dsh/client'
-import { latestTurnFinished, mergeHistoryMessages, messagesFromHistory, parseMarkdownTable, type AssistantMessage } from './conversation'
+import { latestTurnFinished, mergeHistoryMessages, mergeHistoryWindow, messagesFromHistory, parseMarkdownTable, type AssistantMessage } from './conversation'
 import './work-assistant.css'
 
 const maximumFileBytes = 200 * 1024 * 1024
@@ -46,7 +46,7 @@ function MarkdownMessage({ text }: { readonly text: string }) {
 }
 
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, { credentials: 'same-origin', ...init })
+  const response = await fetch(path, { credentials: 'same-origin', signal: init?.signal ?? AbortSignal.timeout(15_000), ...init })
   const body = await response.json().catch(() => ({})) as { error?: unknown } & T
   if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : '操作失败。')
   return body
@@ -106,12 +106,13 @@ export function WorkAssistantModule(_props: ModuleProps) {
     setQuotaBytes(result.quotaBytes)
   }, [])
 
-  const refreshHistory = useCallback(async (targetSessionId: SessionId): Promise<boolean> => {
-    const history = unwrapDshResponse(await client.sessions.history({ sessionId: targetSessionId, maxMessages: 100 }))
+  const refreshHistory = useCallback(async (targetSessionId: SessionId, recentOnly = false): Promise<boolean> => {
+    // 初始化加载当前对话；处理中只拉取最近两轮，避免反复下载整份大型事件历史。
+    const history = unwrapDshResponse(await client.sessions.history({ sessionId: targetSessionId, maxMessages: recentOnly ? 4 : 60 }))
     if (activeSession.current !== targetSessionId) return false
     const fromHistory = messagesFromHistory(history.events)
     setMessages((current) => {
-      const next = mergeHistoryMessages(fromHistory, current)
+      const next = recentOnly ? mergeHistoryWindow(fromHistory, current) : mergeHistoryMessages(fromHistory, current)
       if (next.some((message, index) => message.id !== current[index]?.id || message.text !== current[index]?.text || message.state !== current[index]?.state) || next.length !== current.length) {
         lastProgressAt.current = Date.now()
       }
@@ -123,7 +124,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
   const waitForTaskCompletion = useCallback(async (targetSessionId: SessionId) => {
     const deadline = Date.now() + 5 * 60_000
     while (Date.now() < deadline) {
-      const completed = await refreshHistory(targetSessionId)
+      const completed = await refreshHistory(targetSessionId, true)
       // 完成事件先于会话列表状态抵达时，直接结束等待，避免正文已显示仍持续转圈。
       if (completed) return
       const sessions = unwrapDshResponse(await client.sessions.list({}))
@@ -131,7 +132,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
       if (!current?.running) return
       if (Date.now() - lastProgressAt.current >= noProgressTimeoutMs) {
         try { unwrapDshResponse(await client.sessions.cancel({ sessionId: targetSessionId })) } catch { /* 任务可能已自行结束，后续状态读取会确认。 */ }
-        await refreshHistory(targetSessionId)
+        await refreshHistory(targetSessionId, true)
         throw new Error('处理长时间没有进展，已自动停止。请检查文件后重新发送。')
       }
       await new Promise((resolve) => globalThis.setTimeout(resolve, 800))
@@ -143,7 +144,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
     let cancelled = false
     void (async () => {
       try {
-        const [workspaceResponse] = await Promise.all([client.workspace.list({}), refreshFiles()])
+        const workspaceResponse = await client.workspace.list({})
         const workspaceItems = unwrapDshResponse(workspaceResponse).items
         const targetWorkspace = workspaceItems.find((item) => item.path.includes('/.runtime/agent-sandboxes/work-assistant--') && item.path.endsWith('/workspace')) ?? workspaceItems[0]
         if (!targetWorkspace) throw new Error('工作空间正在准备，请稍后刷新。')
@@ -154,7 +155,9 @@ export function WorkAssistantModule(_props: ModuleProps) {
         setWorkspace(targetWorkspace)
         activeSession.current = active
         setSessionId(active)
-        await refreshHistory(active)
+        // 工作空间和会话已确认即可开放界面；大历史和文件列表在后台加载。
+        setInitializing(false)
+        await Promise.all([refreshHistory(active), refreshFiles()])
       } catch (reason) {
         if (!cancelled) setError(reason instanceof Error ? reason.message : '工作助理暂时不可用。')
       } finally {
@@ -174,7 +177,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
       if (reconciling) return
       reconciling = true
       try {
-        const completed = await refreshHistory(sessionId)
+        const completed = await refreshHistory(sessionId, true)
         if (!cancelled && completed) setSending(false)
       } catch {
         // 当前请求链会展示错误；下一次定时对账仍可在连接恢复后补齐历史。
@@ -277,7 +280,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
     setError(null)
     try {
       unwrapDshResponse(await client.sessions.cancel({ sessionId }))
-      await refreshHistory(sessionId)
+      await refreshHistory(sessionId, true)
       setError('已停止当前处理，可以继续发送新任务。')
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '停止处理失败，请刷新后重试。')
