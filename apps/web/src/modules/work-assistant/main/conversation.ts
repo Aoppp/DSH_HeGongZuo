@@ -1,4 +1,4 @@
-import type { HistoryEntry } from '@deepseek-ai/dsh-client-connection/client'
+import type { HistoryEntry, SessionEvent } from '@deepseek-ai/dsh-client-connection/client'
 
 export interface AssistantMessage {
   readonly id: string
@@ -19,12 +19,41 @@ function visibleText(content: readonly { readonly type: string; readonly text?: 
   return content.filter((part) => part.type === 'text' && typeof part.text === 'string').map((part) => part.text ?? '').join('\n').trim()
 }
 
-function eventSequence(event: { readonly seq?: unknown; readonly seq0?: unknown }): number {
+export function eventSequence(event: { readonly seq?: unknown; readonly seq0?: unknown }): number {
   if (typeof event.seq === 'number') return event.seq
   // DSH 为压缩文本事件使用 seq0；若直接按 seq 排序会产生不稳定顺序，进而让
   // 页面长期保留半截流式片段。
   if (typeof event.seq0 === 'number') return event.seq0
   return -1
+}
+
+function packedSequenceRange(event: { readonly seq0?: unknown; readonly data?: unknown }): readonly [number, number] | null {
+  if (typeof event.seq0 !== 'number' || !event.data || typeof event.data !== 'object' || !('texts' in event.data) || !Array.isArray(event.data.texts)) return null
+  return [event.seq0, event.seq0 + Math.max(0, event.data.texts.length - 1)]
+}
+
+/** 将实时事件或短历史窗口合并进当前历史，避免重复事件和旧响应覆盖新内容。 */
+export function mergeHistoryEntries(current: readonly HistoryEntry[], incoming: readonly HistoryEntry[]): HistoryEntry[] {
+  if (incoming.length === 0) return [...current]
+  const merged = new Map<number, HistoryEntry>()
+  const incomingPackedRanges = incoming.map((entry) => packedSequenceRange(entry.event)).filter((range): range is readonly [number, number] => range !== null)
+  const currentPackedRanges = current.map((entry) => packedSequenceRange(entry.event)).filter((range): range is readonly [number, number] => range !== null)
+  const coveredBy = (sequence: number, ranges: readonly (readonly [number, number])[]) => ranges.some(([start, end]) => sequence >= start && sequence <= end)
+  for (const entry of current) {
+    const sequence = eventSequence(entry.event)
+    if (!packedSequenceRange(entry.event) && coveredBy(sequence, incomingPackedRanges)) continue
+    merged.set(sequence, entry)
+  }
+  for (const entry of incoming) {
+    const sequence = eventSequence(entry.event)
+    if (!packedSequenceRange(entry.event) && coveredBy(sequence, currentPackedRanges)) continue
+    merged.set(sequence, entry)
+  }
+  return [...merged.values()].sort((left, right) => eventSequence(left.event) - eventSequence(right.event))
+}
+
+export function appendSessionEvents(current: readonly HistoryEntry[], events: readonly SessionEvent[]): HistoryEntry[] {
+  return mergeHistoryEntries(current, events.map((event) => ({ event })))
 }
 
 export function messagesFromHistory(entries: readonly HistoryEntry[]): readonly AssistantMessage[] {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { latestTurnFinished, mergeHistoryMessages, mergeHistoryWindow, messagesFromHistory, parseMarkdownTable } from '../src/modules/work-assistant/main/conversation.ts'
+import { appendSessionEvents, latestTurnFinished, mergeHistoryEntries, mergeHistoryMessages, mergeHistoryWindow, messagesFromHistory, parseMarkdownTable } from '../src/modules/work-assistant/main/conversation.ts'
 
 test('工作助理在服务端历史尚未写入时保留刚发送的消息', () => {
   const history = [{ id: 'user-saved', kind: 'user', text: '之前的消息' }]
@@ -70,6 +70,18 @@ test('工作助理按压缩事件的 seq0 顺序合并回复片段', () => {
     { event: { type: 'text-chunks', seq0: 2, data: { turn: 1, step: 1, texts: ['前半段'] } } },
   ]))
   assert.deepEqual(messages, [{ id: 'assistant-1-1', kind: 'assistant', text: '前半段后半段', state: 'running' }])
+})
+
+test('历史压缩片段与实时事件竞态时不会重复正文', () => {
+  const realtime = /** @type {any} */ ([
+    { event: { type: 'assistant/chunk', seq: 11, data: { turn: 1, step: 1, chunk: { type: 'text-delta', text: '实时片段' } } } },
+  ])
+  const packed = /** @type {any} */ ([
+    { event: { type: 'text-chunks', seq0: 10, data: { turn: 1, step: 1, texts: ['前缀', '实时片段'] } } },
+  ])
+  const merged = mergeHistoryEntries(realtime, packed)
+  assert.deepEqual(messagesFromHistory(merged), [{ id: 'assistant-1-1', kind: 'assistant', text: '前缀实时片段', state: 'running' }])
+  assert.deepEqual(appendSessionEvents(packed, /** @type {any} */ ([realtime[0].event])), packed)
 })
 
 test('工作助理以最新轮次的完成事件结束等待，不依赖滞后的运行状态', () => {
