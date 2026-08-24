@@ -60,17 +60,24 @@ test('工作助理按压缩事件的 seq0 顺序合并回复片段', () => {
 
 test('工作助理以最新轮次的完成事件结束等待，不依赖滞后的运行状态', () => {
   assert.equal(latestTurnFinished(/** @type {any} */ ([
-    { event: { type: 'user/message', seq: 10, data: { source: { kind: 'user' } } } },
-    { event: { type: 'assistant/message', seq: 11, data: {} } },
-    { event: { type: 'turn/end', seq: 12, data: { reason: { kind: 'completed' } } } },
+    { event: { type: 'turn/start', seq: 10, data: { turn: 3 } } },
+    { event: { type: 'assistant/message', seq: 11, data: { turn: 3 } } },
+    { event: { type: 'turn/end', seq: 12, data: { turn: 3, reason: { kind: 'completed' } } } },
   ])), true)
   assert.equal(latestTurnFinished(/** @type {any} */ ([
-    { event: { type: 'turn/end', seq: 12, data: { reason: { kind: 'completed' } } } },
-    { event: { type: 'user/message', seq: 13, data: { source: { kind: 'user' } } } },
+    { event: { type: 'turn/end', seq: 12, data: { turn: 3, reason: { kind: 'completed' } } } },
+    { event: { type: 'turn/start', seq: 13, data: { turn: 4 } } },
   ])), false)
   assert.equal(latestTurnFinished(/** @type {any} */ ([
-    { event: { type: 'user/message', seq: 20, data: { source: { kind: 'user' } } } },
-    { event: { type: 'assistant/message', seq: 21, data: {} } },
+    { event: { type: 'turn/start', seq: 20, data: { turn: 5 } } },
+    { event: { type: 'assistant/message', seq: 21, data: { turn: 5 } } },
+  ])), true)
+})
+
+test('长回复历史截掉用户消息后仍能按轮次识别完成', () => {
+  assert.equal(latestTurnFinished(/** @type {any} */ ([
+    { event: { type: 'text-chunks', seq0: 500, data: { turn: 8, step: 1, texts: ['回复后半段'] } } },
+    { event: { type: 'assistant/message', seq: 620, data: { turn: 8, step: 1, message: {} } } },
   ])), true)
 })
 

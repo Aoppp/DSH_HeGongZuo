@@ -93,15 +93,19 @@ export function mergeHistoryMessages(history: readonly AssistantMessage[], curre
 
 /** 当前最新一轮已有结束事件时，不应继续依赖可能延迟更新的会话 running 标记。 */
 export function latestTurnFinished(entries: readonly HistoryEntry[]): boolean {
-  let latestUserSequence = -1
-  let latestCompletionSequence = -1
+  let latestObservedTurn = -1
+  let latestCompletedTurn = -1
   for (const entry of entries) {
     const event = entry.event
-    const sequence = eventSequence(event)
-    if (event.type === 'user/message' && event.data.source.kind === 'user') latestUserSequence = Math.max(latestUserSequence, sequence)
+    const turn = 'data' in event && event.data && typeof event.data === 'object' && 'turn' in event.data && typeof event.data.turn === 'number'
+      ? event.data.turn
+      : -1
+    latestObservedTurn = Math.max(latestObservedTurn, turn)
     // assistant/message 是 DSH 已持久化的完整正文。某些历史响应会先返回它、稍后
     // 才带 turn/end；将其视为完成可避免完整回复仍显示“正在生成”。
-    if (event.type === 'assistant/message' || event.type === 'turn/end') latestCompletionSequence = Math.max(latestCompletionSequence, sequence)
+    if (event.type === 'assistant/message' || event.type === 'turn/end') latestCompletedTurn = Math.max(latestCompletedTurn, turn)
   }
-  return latestUserSequence >= 0 && latestCompletionSequence > latestUserSequence
+  // 长回复的历史窗口可能已截掉本轮 user/message，因此完成判断必须按 turn，不能
+  // 依赖用户消息仍在当前分页中。
+  return latestObservedTurn >= 0 && latestCompletedTurn >= latestObservedTurn
 }

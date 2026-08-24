@@ -97,6 +97,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
   const lastProgressAt = useRef(Date.now())
   const inputFiles = files.filter((file) => file.path.startsWith('uploads/'))
   const outputFiles = files.filter((file) => file.path.startsWith('outputs/'))
+  const hasRunningMessage = messages.some((message) => message.state === 'running')
 
   const refreshFiles = useCallback(async () => {
     const result = await apiRequest<{ files: readonly WorkspaceFile[]; usedBytes: number; quotaBytes: number }>('/api/work-assistant/files')
@@ -143,7 +144,8 @@ export function WorkAssistantModule(_props: ModuleProps) {
     void (async () => {
       try {
         const [workspaceResponse] = await Promise.all([client.workspace.list({}), refreshFiles()])
-        const targetWorkspace = unwrapDshResponse(workspaceResponse).items[0]
+        const workspaceItems = unwrapDshResponse(workspaceResponse).items
+        const targetWorkspace = workspaceItems.find((item) => item.path.includes('/.runtime/agent-sandboxes/work-assistant--') && item.path.endsWith('/workspace')) ?? workspaceItems[0]
         if (!targetWorkspace) throw new Error('工作空间正在准备，请稍后刷新。')
         const sessions = unwrapDshResponse(await client.sessions.list({}))
         const existing = sessions.items.find((item) => item.cwd === targetWorkspace.path && item.origin !== 'subagent')
@@ -165,7 +167,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
   // 连接在服务重启、网络短暂切换时可能错过最后一个完成通知。仅在有任务等待时
   // 主动从持久历史对账，使完整回复和完成状态无需依赖用户手动刷新页面。
   useEffect(() => {
-    if (!sessionId || !sending) return
+    if (!sessionId || (!sending && !hasRunningMessage)) return
     let cancelled = false
     let reconciling = false
     const reconcile = async () => {
@@ -184,7 +186,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
       cancelled = true
       globalThis.clearInterval(timer)
     }
-  }, [refreshHistory, sending, sessionId])
+  }, [hasRunningMessage, refreshHistory, sending, sessionId])
 
   async function upload(file: File) {
     if (file.size > maximumFileBytes) { setError('单个表格文件不能超过 200MB。'); return }
