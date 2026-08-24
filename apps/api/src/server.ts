@@ -218,7 +218,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (url.pathname === '/api/work-assistant/files' && request.method === 'POST') {
     const file = await workAssistantFiles.upload(currentUser.accountId, request)
-    await platformManagement.record(currentUser.id, currentUser.displayName, '上传工作文件', '工作文件', file.path, { fileName: file.name, size: file.size })
     sendJson(response, 201, { file })
     return
   }
@@ -231,7 +230,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (url.pathname === '/api/work-assistant/files' && request.method === 'DELETE') {
     const filePath = url.searchParams.get('path')
     await workAssistantFiles.remove(currentUser.accountId, filePath)
-    await platformManagement.record(currentUser.id, currentUser.displayName, '删除工作文件', '工作文件', filePath ?? '')
     sendJson(response, 200, { ok: true })
     return
   }

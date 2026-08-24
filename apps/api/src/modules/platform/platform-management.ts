@@ -143,7 +143,9 @@ export class PlatformManagementService {
 
   async auditLogs(cursor: { readonly createdAt: string; readonly id: number } | null): Promise<{ readonly logs: readonly { readonly id: string; readonly action: string; readonly targetType: string; readonly targetId: string; readonly detail: unknown; readonly createdAt: string; readonly actorName: string | null }[]; readonly nextCursor: { readonly createdAt: string; readonly id: number } | null }> {
     const values: unknown[] = []
-    const where = cursor ? (() => { values.push(cursor.createdAt, cursor.id); return 'WHERE (l.created_at, l.id) < ($1::timestamptz, $2::bigint)' })() : ''
+    const where = cursor
+      ? (() => { values.push(cursor.createdAt, cursor.id); return "WHERE l.target_type NOT IN ('工作文件', '工作助理') AND (l.created_at, l.id) < ($1::timestamptz, $2::bigint)" })()
+      : "WHERE l.target_type NOT IN ('工作文件', '工作助理')"
     const result = await this.pool.query<AuditRow>(
       `SELECT l.id, l.action, l.target_type, l.target_id, l.detail, l.created_at,
               COALESCE(l.actor_display_name, a.display_name) AS actor_name
@@ -171,7 +173,9 @@ export class PlatformManagementService {
     let cursor: { readonly createdAt: string; readonly id: number } | null = null
     while (!response.destroyed) {
       const values: unknown[] = []
-      const where: string = cursor ? (() => { values.push(cursor.createdAt, cursor.id); return 'WHERE (l.created_at, l.id) < ($1::timestamptz, $2::bigint)' })() : ''
+      const where: string = cursor
+        ? (() => { values.push(cursor.createdAt, cursor.id); return "WHERE l.target_type NOT IN ('工作文件', '工作助理') AND (l.created_at, l.id) < ($1::timestamptz, $2::bigint)" })()
+        : "WHERE l.target_type NOT IN ('工作文件', '工作助理')"
       const result: { readonly rows: readonly AuditRow[] } = await this.pool.query<AuditRow>(
         `SELECT l.id, l.actor_account_id, l.action, l.target_type, l.target_id, l.detail, l.created_at,
                 COALESCE(l.actor_display_name, a.display_name) AS actor_name

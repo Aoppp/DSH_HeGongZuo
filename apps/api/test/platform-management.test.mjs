@@ -35,3 +35,16 @@ test('审计 CSV 仅导出操作元信息和变更字段，并安全转义内容
   assert.match(line, /"工作电话、身份证号"/)
   assert.doesNotMatch(line, /\+8613800000000/)
 })
+
+test('审计列表排除工作助理内的操作记录', async () => {
+  const calls = []
+  const service = new PlatformManagementService({
+    async query(sql, values = []) {
+      calls.push({ sql, values })
+      return { rows: [] }
+    },
+  })
+
+  await service.auditLogs(null)
+  assert.match(calls[0].sql, /target_type NOT IN \('工作文件', '工作助理'\)/)
+})
