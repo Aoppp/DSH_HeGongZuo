@@ -79,6 +79,18 @@ export function WorkAssistantModule(_props: ModuleProps) {
     setMessages(messagesFromHistory(history.events))
   }, [client])
 
+  const waitForTaskCompletion = useCallback(async (targetSessionId: SessionId) => {
+    const deadline = Date.now() + 5 * 60_000
+    while (Date.now() < deadline) {
+      const sessions = unwrapDshResponse(await client.sessions.list({}))
+      const current = sessions.items.find((item) => item.sessionId === targetSessionId)
+      await refreshHistory(targetSessionId)
+      if (!current?.running) return
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 800))
+    }
+    throw new Error('任务处理时间较长，请稍后刷新本页查看结果。')
+  }, [client, refreshHistory])
+
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -137,9 +149,10 @@ export function WorkAssistantModule(_props: ModuleProps) {
     setSending(true)
     setError(null)
     setDraft('')
+    setMessages((current) => [...current, { id: `pending-${Date.now()}`, kind: 'user', text }])
     try {
       unwrapDshResponse(await client.promptSession({ sessionId, mode: 'queue', content: [{ type: 'text', text }], clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }))
-      await Promise.all([refreshHistory(sessionId), refreshFiles()])
+      await Promise.all([waitForTaskCompletion(sessionId), refreshFiles()])
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '处理任务时发生错误。')
     } finally { setSending(false) }
