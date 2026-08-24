@@ -9,7 +9,7 @@ import { HttpError } from '../../http/http.js'
 export const workAssistantQuotaBytes = 3 * 1024 * 1024 * 1024
 export const workAssistantMaximumFileBytes = 200 * 1024 * 1024
 
-const supportedExtensions = new Set(['csv', 'tsv', 'xls', 'xlsx'])
+const supportedExtensions = new Set(['csv', 'tsv', 'xls', 'xlsx', 'doc', 'docx', 'md', 'txt', 'pdf', 'rtf'])
 
 export interface WorkspaceFile {
   readonly path: string
@@ -23,7 +23,7 @@ function safeFileName(value: string | undefined): string {
   try { decoded = decodeURIComponent(decoded) } catch { throw new HttpError(400, '文件名编码无效。') }
   const name = decoded.split(/[\\/]/).at(-1)?.replace(/[\r\n]/g, '') ?? ''
   const extension = name.split('.').at(-1)?.toLowerCase() ?? ''
-  if (!name || name === '.' || name === '..' || !supportedExtensions.has(extension)) throw new HttpError(400, '仅支持上传 CSV、TSV、XLS 或 XLSX 表格文件。')
+  if (!name || name === '.' || name === '..' || !supportedExtensions.has(extension)) throw new HttpError(400, '仅支持常用表格与文档格式：CSV、TSV、XLS、XLSX、DOC、DOCX、MD、TXT、PDF、RTF。')
   if (Buffer.byteLength(name, 'utf8') > 180) throw new HttpError(400, '文件名过长。')
   return name
 }
