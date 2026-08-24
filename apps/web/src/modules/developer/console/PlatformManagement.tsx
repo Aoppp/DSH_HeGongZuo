@@ -1,4 +1,4 @@
-import { Activity, Blocks, Database, History, LoaderCircle, RefreshCw } from 'lucide-react'
+import { Activity, Blocks, ChevronDown, Database, History, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ModuleId } from '../../../app/types'
@@ -17,6 +17,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [changingModuleId, setChangingModuleId] = useState<string | null>(null)
+  const [auditOpen, setAuditOpen] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -82,10 +83,10 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       </section>}
 
       {status && <section className="platform-management panel-card">
-        <header className="platform-management__header"><div><h2>操作记录</h2><p>保留最近 30 条平台管理操作。</p></div><History size={19} /></header>
-        {status.auditLogs.length === 0 ? <div className="account-admin__empty">暂无平台管理操作记录。</div> : <div className="platform-management__audit">
+        <header className="platform-management__header"><div><h2>操作记录</h2><p>保留最近 30 条平台管理操作。</p></div><button className="employee-data__secondary platform-management__audit-toggle" type="button" onClick={() => setAuditOpen((open) => !open)} aria-expanded={auditOpen}><History size={15} />{auditOpen ? '收起记录' : '查看记录'}<ChevronDown className={auditOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></header>
+        {auditOpen && (status.auditLogs.length === 0 ? <div className="account-admin__empty">暂无平台管理操作记录。</div> : <div className="platform-management__audit">
           {status.auditLogs.map((log) => <article key={log.id}><div><strong>{log.action}</strong><small>{log.targetType} · {log.targetId}</small></div><span>{log.actorName ?? '已删除账号'} · {formatTime(log.createdAt)}</span></article>)}
-        </div>}
+        </div>)}
       </section>}
     </>
   )

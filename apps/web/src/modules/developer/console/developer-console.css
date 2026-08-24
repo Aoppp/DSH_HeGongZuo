@@ -301,6 +301,18 @@
   font-size: 12px;
 }
 
+.platform-management__audit-toggle {
+  flex: 0 0 auto;
+}
+
+.platform-management__audit-chevron {
+  transition: transform 160ms ease;
+}
+
+.platform-management__audit-chevron--open {
+  transform: rotate(180deg);
+}
+
 .platform-management__health {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
