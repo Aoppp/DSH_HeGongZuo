@@ -10,6 +10,9 @@ export const workAssistantQuotaBytes = 3 * 1024 * 1024 * 1024
 export const workAssistantMaximumFileBytes = 200 * 1024 * 1024
 
 const supportedExtensions = new Set(['csv', 'tsv', 'xls', 'xlsx', 'doc', 'docx', 'md', 'txt', 'pdf', 'rtf'])
+const uploadDirectory = 'uploads'
+const outputDirectory = 'outputs'
+const internalDirectory = '.work'
 
 export interface WorkspaceFile {
   readonly path: string
@@ -70,6 +73,13 @@ async function collectFiles(directory: string, prefix = ''): Promise<WorkspaceFi
   return files
 }
 
+function isVisibleFilePath(relativePath: string): boolean {
+  return relativePath === uploadDirectory
+    || relativePath === outputDirectory
+    || relativePath.startsWith(`${uploadDirectory}/`)
+    || relativePath.startsWith(`${outputDirectory}/`)
+}
+
 function contentLength(request: IncomingMessage): number | null {
   const value = request.headers['content-length']
   const parsed = typeof value === 'string' ? Number(value) : Array.isArray(value) ? Number(value[0]) : Number.NaN
@@ -84,10 +94,27 @@ export class WorkAssistantWorkspaceFiles {
     return path.join(this.projectRoot, '.runtime', 'workspaces', 'work-assistant', accountId)
   }
 
-  async list(accountId: string): Promise<{ readonly files: readonly WorkspaceFile[]; readonly usedBytes: number; readonly quotaBytes: number }> {
+  private async prepareWorkspace(accountId: string): Promise<string> {
     const workspace = this.workspacePath(accountId)
-    await mkdir(workspace, { recursive: true })
-    const files = await collectFiles(workspace)
+    await Promise.all([
+      mkdir(path.join(workspace, uploadDirectory), { recursive: true }),
+      mkdir(path.join(workspace, outputDirectory), { recursive: true }),
+      mkdir(path.join(workspace, internalDirectory), { recursive: true }),
+    ])
+    return workspace
+  }
+
+  private async visibleFiles(workspace: string): Promise<WorkspaceFile[]> {
+    const [uploads, outputs] = await Promise.all([
+      collectFiles(path.join(workspace, uploadDirectory), uploadDirectory),
+      collectFiles(path.join(workspace, outputDirectory), outputDirectory),
+    ])
+    return [...uploads, ...outputs]
+  }
+
+  async list(accountId: string): Promise<{ readonly files: readonly WorkspaceFile[]; readonly usedBytes: number; readonly quotaBytes: number }> {
+    const workspace = await this.prepareWorkspace(accountId)
+    const files = await this.visibleFiles(workspace)
     const usedBytes = files.reduce((total, file) => total + file.size, 0)
     return { files: files.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)), usedBytes, quotaBytes: workAssistantQuotaBytes }
   }
@@ -96,15 +123,18 @@ export class WorkAssistantWorkspaceFiles {
     const name = safeFileName(typeof request.headers['x-workspace-file-name'] === 'string' ? request.headers['x-workspace-file-name'] : undefined)
     const declaredLength = contentLength(request)
     if (declaredLength !== null && declaredLength > workAssistantMaximumFileBytes) throw new HttpError(413, '单个表格文件不能超过 200MB。')
-    const workspace = this.workspacePath(accountId)
-    await mkdir(workspace, { recursive: true })
-    const target = resolveWorkspacePath(workspace, name)
+    const workspace = await this.prepareWorkspace(accountId)
+    const target = resolveWorkspacePath(workspace, `${uploadDirectory}/${name}`)
     let previousSize = 0
     try { previousSize = (await stat(target)).size } catch { /* 新文件无需扣除旧大小。 */ }
-    const usedBytes = await directorySize(workspace)
+    const [uploadBytes, outputBytes] = await Promise.all([
+      directorySize(path.join(workspace, uploadDirectory)),
+      directorySize(path.join(workspace, outputDirectory)),
+    ])
+    const usedBytes = uploadBytes + outputBytes
     if (usedBytes - previousSize + (declaredLength ?? 0) > workAssistantQuotaBytes) throw new HttpError(413, '个人工作区空间不足，请删除不再需要的文件后再上传。')
 
-    const temporary = path.join(workspace, `.upload-${crypto.randomUUID()}`)
+    const temporary = path.join(workspace, internalDirectory, `.upload-${crypto.randomUUID()}`)
     let received = 0
     const limit = async function* () {
       for await (const chunk of request) {
@@ -119,7 +149,7 @@ export class WorkAssistantWorkspaceFiles {
       if (received === 0) throw new HttpError(400, '不能上传空文件。')
       await rename(temporary, target)
       const details = await stat(target)
-      return { path: name, name, size: details.size, updatedAt: details.mtime.toISOString() }
+      return { path: `${uploadDirectory}/${name}`, name, size: details.size, updatedAt: details.mtime.toISOString() }
     } catch (error) {
       await rm(temporary, { force: true })
       throw error
@@ -128,7 +158,9 @@ export class WorkAssistantWorkspaceFiles {
 
   async remove(accountId: string, requestedPath: string | null): Promise<void> {
     const workspace = this.workspacePath(accountId)
-    const target = resolveWorkspacePath(workspace, safeRelativePath(requestedPath))
+    const relativePath = safeRelativePath(requestedPath)
+    if (!isVisibleFilePath(relativePath)) throw new HttpError(400, '只能删除上传文件或处理结果。')
+    const target = resolveWorkspacePath(workspace, relativePath)
     let details
     try { details = await lstat(target) } catch { throw new HttpError(404, '文件不存在。') }
     if (!details.isFile()) throw new HttpError(400, '只能删除文件。')
@@ -138,6 +170,7 @@ export class WorkAssistantWorkspaceFiles {
   async download(accountId: string, requestedPath: string | null, response: ServerResponse): Promise<void> {
     const workspace = this.workspacePath(accountId)
     const relativePath = safeRelativePath(requestedPath)
+    if (!isVisibleFilePath(relativePath)) throw new HttpError(400, '只能下载上传文件或处理结果。')
     const target = resolveWorkspacePath(workspace, relativePath)
     let details
     try { details = await lstat(target) } catch { throw new HttpError(404, '文件不存在。') }

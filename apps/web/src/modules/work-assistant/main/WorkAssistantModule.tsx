@@ -1,6 +1,6 @@
 import type { HistoryEntry, SessionId, WorkspaceView } from '@deepseek-ai/dsh-client-connection/client'
 import { Download, FileSpreadsheet, LoaderCircle, RotateCcw, Send, Trash2, Upload } from 'lucide-react'
-import { type ChangeEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ChangeEvent, type DragEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
 import { AccountDshApiClient, unwrapDshResponse } from '../../../shared/dsh/client'
@@ -73,6 +73,29 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return body
 }
 
+function uploadWorkspaceFile(file: File, onProgress: (progress: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    request.open('POST', '/api/work-assistant/files')
+    request.setRequestHeader('content-type', file.type || 'application/octet-stream')
+    request.setRequestHeader('x-workspace-file-name', encodeURIComponent(file.name))
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100))
+    }
+    request.onerror = () => reject(new Error('文件上传失败，请检查网络后重试。'))
+    request.onload = () => {
+      let body: { error?: unknown } = {}
+      try { body = JSON.parse(request.responseText) as { error?: unknown } } catch { /* 由状态码处理。 */ }
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(typeof body.error === 'string' ? body.error : '文件上传失败。'))
+        return
+      }
+      resolve()
+    }
+    request.send(file)
+  })
+}
+
 export function WorkAssistantModule(_props: ModuleProps) {
   const client = useMemo(() => new AccountDshApiClient('/api/agents/work-assistant'), [])
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null)
@@ -84,10 +107,13 @@ export function WorkAssistantModule(_props: ModuleProps) {
   const [draft, setDraft] = useState('')
   const [initializing, setInitializing] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [draggingFiles, setDraggingFiles] = useState(false)
   const [sending, setSending] = useState(false)
   const [clearing, setClearing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+  const dragDepth = useRef(0)
 
   const refreshFiles = useCallback(async () => {
     const result = await apiRequest<{ files: readonly WorkspaceFile[]; usedBytes: number; quotaBytes: number }>('/api/work-assistant/files')
@@ -139,20 +165,42 @@ export function WorkAssistantModule(_props: ModuleProps) {
   async function upload(file: File) {
     if (file.size > maximumFileBytes) { setError('单个表格文件不能超过 200MB。'); return }
     setUploading(true)
+    setUploadProgress(0)
     setError(null)
     try {
-      await apiRequest('/api/work-assistant/files', { method: 'POST', headers: { 'content-type': file.type || 'application/octet-stream', 'x-workspace-file-name': encodeURIComponent(file.name) }, body: file })
+      await uploadWorkspaceFile(file, setUploadProgress)
       await refreshFiles()
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '文件上传失败。')
     } finally {
       setUploading(false)
+      setUploadProgress(null)
       if (fileInput.current) fileInput.current.value = ''
     }
   }
 
   function selectFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
+    if (file) void upload(file)
+  }
+
+  function dragEnter(event: DragEvent<HTMLElement>) {
+    event.preventDefault()
+    dragDepth.current += 1
+    setDraggingFiles(true)
+  }
+
+  function dragLeave(event: DragEvent<HTMLElement>) {
+    event.preventDefault()
+    dragDepth.current = Math.max(0, dragDepth.current - 1)
+    if (dragDepth.current === 0) setDraggingFiles(false)
+  }
+
+  function dropFile(event: DragEvent<HTMLElement>) {
+    event.preventDefault()
+    dragDepth.current = 0
+    setDraggingFiles(false)
+    const file = event.dataTransfer.files[0]
     if (file) void upload(file)
   }
 
@@ -205,8 +253,10 @@ export function WorkAssistantModule(_props: ModuleProps) {
     </section>
     {error && <div className="work-assistant__error">{error}</div>}
     <div className="work-assistant__layout">
-      <section className="work-assistant__files panel-card">
-        <header><div><h2>工作文件</h2><p>支持表格、Word、Markdown、文本、PDF、RTF，单个文件不超过 200MB。</p></div><button className="work-assistant__upload" type="button" onClick={() => fileInput.current?.click()} disabled={uploading || initializing}><Upload size={16} />{uploading ? '正在上传' : '上传文件'}</button><input ref={fileInput} type="file" accept=".csv,.tsv,.xls,.xlsx,.doc,.docx,.md,.txt,.pdf,.rtf" onChange={selectFile} /></header>
+      <section className={`work-assistant__files panel-card${draggingFiles ? ' is-dragging' : ''}`} onDragEnter={dragEnter} onDragOver={(event) => event.preventDefault()} onDragLeave={dragLeave} onDrop={dropFile}>
+        <header><div><h2>工作文件</h2><p>支持表格、Word、Markdown、文本、PDF、RTF，单个文件不超过 200MB；可拖拽上传。</p></div><button className="work-assistant__upload" type="button" onClick={() => fileInput.current?.click()} disabled={uploading || initializing}><Upload size={16} />{uploading ? `正在上传${uploadProgress === null ? '' : ` ${uploadProgress}%`}` : '上传文件'}</button><input ref={fileInput} type="file" accept=".csv,.tsv,.xls,.xlsx,.doc,.docx,.md,.txt,.pdf,.rtf" onChange={selectFile} /></header>
+        {draggingFiles && <div className="work-assistant__drop-hint">松开以上传文件</div>}
+        {uploading && <div className="work-assistant__upload-progress" aria-label="上传进度"><i><b style={{ width: `${uploadProgress ?? 0}%` }} /></i><span>{uploadProgress ?? 0}%</span></div>}
         <div className="work-assistant__quota"><span>已使用 {formatBytes(usedBytes)} / {formatBytes(quotaBytes)}</span><i><b style={{ width: `${Math.min(100, usedBytes / quotaBytes * 100)}%` }} /></i></div>
         {files.length === 0 ? <div className="work-assistant__empty"><FileSpreadsheet size={24} />上传一个表格或文档后，告诉工作助理你希望如何处理。</div> : <div className="work-assistant__file-list">{files.map((file) => <article key={file.path}><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{formatBytes(file.size)} · {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.updatedAt))}</small></div><a href={`/api/work-assistant/files/download?path=${encodeURIComponent(file.path)}`} title="下载"><Download size={16} /></a><button type="button" onClick={() => void removeFile(file)} title="删除"><Trash2 size={16} /></button></article>)}</div>}
       </section>

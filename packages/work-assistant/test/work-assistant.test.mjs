@@ -18,7 +18,9 @@ test('工作助理为账号工作目录注册默认工作区和处理边界', as
       webServer: { register() { return () => undefined } },
     })
     assert.deepEqual(workspaces, [{ workspacePath: '/tmp/hegongzuo-work-assistant-test', title: '工作文件' }])
-    assert.match(sections[0].text, /不得删除、覆盖或改名原始上传文件/)
+    assert.match(sections[0].text, /原始上传文件位于 uploads\//)
+    assert.match(sections[0].text, /交付结果必须保存为 outputs\//)
+    assert.match(sections[0].text, /中间文件保存到 .work\//)
   } finally {
     if (previous === undefined) delete process.env.HEGONGZUO_AGENT_WORKSPACE
     else process.env.HEGONGZUO_AGENT_WORKSPACE = previous

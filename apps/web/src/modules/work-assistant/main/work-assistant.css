@@ -20,6 +20,8 @@
 .work-assistant__layout { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.5fr); gap: 18px; align-items: start; }
 .work-assistant__files,
 .work-assistant__conversation { padding: 18px; }
+.work-assistant__files { position: relative; transition: border-color .15s, background .15s; }
+.work-assistant__files.is-dragging { outline: 2px dashed var(--jade-600); outline-offset: -7px; background: var(--jade-50); }
 .work-assistant__files h2,
 .work-assistant__conversation h2 { font-size: 16px; color: var(--ink-800); }
 .work-assistant__upload,
@@ -31,6 +33,10 @@
 .work-assistant__quota { margin: 18px 0 12px; color: var(--ink-500); font-size: 12px; }
 .work-assistant__quota i { display: block; overflow: hidden; height: 6px; margin-top: 7px; border-radius: 10px; background: var(--ink-100); }
 .work-assistant__quota b { display: block; height: 100%; border-radius: inherit; background: var(--jade-600); }
+.work-assistant__drop-hint { margin: 14px 0 -3px; border: 1px dashed var(--jade-500); border-radius: 8px; padding: 11px; color: var(--jade-700); background: white; font-size: 13px; text-align: center; }
+.work-assistant__upload-progress { display: flex; align-items: center; gap: 8px; margin: 14px 0 -3px; color: var(--ink-500); font-size: 12px; }
+.work-assistant__upload-progress i { display: block; overflow: hidden; flex: 1; height: 6px; border-radius: 10px; background: var(--ink-100); }
+.work-assistant__upload-progress b { display: block; height: 100%; border-radius: inherit; background: var(--jade-600); transition: width .12s linear; }
 .work-assistant__file-list { display: grid; gap: 7px; }
 .work-assistant__file-list article { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fbfdfc; }
 .work-assistant__file-list article > svg { flex: 0 0 auto; color: var(--jade-700); }
