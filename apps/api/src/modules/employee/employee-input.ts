@@ -2,6 +2,8 @@
 import {
   employeeStatuses,
   employmentTypes,
+  isValidChineseIdNumber,
+  isValidChinesePhone,
   type EmployeeStatus,
   type EmploymentType,
 } from '@hegongzuo/employee-domain'
@@ -129,11 +131,16 @@ export function parseEmployeeInput(value: unknown): EmployeeInput {
     throw new EmployeeValidationError('hireDate 格式无效。')
   }
   const idNumber = optionalString(record, 'idNumber')
+  const workPhone = requiredString(record, 'workPhone')
+  if (!isValidChinesePhone(workPhone)) throw new EmployeeValidationError('workPhone 格式无效。')
+  const emergencyContactPhone = optionalString(record, 'emergencyContactPhone')
+  if (emergencyContactPhone && !isValidChinesePhone(emergencyContactPhone)) throw new EmployeeValidationError('emergencyContactPhone 格式无效。')
+  if (idNumber && !isValidChineseIdNumber(idNumber)) throw new EmployeeValidationError('idNumber 格式无效。')
 
   return {
     displayName: requiredString(record, 'displayName'),
     workEmail,
-    workPhone: requiredString(record, 'workPhone'),
+    workPhone,
     departmentName: requiredString(record, 'departmentName'),
     jobTitle: requiredString(record, 'jobTitle'),
     employmentType: employmentType as EmploymentType,
@@ -155,7 +162,7 @@ export function parseEmployeeInput(value: unknown): EmployeeInput {
     hasChildren: optionalString(record, 'hasChildren'),
     hometown: optionalString(record, 'hometown'),
     emergencyContact: optionalString(record, 'emergencyContact'),
-    emergencyContactPhone: optionalString(record, 'emergencyContactPhone'),
+    emergencyContactPhone,
     residentialAddress: optionalString(record, 'residentialAddress'),
     idAddress: optionalString(record, 'idAddress'),
     bankAccount: optionalString(record, 'bankAccount'),

@@ -30,6 +30,27 @@ export const employmentTypes = [
 
 export type EmploymentType = (typeof employmentTypes)[number]
 
+/** 中国大陆手机号码或固定电话号码（固定电话可带区号及连字符）。 */
+export function isValidChinesePhone(value: string): boolean {
+  const normalized = value.replace(/[\s-]/g, '')
+  return /^1[3-9]\d{9}$/.test(normalized) || /^0\d{9,11}$/.test(normalized)
+}
+
+/** 校验 18 位中国居民身份证的格式、出生日期与校验码。 */
+export function isValidChineseIdNumber(value: string): boolean {
+  const normalized = value.trim().toUpperCase()
+  if (!/^\d{17}[\dX]$/.test(normalized)) return false
+  const year = Number(normalized.slice(6, 10))
+  const month = Number(normalized.slice(10, 12))
+  const day = Number(normalized.slice(12, 14))
+  const birthday = new Date(Date.UTC(year, month - 1, day))
+  if (birthday.getUTCFullYear() !== year || birthday.getUTCMonth() !== month - 1 || birthday.getUTCDate() !== day) return false
+  const weights = [7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2]
+  const checks = '10X98765432'
+  const checksum = normalized.slice(0, 17).split('').reduce((sum, digit, index) => sum + Number(digit) * (weights[index] ?? 0), 0)
+  return checks[checksum % 11] === normalized[17]
+}
+
 // 前端默认脱敏、Agent 工具白名单不返回的敏感字段（单一事实源）
 export const sensitiveEmployeeFields = [
   'idNumber',

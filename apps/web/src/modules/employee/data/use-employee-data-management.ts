@@ -1,5 +1,6 @@
 // 员工管理 / 数据状态与数据访问边界。
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { isValidChineseIdNumber, isValidChinesePhone } from '@hegongzuo/employee-domain'
 
 import { createEmployeeRecord, departEmployeeRecord, nextEmployeeIdentity, readEmployeeRecords, resumeUploadPayload, updateEmployeeRecord, type EmployeeRecord } from './employee-data'
 import { type SortField } from './employee-sort'
@@ -20,6 +21,10 @@ function validateEmployee(draft: EmployeeRecord, employees: readonly EmployeeRec
   if ([draft.displayName, draft.workPhone, draft.departmentName, draft.jobTitle, draft.hireDate].some((value) => !value.trim())) return '请填写全部必填字段。'
   const workEmail = draft.workEmail?.trim()
   const idNumber = draft.idNumber?.trim()
+  const emergencyContactPhone = draft.emergencyContactPhone?.trim()
+  if (!isValidChinesePhone(draft.workPhone)) return '请填写有效的工作电话。'
+  if (emergencyContactPhone && !isValidChinesePhone(emergencyContactPhone)) return '请填写有效的紧急联系人电话。'
+  if (idNumber && !isValidChineseIdNumber(idNumber)) return '请填写有效的 18 位身份证号。'
   if (workEmail && employees.some((employee) => employee.id !== draft.id && employee.workEmail?.toLocaleLowerCase() === workEmail.toLocaleLowerCase())) return '工作邮箱不能重复。'
   if (idNumber && employees.some((employee) => employee.id !== draft.id && employee.idNumber?.trim() === idNumber)) return '身份证号不能重复。'
   return null
