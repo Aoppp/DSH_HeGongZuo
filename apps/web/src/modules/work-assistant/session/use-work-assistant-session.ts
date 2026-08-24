@@ -2,7 +2,7 @@ import type { HistoryEntry, SessionId, SessionEvent, WorkspaceView } from '@deep
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AccountDshApiClient, unwrapDshResponse } from '../../../shared/dsh/client'
-import { appendSessionEvents, latestTurnFinished, mergeHistoryEntries, messagesFromHistory, type AssistantMessage } from '../main/conversation'
+import { appendSessionEvents, hasPendingInteractiveTool, latestTurnFinished, mergeHistoryEntries, messagesFromHistory, type AssistantMessage } from '../main/conversation'
 
 export type WorkAssistantConnection = 'connecting' | 'connected' | 'reconnecting' | 'failed'
 export type WorkAssistantTask = 'idle' | 'submitting' | 'running' | 'stopping'
@@ -53,7 +53,17 @@ export function useWorkAssistantSession() {
   const queueEvent = useCallback((event: SessionEvent) => {
     lastProgressAt.current = Date.now()
     pendingEvents.current.set(event.seq, event)
-    if (event.type === 'user/message' && event.data.source.kind === 'user') setPendingMessage(null)
+    if (event.type === 'tool/call' && event.data.name === 'ask_user_question') {
+      const target = activeSessionRef.current
+      if (target) {
+        transitionTask('stopping')
+        void client.sessions.cancel({ sessionId: target }).finally(() => {
+          if (activeSessionRef.current !== target) return
+          settleTask()
+          setError('当前任务需要补充信息，已结束等待。请直接发送完整问题。')
+        })
+      }
+    }
     if (event.type === 'turn/start' || event.type === 'step/start' || event.type === 'assistant/chunk') transitionTask('running')
     if (event.type === 'turn/end') settleTask()
     if (flushTimer.current !== null) return
@@ -62,14 +72,23 @@ export function useWorkAssistantSession() {
       const events = [...pendingEvents.current.values()]
       pendingEvents.current.clear()
       setHistory((current) => appendSessionEvents(current, events))
+      if (events.some((item) => item.type === 'user/message' && item.data.source.kind === 'user')) setPendingMessage(null)
     }, 80)
-  }, [settleTask, transitionTask])
+  }, [client, settleTask, transitionTask])
 
   const loadHistory = useCallback(async (target: SessionId, recentOnly: boolean, signal?: AbortSignal) => {
     const response = unwrapDshResponse(await client.sessions.history({ sessionId: target, maxMessages: recentOnly ? 4 : 60 }, signal))
     if (activeSessionRef.current !== target) return false
     clearEventQueue()
     setHistory((current) => recentOnly ? mergeHistoryEntries(current, response.events) : response.events)
+    if (hasPendingInteractiveTool(response.events)) {
+      try { unwrapDshResponse(await client.sessions.cancel({ sessionId: target }, signal)) } catch { /* 可能已由运行时结束。 */ }
+      if (activeSessionRef.current === target) {
+        settleTask()
+        setError('上一条任务等待了网页不支持的交互，已自动解除。请重新发送完整问题。')
+      }
+      return true
+    }
     if (latestTurnFinished(response.events)) settleTask()
     return latestTurnFinished(response.events)
   }, [clearEventQueue, client, settleTask])

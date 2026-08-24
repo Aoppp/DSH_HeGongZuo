@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { appendSessionEvents, latestTurnFinished, mergeHistoryEntries, mergeHistoryMessages, mergeHistoryWindow, messagesFromHistory, parseMarkdownTable } from '../src/modules/work-assistant/main/conversation.ts'
+import { appendSessionEvents, hasPendingInteractiveTool, latestTurnFinished, mergeHistoryEntries, mergeHistoryMessages, mergeHistoryWindow, messagesFromHistory, parseMarkdownTable } from '../src/modules/work-assistant/main/conversation.ts'
 
 test('工作助理在服务端历史尚未写入时保留刚发送的消息', () => {
   const history = [{ id: 'user-saved', kind: 'user', text: '之前的消息' }]
@@ -87,7 +87,7 @@ test('历史压缩片段与实时事件竞态时不会重复正文', () => {
 test('工作助理以最新轮次的完成事件结束等待，不依赖滞后的运行状态', () => {
   assert.equal(latestTurnFinished(/** @type {any} */ ([
     { event: { type: 'turn/start', seq: 10, data: { turn: 3 } } },
-    { event: { type: 'assistant/message', seq: 11, data: { turn: 3 } } },
+    { event: { type: 'assistant/message', seq: 11, data: { turn: 3, message: { content: [{ type: 'text', text: '完成' }] } } } },
     { event: { type: 'turn/end', seq: 12, data: { turn: 3, reason: { kind: 'completed' } } } },
   ])), true)
   assert.equal(latestTurnFinished(/** @type {any} */ ([
@@ -96,14 +96,28 @@ test('工作助理以最新轮次的完成事件结束等待，不依赖滞后�
   ])), false)
   assert.equal(latestTurnFinished(/** @type {any} */ ([
     { event: { type: 'turn/start', seq: 20, data: { turn: 5 } } },
-    { event: { type: 'assistant/message', seq: 21, data: { turn: 5 } } },
+    { event: { type: 'assistant/message', seq: 21, data: { turn: 5, message: { content: [{ type: 'text', text: '完成' }] } } } },
   ])), true)
+})
+
+test('带工具调用的完整消息不能被误判为本轮已经结束', () => {
+  assert.equal(latestTurnFinished(/** @type {any} */ ([
+    { event: { type: 'turn/start', seq: 20, data: { turn: 5 } } },
+    { event: { type: 'assistant/message', seq: 21, data: { turn: 5, message: { content: [{ type: 'text', text: '请补充信息。' }, { type: 'tool-call', id: 'call-1', name: 'ask_user_question' }] } } } },
+    { event: { type: 'tool/call', seq: 22, data: { turn: 5, callId: 'call-1', name: 'ask_user_question' } } },
+  ])), false)
+})
+
+test('工作助理识别尚未返回结果的交互式提问工具', () => {
+  const call = { event: { type: 'tool/call', seq: 22, data: { callId: 'call-1', name: 'ask_user_question' } } }
+  assert.equal(hasPendingInteractiveTool(/** @type {any} */ ([call])), true)
+  assert.equal(hasPendingInteractiveTool(/** @type {any} */ ([call, { event: { type: 'turn/end', seq: 23, data: { turn: 5 } } }])), false)
 })
 
 test('长回复历史截掉用户消息后仍能按轮次识别完成', () => {
   assert.equal(latestTurnFinished(/** @type {any} */ ([
     { event: { type: 'text-chunks', seq0: 500, data: { turn: 8, step: 1, texts: ['回复后半段'] } } },
-    { event: { type: 'assistant/message', seq: 620, data: { turn: 8, step: 1, message: {} } } },
+    { event: { type: 'assistant/message', seq: 620, data: { turn: 8, step: 1, message: { content: [{ type: 'text', text: '完整回复' }] } } } },
   ])), true)
 })
 

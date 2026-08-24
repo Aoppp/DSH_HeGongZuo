@@ -56,6 +56,20 @@ export function appendSessionEvents(current: readonly HistoryEntry[], events: re
   return mergeHistoryEntries(current, events.map((event) => ({ event })))
 }
 
+/** 网页不承接交互式工具结果；识别未结束的提问调用，以便自动解除旧会话阻塞。 */
+export function hasPendingInteractiveTool(entries: readonly HistoryEntry[]): boolean {
+  const pending = new Set<string>()
+  for (const { event } of entries.map((entry) => entry).sort((left, right) => eventSequence(left.event) - eventSequence(right.event))) {
+    if (event.type === 'tool/call' && event.data.name === 'ask_user_question') pending.add(String(event.data.callId))
+    if (event.type === 'tool/result') {
+      const block = event.data.message.content[0]
+      if (block?.type === 'tool-result') pending.delete(String(block.toolCallId))
+    }
+    if (event.type === 'turn/end') pending.clear()
+  }
+  return pending.size > 0
+}
+
 export function messagesFromHistory(entries: readonly HistoryEntry[]): readonly AssistantMessage[] {
   const finalAssistantMessages = new Set<string>()
   for (const entry of entries) {
@@ -145,7 +159,11 @@ export function latestTurnFinished(entries: readonly HistoryEntry[]): boolean {
     latestObservedTurn = Math.max(latestObservedTurn, turn)
     // assistant/message 是 DSH 已持久化的完整正文。某些历史响应会先返回它、稍后
     // 才带 turn/end；将其视为完成可避免完整回复仍显示“正在生成”。
-    if (event.type === 'assistant/message' || event.type === 'turn/end') latestCompletedTurn = Math.max(latestCompletedTurn, turn)
+    if (event.type === 'assistant/message') {
+      const hasToolCall = event.data.message.content.some((part) => part.type === 'tool-call')
+      if (!hasToolCall) latestCompletedTurn = Math.max(latestCompletedTurn, turn)
+    }
+    if (event.type === 'turn/end') latestCompletedTurn = Math.max(latestCompletedTurn, turn)
   }
   // 长回复的历史窗口可能已截掉本轮 user/message，因此完成判断必须按 turn，不能
   // 依赖用户消息仍在当前分页中。
