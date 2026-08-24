@@ -22,6 +22,7 @@
 .work-assistant__files,
 .work-assistant__conversation { padding: 18px; }
 .work-assistant__files { position: relative; }
+.work-assistant__conversation { min-width: 0; }
 .work-assistant__files h2,
 .work-assistant__conversation h2 { font-size: 16px; color: var(--ink-800); }
 .work-assistant__zone { margin-top: 14px; border: 1px solid var(--line); border-radius: 9px; padding: 13px; background: #fbfdfc; transition: border-color .15s, background .15s; }
@@ -58,7 +59,7 @@
 .work-assistant__file-list button:hover { background: var(--ink-100); color: var(--ink-800); }
 .work-assistant__empty { display: grid; min-height: 150px; place-content: center; gap: 9px; color: var(--ink-400); font-size: 13px; text-align: center; }
 .work-assistant__empty svg { margin: 0 auto; color: var(--jade-600); }
-.work-assistant__messages { display: grid; align-content: start; gap: 10px; min-height: 370px; max-height: 550px; overflow: auto; margin: 16px 0; padding-right: 4px; }
+.work-assistant__messages { display: grid; height: clamp(370px, 52vh, 550px); align-content: start; gap: 10px; overflow: auto; overflow-anchor: none; scrollbar-gutter: stable; margin: 16px 0; padding-right: 4px; }
 .work-assistant__message { max-width: 88%; border-radius: 10px; padding: 10px 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.65; }
 .work-assistant__message--user { justify-self: end; background: var(--jade-700); color: white; }
 .work-assistant__message--assistant { justify-self: start; background: var(--ink-100); color: var(--ink-700); }
@@ -77,5 +78,6 @@
 .work-assistant__working { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-500); font-size: 12px; }
 .work-assistant__composer { align-items: flex-end; border-top: 1px solid var(--line); padding-top: 14px; }
 .work-assistant__composer textarea { min-height: 66px; flex: 1; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 9px; color: var(--ink-800); font: inherit; font-size: 13px; }
+.work-assistant__composer button { min-width: 92px; justify-content: center; }
 @media (max-width: 900px) { .work-assistant__layout { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .work-assistant__heading { align-items: flex-start; flex-direction: column; } .work-assistant__files > header { align-items: flex-start; } }
+@media (max-width: 560px) { .work-assistant__heading { align-items: flex-start; flex-direction: column; } .work-assistant__files > header { align-items: flex-start; } .work-assistant__messages { height: clamp(320px, 52vh, 440px); } }
