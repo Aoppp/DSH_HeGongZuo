@@ -12,6 +12,10 @@ test('工作助理为账号工作目录注册默认工作区和处理边界', as
     await apply({
       workspaceRegistry: { async create(workspacePath, title) { workspaces.push({ workspacePath, title }) } },
       systemPrompt: { section(section) { sections.push(section) } },
+      agents: { create() {}, resume() {} },
+      on() { return () => undefined },
+      effect() { return undefined },
+      webServer: { register() { return () => undefined } },
     })
     assert.deepEqual(workspaces, [{ workspacePath: '/tmp/hegongzuo-work-assistant-test', title: '工作文件' }])
     assert.match(sections[0].text, /不得删除、覆盖或改名原始上传文件/)

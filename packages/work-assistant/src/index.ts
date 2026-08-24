@@ -3,8 +3,10 @@ import '@deepseek-ai/dsh-system-prompt'
 import '@deepseek-ai/dsh-tools'
 import '@deepseek-ai/dsh-workspace'
 
+import { registerSessionDeletionRoute } from './session-deletion.js'
+
 export const name = 'hegongzuo-work-assistant'
-export const inject = ['tools', 'systemPrompt', 'workspaceRegistry']
+export const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'webServer', 'agents', 'sessions', 'sessionPersistence', 'storageDomain']
 
 export async function apply(ctx: Context): Promise<void> {
   const workspacePath = process.env.HEGONGZUO_AGENT_WORKSPACE?.trim()
@@ -24,4 +26,5 @@ export async function apply(ctx: Context): Promise<void> {
       '不得执行与当前工作区文件处理无关的命令或操作。',
     ].join('\n'),
   })
+  registerSessionDeletionRoute(ctx)
 }

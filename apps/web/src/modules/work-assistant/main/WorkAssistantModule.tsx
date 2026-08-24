@@ -1,5 +1,5 @@
 import type { HistoryEntry, SessionId, WorkspaceView } from '@deepseek-ai/dsh-client-connection/client'
-import { Download, FileSpreadsheet, LoaderCircle, Send, Trash2, Upload } from 'lucide-react'
+import { Download, FileSpreadsheet, LoaderCircle, RotateCcw, Send, Trash2, Upload } from 'lucide-react'
 import { type ChangeEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
@@ -45,6 +45,27 @@ function messagesFromHistory(entries: readonly HistoryEntry[]): readonly Assista
   return messages
 }
 
+function renderInline(text: string) {
+  return text.split(/(\*\*[^*\n]+\*\*|`[^`\n]+`|\*[^*\n]+\*)/g).map((part, index) => {
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={index}>{part.slice(2, -2)}</strong>
+    if (part.startsWith('`') && part.endsWith('`')) return <code key={index}>{part.slice(1, -1)}</code>
+    if (part.startsWith('*') && part.endsWith('*')) return <em key={index}>{part.slice(1, -1)}</em>
+    return part
+  })
+}
+
+function MarkdownMessage({ text }: { readonly text: string }) {
+  return <>{text.split(/\n{2,}/).map((block, blockIndex) => {
+    const lines = block.split('\n').filter(Boolean)
+    if (lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line))) return <ul key={blockIndex}>{lines.map((line, lineIndex) => <li key={lineIndex}>{renderInline(line.replace(/^[-*]\s+/, ''))}</li>)}</ul>
+    return <>{lines.map((line, lineIndex) => {
+      const heading = line.match(/^#{1,3}\s+(.+)$/)
+      if (heading) return <strong className="work-assistant__message-heading" key={lineIndex}>{renderInline(heading[1] ?? '')}</strong>
+      return <p key={lineIndex}>{renderInline(line)}</p>
+    })}</>
+  })}</>
+}
+
 async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, { credentials: 'same-origin', ...init })
   const body = await response.json().catch(() => ({})) as { error?: unknown } & T
@@ -64,6 +85,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
   const [initializing, setInitializing] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [sending, setSending] = useState(false)
+  const [clearing, setClearing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -143,6 +165,20 @@ export function WorkAssistantModule(_props: ModuleProps) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : '文件删除失败。') }
   }
 
+  async function clearConversation() {
+    if (!sessionId || !workspace || clearing) return
+    setClearing(true)
+    setError(null)
+    try {
+      await client.deleteSession(sessionId)
+      const next = unwrapDshResponse(await client.sessions.create({ workspaceId: workspace.workspaceId })).sessionId
+      setSessionId(next)
+      setMessages([])
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '清空对话失败。')
+    } finally { setClearing(false) }
+  }
+
   async function submit() {
     const text = draft.trim()
     if (!text || !sessionId || sending) return
@@ -175,8 +211,8 @@ export function WorkAssistantModule(_props: ModuleProps) {
         {files.length === 0 ? <div className="work-assistant__empty"><FileSpreadsheet size={24} />上传一个表格或文档后，告诉工作助理你希望如何处理。</div> : <div className="work-assistant__file-list">{files.map((file) => <article key={file.path}><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{formatBytes(file.size)} · {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.updatedAt))}</small></div><a href={`/api/work-assistant/files/download?path=${encodeURIComponent(file.path)}`} title="下载"><Download size={16} /></a><button type="button" onClick={() => void removeFile(file)} title="删除"><Trash2 size={16} /></button></article>)}</div>}
       </section>
       <section className="work-assistant__conversation panel-card">
-        <header><div><h2>任务处理</h2><p>原始文件会保留；处理结果将生成新文件。</p></div></header>
-        <div className="work-assistant__messages">{initializing ? <div className="work-assistant__empty"><LoaderCircle className="spin" size={22} />正在连接工作空间…</div> : messages.length === 0 ? <div className="work-assistant__empty">例如：将“销售数据.xlsx”按客户汇总，或将“会议纪要.docx”整理为一份新的行动清单。</div> : messages.map((message) => <article className={`work-assistant__message work-assistant__message--${message.kind}`} key={message.id}>{message.text}</article>)}{sending && <div className="work-assistant__working"><LoaderCircle className="spin" size={15} />正在处理文件…</div>}</div>
+        <header><div><h2>任务处理</h2><p>原始文件会保留；处理结果将生成新文件。</p></div><button className="work-assistant__clear" type="button" onClick={() => void clearConversation()} disabled={!sessionId || sending || clearing}>{clearing ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}清空对话</button></header>
+        <div className="work-assistant__messages">{initializing ? <div className="work-assistant__empty"><LoaderCircle className="spin" size={22} />正在连接工作空间…</div> : messages.length === 0 ? <div className="work-assistant__empty">例如：将“销售数据.xlsx”按客户汇总，或将“会议纪要.docx”整理为一份新的行动清单。</div> : messages.map((message) => <article className={`work-assistant__message work-assistant__message--${message.kind}`} key={message.id}>{message.kind === 'assistant' ? <MarkdownMessage text={message.text} /> : message.text}</article>)}{sending && <div className="work-assistant__working"><LoaderCircle className="spin" size={15} />正在处理文件…</div>}</div>
         <div className="work-assistant__composer"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={keyDown} disabled={!sessionId || sending} placeholder="描述你希望如何整理当前工作区的文件或文档…" rows={3} /><button type="button" onClick={() => void submit()} disabled={!draft.trim() || !sessionId || sending}><Send size={18} />发送</button></div>
       </section>
     </div>

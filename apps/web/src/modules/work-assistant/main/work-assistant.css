@@ -24,6 +24,7 @@
 .work-assistant__conversation h2 { font-size: 16px; color: var(--ink-800); }
 .work-assistant__upload,
 .work-assistant__composer button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 9px 12px; background: var(--jade-700); color: white; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.work-assistant__clear { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: white; color: var(--ink-600); font: inherit; font-size: 12px; cursor: pointer; }
 .work-assistant__upload:disabled,
 .work-assistant__composer button:disabled { opacity: .55; cursor: not-allowed; }
 .work-assistant__files input { display: none; }
@@ -48,6 +49,12 @@
 .work-assistant__message { max-width: 88%; border-radius: 10px; padding: 10px 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.65; }
 .work-assistant__message--user { justify-self: end; background: var(--jade-700); color: white; }
 .work-assistant__message--assistant { justify-self: start; background: var(--ink-100); color: var(--ink-700); }
+.work-assistant__message p { margin: 0; }
+.work-assistant__message p + p { margin-top: 7px; }
+.work-assistant__message ul { margin: 7px 0 0; padding-left: 18px; }
+.work-assistant__message li + li { margin-top: 3px; }
+.work-assistant__message code { border-radius: 4px; padding: 1px 4px; background: rgba(0, 0, 0, .08); font-size: .92em; }
+.work-assistant__message-heading { display: block; margin-bottom: 5px; }
 .work-assistant__working { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-500); font-size: 12px; }
 .work-assistant__composer { align-items: flex-end; border-top: 1px solid var(--line); padding-top: 14px; }
 .work-assistant__composer textarea { min-height: 66px; flex: 1; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 9px; color: var(--ink-800); font: inherit; font-size: 13px; }
