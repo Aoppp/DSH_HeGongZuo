@@ -93,6 +93,8 @@ export function WorkAssistantModule(_props: ModuleProps) {
   const dragDepth = useRef(0)
   const activeSession = useRef<SessionId | null>(null)
   const lastProgressAt = useRef(Date.now())
+  const inputFiles = files.filter((file) => file.path.startsWith('uploads/'))
+  const outputFiles = files.filter((file) => file.path.startsWith('outputs/'))
 
   const refreshFiles = useCallback(async () => {
     const result = await apiRequest<{ files: readonly WorkspaceFile[]; usedBytes: number; quotaBytes: number }>('/api/work-assistant/files')
@@ -262,15 +264,22 @@ export function WorkAssistantModule(_props: ModuleProps) {
     </section>
     {error && <div className="work-assistant__error">{error}</div>}
     <div className="work-assistant__layout">
-      <section className={`work-assistant__files panel-card${draggingFiles ? ' is-dragging' : ''}`} onDragEnter={dragEnter} onDragOver={(event) => event.preventDefault()} onDragLeave={dragLeave} onDrop={dropFile}>
-        <header><div><h2>工作文件</h2><p>支持表格、Word、Markdown、文本、PDF、RTF，单个文件不超过 200MB；可拖拽上传。</p></div><button className="work-assistant__upload" type="button" onClick={() => fileInput.current?.click()} disabled={uploading || initializing}><Upload size={16} />{uploading ? `正在上传${uploadProgress === null ? '' : ` ${uploadProgress}%`}` : '上传文件'}</button><input ref={fileInput} type="file" accept=".csv,.tsv,.xls,.xlsx,.doc,.docx,.md,.txt,.pdf,.rtf" onChange={selectFile} /></header>
-        {draggingFiles && <div className="work-assistant__drop-hint">松开以上传文件</div>}
-        {uploading && <div className="work-assistant__upload-progress" aria-label="上传进度"><i><b style={{ width: `${uploadProgress ?? 0}%` }} /></i><span>{uploadProgress ?? 0}%</span></div>}
+      <section className="work-assistant__files panel-card">
+        <header><div><h2>工作区文件</h2><p>输入区用于提交原始文件；输出区仅保留你明确要求生成的结果。</p></div></header>
+        <section className={`work-assistant__zone work-assistant__zone--input${draggingFiles ? ' is-dragging' : ''}`} onDragEnter={dragEnter} onDragOver={(event) => event.preventDefault()} onDragLeave={dragLeave} onDrop={dropFile}>
+          <header><div><h3>输入区</h3><p>上传需要处理的表格或文档，支持拖拽，单个文件不超过 200MB。</p></div><button className="work-assistant__upload" type="button" onClick={() => fileInput.current?.click()} disabled={uploading || initializing}><Upload size={16} />{uploading ? `正在上传${uploadProgress === null ? '' : ` ${uploadProgress}%`}` : '上传文件'}</button><input ref={fileInput} type="file" accept=".csv,.tsv,.xls,.xlsx,.doc,.docx,.md,.txt,.pdf,.rtf" onChange={selectFile} /></header>
+          {draggingFiles && <div className="work-assistant__drop-hint">松开以上传到输入区</div>}
+          {uploading && <div className="work-assistant__upload-progress" aria-label="上传进度"><i><b style={{ width: `${uploadProgress ?? 0}%` }} /></i><span>{uploadProgress ?? 0}%</span></div>}
+          {inputFiles.length === 0 ? <div className="work-assistant__zone-empty">尚未提交输入文件。</div> : <div className="work-assistant__file-list">{inputFiles.map((file) => <article key={file.path}><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{formatBytes(file.size)} · {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.updatedAt))}</small></div><a href={`/api/work-assistant/files/download?path=${encodeURIComponent(file.path)}`} title="下载"><Download size={16} /></a><button type="button" onClick={() => void removeFile(file)} title="删除"><Trash2 size={16} /></button></article>)}</div>}
+        </section>
+        <section className="work-assistant__zone work-assistant__zone--output">
+          <header><div><h3>输出区</h3><p>仅显示明确要求生成、导出或保存的结果文件。</p></div></header>
+          {outputFiles.length === 0 ? <div className="work-assistant__zone-empty">暂无输出文件。</div> : <div className="work-assistant__file-list">{outputFiles.map((file) => <article key={file.path}><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{formatBytes(file.size)} · {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.updatedAt))}</small></div><a href={`/api/work-assistant/files/download?path=${encodeURIComponent(file.path)}`} title="下载"><Download size={16} /></a><button type="button" onClick={() => void removeFile(file)} title="删除"><Trash2 size={16} /></button></article>)}</div>}
+        </section>
         <div className="work-assistant__quota"><span>已使用 {formatBytes(usedBytes)} / {formatBytes(quotaBytes)}</span><i><b style={{ width: `${Math.min(100, usedBytes / quotaBytes * 100)}%` }} /></i></div>
-        {files.length === 0 ? <div className="work-assistant__empty"><FileSpreadsheet size={24} />上传一个表格或文档后，告诉工作助理你希望如何处理。</div> : <div className="work-assistant__file-list">{files.map((file) => <article key={file.path}><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{formatBytes(file.size)} · {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.updatedAt))}</small></div><a href={`/api/work-assistant/files/download?path=${encodeURIComponent(file.path)}`} title="下载"><Download size={16} /></a><button type="button" onClick={() => void removeFile(file)} title="删除"><Trash2 size={16} /></button></article>)}</div>}
       </section>
       <section className="work-assistant__conversation panel-card">
-        <header><div><h2>任务处理</h2><p>原始文件会保留；处理结果将生成新文件。</p></div><button className="work-assistant__clear" type="button" onClick={() => void clearConversation()} disabled={!sessionId || sending || clearing}>{clearing ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}清空对话</button></header>
+        <header><div><h2>任务处理</h2><p>分析结果会直接回复；如需生成文件，请明确说明文件类型和内容。</p></div><button className="work-assistant__clear" type="button" onClick={() => void clearConversation()} disabled={!sessionId || sending || clearing}>{clearing ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}清空对话</button></header>
         <div className="work-assistant__messages">{initializing ? <div className="work-assistant__empty"><LoaderCircle className="spin" size={22} />正在连接工作空间…</div> : messages.length === 0 ? <div className="work-assistant__empty">例如：将“销售数据.xlsx”按客户汇总，或将“会议纪要.docx”整理为一份新的行动清单。</div> : messages.map((message) => <article className={`work-assistant__message work-assistant__message--${message.kind}`} key={message.id}>{message.kind === 'assistant' ? <MarkdownMessage text={message.text} /> : message.text}{message.state === 'running' && <span className="work-assistant__message-progress"><LoaderCircle className="spin" size={13} />正在生成</span>}</article>)}{sending && <div className="work-assistant__working"><LoaderCircle className="spin" size={15} />正在处理文件，长时间无进展会自动停止。</div>}</div>
         <div className="work-assistant__composer"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={keyDown} disabled={!sessionId || sending} placeholder="描述你希望如何整理当前工作区的文件或文档…" rows={3} />{sending ? <button className="work-assistant__cancel" type="button" onClick={() => void cancelProcessing()}><Square size={16} />停止处理</button> : <button type="button" onClick={() => void submit()} disabled={!draft.trim() || !sessionId}><Send size={18} />发送</button>}</div>
       </section>

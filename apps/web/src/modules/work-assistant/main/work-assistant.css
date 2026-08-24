@@ -1,5 +1,6 @@
 .work-assistant__heading,
 .work-assistant__files > header,
+.work-assistant__zone > header,
 .work-assistant__conversation > header,
 .work-assistant__file-list article,
 .work-assistant__composer {
@@ -20,10 +21,14 @@
 .work-assistant__layout { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.5fr); gap: 18px; align-items: start; }
 .work-assistant__files,
 .work-assistant__conversation { padding: 18px; }
-.work-assistant__files { position: relative; transition: border-color .15s, background .15s; }
-.work-assistant__files.is-dragging { outline: 2px dashed var(--jade-600); outline-offset: -7px; background: var(--jade-50); }
+.work-assistant__files { position: relative; }
 .work-assistant__files h2,
 .work-assistant__conversation h2 { font-size: 16px; color: var(--ink-800); }
+.work-assistant__zone { margin-top: 14px; border: 1px solid var(--line); border-radius: 9px; padding: 13px; background: #fbfdfc; transition: border-color .15s, background .15s; }
+.work-assistant__zone.is-dragging { outline: 2px dashed var(--jade-600); outline-offset: -5px; border-color: var(--jade-500); background: var(--jade-50); }
+.work-assistant__zone--output { background: #fafbfd; }
+.work-assistant__zone h3 { color: var(--ink-700); font-size: 14px; }
+.work-assistant__zone header p { margin-top: 3px; color: var(--ink-400); font-size: 12px; }
 .work-assistant__upload,
 .work-assistant__composer button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 9px 12px; background: var(--jade-700); color: white; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
 .work-assistant__composer .work-assistant__cancel { background: var(--ink-600); }
@@ -39,6 +44,7 @@
 .work-assistant__upload-progress i { display: block; overflow: hidden; flex: 1; height: 6px; border-radius: 10px; background: var(--ink-100); }
 .work-assistant__upload-progress b { display: block; height: 100%; border-radius: inherit; background: var(--jade-600); transition: width .12s linear; }
 .work-assistant__file-list { display: grid; gap: 7px; }
+.work-assistant__zone-empty { padding: 14px 4px 2px; color: var(--ink-400); font-size: 12px; }
 .work-assistant__file-list article { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fbfdfc; }
 .work-assistant__file-list article > svg { flex: 0 0 auto; color: var(--jade-700); }
 .work-assistant__file-list article > div { min-width: 0; flex: 1; }
