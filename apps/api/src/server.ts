@@ -275,6 +275,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePlatformAdministration(currentUser)
     if (accountIdPath === currentUser.id) throw new HttpError(400, '不能删除当前登录的账号。')
     if (!await accounts.delete(accountIdPath)) throw new HttpError(404, '账号不存在。')
+    // 删除后立即从运行时配置移除该账号；systemd 配置监听器随即停止对应实例。
+    accountRuntimeTasks.synchronize()
     await platformManagement.record(currentUser.id, '删除账号', '账号', accountIdPath)
     sendJson(response, 200, { ok: true })
     return

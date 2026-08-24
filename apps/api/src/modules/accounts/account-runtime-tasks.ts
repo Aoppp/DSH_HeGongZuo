@@ -41,6 +41,18 @@ export class AccountRuntimeTasks {
     })
   }
 
+  /** 删除账号或移除全部 Agent 权限后，立即重建运行时定义并通知服务同步器停止旧实例。 */
+  synchronize(): void {
+    this.enqueueTask(async () => {
+      try {
+        await this.run('sync-account-agent-runtimes.mjs')
+      } catch (error) {
+        // 定时协调器会继续兜底；记录错误便于服务器日志告警定位。
+        console.error('[和工作] 账号运行空间同步失败：', error)
+      }
+    })
+  }
+
   private enqueueTask(task: () => Promise<void>): void {
     this.queue = this.queue.catch(() => undefined).then(task)
   }
