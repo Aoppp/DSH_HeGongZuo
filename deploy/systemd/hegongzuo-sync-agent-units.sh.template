@@ -4,6 +4,7 @@ set -eu
 
 PROJECT_DIR=__PROJECT_DIR__
 CONFIG_PATH="$PROJECT_DIR/.runtime/agent-runtimes.json"
+RESTART_REQUEST_PATH="$PROJECT_DIR/.runtime/agent-restart-request"
 
 if [ ! -f "$CONFIG_PATH" ]; then
   echo "[和工作] 运行时配置不存在：$CONFIG_PATH" >&2
@@ -21,6 +22,10 @@ desired_runtimes=$(/usr/bin/node -e '
 
 running_runtimes=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^[[:space:]]*hegongzuo-agent@\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)\.service.*/\1/p')
 legacy_accounts=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^[[:space:]]*hegongzuo-agent@\([a-z][a-z0-9]*\)\.service.*/\1/p')
+restart_runtimes=""
+if [ -f "$RESTART_REQUEST_PATH" ]; then
+  restart_runtimes=$(sed -n 's/^\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)$/\1/p' "$RESTART_REQUEST_PATH" | sort -u)
+fi
 
 # v2.02 之前的实例仅以账号命名；切换为 agent--account 后必须先停用，
 # 否则会与新实例争用相同端口。
@@ -35,5 +40,12 @@ for runtime in $running_runtimes; do
 done
 
 for runtime in $desired_runtimes; do
+  was_active=false
+  if systemctl is-active --quiet "hegongzuo-agent@${runtime}.service"; then was_active=true; fi
   systemctl enable --now "hegongzuo-agent@${runtime}.service"
+  if [ "$was_active" = true ] && printf '%s\n' "$restart_runtimes" | grep -Fxq "$runtime"; then
+    systemctl restart "hegongzuo-agent@${runtime}.service"
+  fi
 done
+
+rm -f "$RESTART_REQUEST_PATH"
