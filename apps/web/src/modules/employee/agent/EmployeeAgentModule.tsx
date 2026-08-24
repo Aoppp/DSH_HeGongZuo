@@ -12,6 +12,7 @@ import {
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
+import { shouldSubmitOnEnter } from '../../../shared/forms/submit-on-enter'
 import { buildConversation, maximumConversationTurns, maximumSavedConversations } from './conversation'
 import { MarkdownText } from './markdown'
 import { useEmployeeAgent } from './use-employee-agent'
@@ -47,7 +48,7 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (shouldSubmitOnEnter(event)) {
       event.preventDefault()
       submit()
     }

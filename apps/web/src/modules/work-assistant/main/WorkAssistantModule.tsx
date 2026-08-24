@@ -2,6 +2,7 @@ import { Download, FileSpreadsheet, LoaderCircle, RotateCcw, Send, Square, Trash
 import { type ChangeEvent, type DragEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
+import { shouldSubmitOnEnter } from '../../../shared/forms/submit-on-enter'
 import { useWorkspaceFiles, type WorkspaceFile } from '../files/use-workspace-files'
 import { useWorkAssistantSession } from '../session/use-work-assistant-session'
 import { parseMarkdownTable } from './conversation'
@@ -90,7 +91,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
   }
 
   function keyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit() }
+    if (shouldSubmitOnEnter(event)) { event.preventDefault(); submit() }
   }
 
   const connectionText = session.connection === 'connected' && session.workspace
