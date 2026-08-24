@@ -80,15 +80,28 @@ export function useWorkAssistantSession() {
     const response = unwrapDshResponse(await client.sessions.history({ sessionId: target, maxMessages: recentOnly ? 4 : 60 }, signal))
     if (activeSessionRef.current !== target) return false
     clearEventQueue()
-    setHistory((current) => recentOnly ? mergeHistoryEntries(current, response.events) : response.events)
     if (hasPendingInteractiveTool(response.events)) {
       try { unwrapDshResponse(await client.sessions.cancel({ sessionId: target }, signal)) } catch { /* 可能已由运行时结束。 */ }
-      if (activeSessionRef.current === target) {
+      const targetWorkspace = workspaceRef.current
+      try {
+        await client.deleteSession(target)
+        if (activeSessionRef.current !== target || !targetWorkspace) return true
+        const next = unwrapDshResponse(await client.sessions.create({ workspaceId: targetWorkspace.workspaceId }, signal)).sessionId
+        activeSessionRef.current = next
+        setSessionId(next)
+        setHistory([])
+        setPendingMessage(null)
         settleTask()
-        setError('上一条任务等待了网页不支持的交互，已自动解除。请重新发送完整问题。')
+        setError('上一条任务停在了网页不支持的交互，已自动恢复。请重新发送完整问题。')
+      } catch {
+        if (activeSessionRef.current === target) {
+          settleTask()
+          setError('上一条任务无法继续，请点击“清空对话”后重新发送。')
+        }
       }
       return true
     }
+    setHistory((current) => recentOnly ? mergeHistoryEntries(current, response.events) : response.events)
     if (latestTurnFinished(response.events)) settleTask()
     return latestTurnFinished(response.events)
   }, [clearEventQueue, client, settleTask])
