@@ -1,9 +1,10 @@
-import type { HistoryEntry, SessionId, WorkspaceView } from '@deepseek-ai/dsh-client-connection/client'
+import type { SessionId, WorkspaceView } from '@deepseek-ai/dsh-client-connection/client'
 import { Download, FileSpreadsheet, LoaderCircle, RotateCcw, Send, Trash2, Upload } from 'lucide-react'
 import { type ChangeEvent, type DragEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
 import { AccountDshApiClient, unwrapDshResponse } from '../../../shared/dsh/client'
+import { mergeHistoryMessages, messagesFromHistory, type AssistantMessage } from './conversation'
 import './work-assistant.css'
 
 const maximumFileBytes = 200 * 1024 * 1024
@@ -15,34 +16,9 @@ interface WorkspaceFile {
   readonly updatedAt: string
 }
 
-interface AssistantMessage {
-  readonly id: string
-  readonly kind: 'user' | 'assistant' | 'error'
-  readonly text: string
-}
-
 function formatBytes(value: number): string {
   if (value < 1024 * 1024) return `${Math.ceil(value / 1024)} KB`
   return `${(value / (1024 * 1024)).toFixed(value >= 100 * 1024 * 1024 ? 0 : 1)} MB`
-}
-
-function visibleText(content: readonly { readonly type: string; readonly text?: string }[]): string {
-  return content.filter((part) => part.type === 'text' && typeof part.text === 'string').map((part) => part.text ?? '').join('\n').trim()
-}
-
-function messagesFromHistory(entries: readonly HistoryEntry[]): readonly AssistantMessage[] {
-  const messages: AssistantMessage[] = []
-  for (const entry of entries.map((item) => item.event).sort((left, right) => left.seq - right.seq)) {
-    if (entry.type === 'user/message' && entry.data.source.kind === 'user') {
-      const text = visibleText(entry.data.content)
-      if (text) messages.push({ id: `user-${entry.data.id}`, kind: 'user', text })
-    }
-    if (entry.type === 'assistant/message') {
-      const text = visibleText(entry.data.message.content)
-      if (text) messages.push({ id: `assistant-${entry.data.turn}-${entry.data.step}`, kind: 'assistant', text })
-    }
-  }
-  return messages
 }
 
 function renderInline(text: string) {
@@ -114,6 +90,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
   const [error, setError] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
   const dragDepth = useRef(0)
+  const activeSession = useRef<SessionId | null>(null)
 
   const refreshFiles = useCallback(async () => {
     const result = await apiRequest<{ files: readonly WorkspaceFile[]; usedBytes: number; quotaBytes: number }>('/api/work-assistant/files')
@@ -124,7 +101,9 @@ export function WorkAssistantModule(_props: ModuleProps) {
 
   const refreshHistory = useCallback(async (targetSessionId: SessionId) => {
     const history = unwrapDshResponse(await client.sessions.history({ sessionId: targetSessionId, maxMessages: 100 }))
-    setMessages(messagesFromHistory(history.events))
+    if (activeSession.current !== targetSessionId) return
+    const fromHistory = messagesFromHistory(history.events)
+    setMessages((current) => mergeHistoryMessages(fromHistory, current))
   }, [client])
 
   const waitForTaskCompletion = useCallback(async (targetSessionId: SessionId) => {
@@ -151,6 +130,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
         const active = existing?.sessionId ?? unwrapDshResponse(await client.sessions.create({ workspaceId: targetWorkspace.workspaceId })).sessionId
         if (cancelled) return
         setWorkspace(targetWorkspace)
+        activeSession.current = active
         setSessionId(active)
         await refreshHistory(active)
       } catch (reason) {
@@ -217,12 +197,15 @@ export function WorkAssistantModule(_props: ModuleProps) {
     if (!sessionId || !workspace || clearing) return
     setClearing(true)
     setError(null)
+    activeSession.current = null
     try {
       await client.deleteSession(sessionId)
       const next = unwrapDshResponse(await client.sessions.create({ workspaceId: workspace.workspaceId })).sessionId
+      activeSession.current = next
       setSessionId(next)
       setMessages([])
     } catch (reason) {
+      activeSession.current = sessionId
       setError(reason instanceof Error ? reason.message : '清空对话失败。')
     } finally { setClearing(false) }
   }
