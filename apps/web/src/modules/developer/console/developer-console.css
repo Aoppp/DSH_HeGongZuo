@@ -389,6 +389,10 @@
   text-align: right;
 }
 
+.platform-management__audit-more {
+  margin-top: 12px;
+}
+
 @media (max-width: 760px) {
   .platform-management__health {
     grid-template-columns: 1fr;

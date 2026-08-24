@@ -10,6 +10,7 @@ import { AuthError, AuthService, LoginRateLimitError } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/employee-input.js'
 import { PostgresEmployeeRepository } from './modules/employee/employee-repository.js'
+import { employeeAuditDetail } from './modules/employee/employee-audit.js'
 import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
 import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtime-change.js'
@@ -111,6 +112,21 @@ function platformModuleId(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
+function auditCursor(value: string | null): { readonly createdAt: string; readonly id: number } | null {
+  if (!value) return null
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'))
+    if (!parsed || typeof parsed !== 'object') throw new Error('invalid')
+    const record = parsed as Record<string, unknown>
+    if (typeof record.createdAt !== 'string' || Number.isNaN(Date.parse(record.createdAt)) || typeof record.id !== 'number' || !Number.isSafeInteger(record.id) || record.id < 1) throw new Error('invalid')
+    return { createdAt: record.createdAt, id: record.id }
+  } catch { throw new HttpError(400, '操作记录分页参数无效。') }
+}
+
+function encodeAuditCursor(cursor: { readonly createdAt: string; readonly id: number } | null): string | null {
+  return cursor ? Buffer.from(JSON.stringify(cursor)).toString('base64url') : null
+}
+
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost')
 
@@ -180,12 +196,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/platform/audit-logs' && request.method === 'GET') {
+    requirePlatformAdministration(currentUser)
+    const page = await platformManagement.auditLogs(auditCursor(url.searchParams.get('cursor')))
+    sendJson(response, 200, { logs: page.logs, nextCursor: encodeAuditCursor(page.nextCursor) })
+    return
+  }
+
   const managedModuleId = platformModuleId(url.pathname)
   if (managedModuleId && request.method === 'PATCH') {
     requirePlatformAdministration(currentUser)
     const body = await readJson(request)
     const record = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
-    await platformManagement.setModuleEnabled(managedModuleId, record.enabled, currentUser.id)
+    await platformManagement.setModuleEnabled(managedModuleId, record.enabled, currentUser.id, currentUser.displayName)
     sendJson(response, 200, await platformManagement.status())
     return
   }
@@ -243,7 +266,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     }
     const agentPermissionIds = await registeredAgentPermissionIds(projectRoot)
     accountRuntimeTasks.enqueue(created, { transitionStatus: true, provision: created.permissions.some((permission) => agentPermissionIds.includes(permission)) })
-    await platformManagement.record(currentUser.id, '新增账号', '账号', created.id, { accountId: created.accountId, displayName: created.displayName })
+    await platformManagement.record(currentUser.id, currentUser.displayName, '新增账号', '账号', created.id, { accountId: created.accountId, displayName: created.displayName })
     sendJson(response, 202, { account: created })
     return
   }
@@ -266,7 +289,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (!updated) throw new HttpError(404, '账号不存在。')
     const runtimeChange = runtimeChangeForAccountUpdate(existing, updated, agentPermissionIds)
     if (runtimeChange.sync) accountRuntimeTasks.enqueue(updated, { transitionStatus: false, provision: runtimeChange.provision })
-    await platformManagement.record(currentUser.id, '更新账号', '账号', updated.id, { accountId: updated.accountId, displayName: updated.displayName, permissions: updated.permissions })
+    await platformManagement.record(currentUser.id, currentUser.displayName, '更新账号', '账号', updated.id, { accountId: updated.accountId, displayName: updated.displayName, permissions: updated.permissions })
     sendJson(response, 202, { account: updated })
     return
   }
@@ -277,7 +300,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (!await accounts.delete(accountIdPath)) throw new HttpError(404, '账号不存在。')
     // 删除后立即从运行时配置移除该账号；systemd 配置监听器随即停止对应实例。
     accountRuntimeTasks.synchronize()
-    await platformManagement.record(currentUser.id, '删除账号', '账号', accountIdPath)
+    await platformManagement.record(currentUser.id, currentUser.displayName, '删除账号', '账号', accountIdPath)
     sendJson(response, 200, { ok: true })
     return
   }
@@ -286,7 +309,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (resetPasswordId && request.method === 'POST') {
     requirePlatformAdministration(currentUser)
     if (!await accounts.resetPassword(resetPasswordId)) throw new HttpError(404, '账号不存在。')
-    await platformManagement.record(currentUser.id, '重置账号密码', '账号', resetPasswordId)
+    await platformManagement.record(currentUser.id, currentUser.displayName, '重置账号密码', '账号', resetPasswordId)
     sendJson(response, 200, { ok: true })
     return
   }
@@ -300,7 +323,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const status = typeof record.status === 'string' ? record.status : ''
     const updated = await accounts.setStatus(statusId, status)
     if (!updated) throw new HttpError(404, '账号不存在。')
-    await platformManagement.record(currentUser.id, status === 'disabled' ? '停用账号' : '启用账号', '账号', updated.id, { displayName: updated.displayName })
+    await platformManagement.record(currentUser.id, currentUser.displayName, status === 'disabled' ? '停用账号' : '启用账号', '账号', updated.id, { displayName: updated.displayName })
     sendJson(response, 200, { account: updated })
     return
   }
@@ -312,7 +335,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (!account) throw new HttpError(404, '账号不存在。')
     const agentPermissionIds = await registeredAgentPermissionIds(projectRoot)
     accountRuntimeTasks.enqueue(account, { transitionStatus: true, provision: account.permissions.some((permission) => agentPermissionIds.includes(permission)) })
-    await platformManagement.record(currentUser.id, '重试账号初始化', '账号', account.id, { displayName: account.displayName })
+    await platformManagement.record(currentUser.id, currentUser.displayName, '重试账号初始化', '账号', account.id, { displayName: account.displayName })
     sendJson(response, 202, { account: { ...account, status: 'initializing' } })
     return
   }
@@ -351,7 +374,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (url.pathname === '/api/employees' && request.method === 'POST') {
     requirePermission(currentUser, 'employee-data')
     await platformManagement.assertModuleEnabled('employee-data')
-    const created = await repository.create(parseEmployeeInput(await readJson(request)))
+    const input = parseEmployeeInput(await readJson(request))
+    const created = await repository.create(input)
+    await platformManagement.record(currentUser.id, currentUser.displayName, '新增员工档案', '员工', created.id, employeeAuditDetail(null, created, input.resume !== undefined && input.resume !== null))
     sendJson(response, 201, { employee: created })
     return
   }
@@ -380,6 +405,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const { departureDate, departureReason } = departureInput(await readJson(request))
     const employee = await repository.depart(departureId, departureDate, departureReason)
     if (!employee) throw new HttpError(404, '员工不存在。')
+    await platformManagement.record(currentUser.id, currentUser.displayName, '办理员工离职', '员工', employee.id, { employeeName: employee.displayName, changedFields: ['员工状态', '离职日期', '离职原因'] })
     sendJson(response, 200, { employee })
     return
   }
@@ -397,9 +423,13 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (id && request.method === 'PUT') {
     requirePermission(currentUser, 'employee-data')
     await platformManagement.assertModuleEnabled('employee-data')
+    const previous = await repository.get(id)
+    if (!previous) throw new HttpError(404, '员工不存在。')
     const input = parseEmployeeInput(await readJson(request))
     const employee = await repository.update(id, input)
     if (!employee) throw new HttpError(404, '员工不存在。')
+    const detail = employeeAuditDetail(previous, employee, input.resume !== undefined)
+    if (detail.changedFields.length > 0) await platformManagement.record(currentUser.id, currentUser.displayName, detail.changedFields.length === 1 && detail.changedFields[0] === '员工简历' ? '更新员工简历' : '编辑员工档案', '员工', employee.id, detail)
     sendJson(response, 200, { employee })
     return
   }

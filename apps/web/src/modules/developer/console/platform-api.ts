@@ -12,7 +12,21 @@ export interface PlatformStatus {
   readonly database: 'available'
   readonly agentRuntimes: { readonly expected: number; readonly available: number; readonly unavailable: readonly string[] }
   readonly modules: readonly PlatformModuleStatus[]
-  readonly auditLogs: readonly { readonly id: string; readonly action: string; readonly targetType: string; readonly targetId: string; readonly detail: unknown; readonly createdAt: string; readonly actorName: string | null }[]
+}
+
+export interface AuditLog {
+  readonly id: string
+  readonly action: string
+  readonly targetType: string
+  readonly targetId: string
+  readonly detail: unknown
+  readonly createdAt: string
+  readonly actorName: string | null
+}
+
+export interface AuditLogPage {
+  readonly logs: readonly AuditLog[]
+  readonly nextCursor: string | null
 }
 
 interface ErrorResponse { readonly error?: string }
@@ -36,4 +50,9 @@ export function readPlatformStatus(): Promise<PlatformStatus> {
 
 export function setPlatformModuleEnabled(moduleId: PlatformModuleStatus['id'], enabled: boolean): Promise<PlatformStatus> {
   return request<PlatformStatus>(`/api/platform/modules/${encodeURIComponent(moduleId)}`, { method: 'PATCH', body: JSON.stringify({ enabled }) })
+}
+
+export function readAuditLogs(cursor: string | null): Promise<AuditLogPage> {
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+  return request<AuditLogPage>(`/api/platform/audit-logs${query}`)
 }

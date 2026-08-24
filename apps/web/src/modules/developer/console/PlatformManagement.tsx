@@ -2,7 +2,7 @@ import { Activity, Blocks, ChevronDown, Database, History, LoaderCircle, Refresh
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ModuleId } from '../../../app/types'
-import { readPlatformStatus, setPlatformModuleEnabled, type PlatformStatus } from './platform-api'
+import { readAuditLogs, readPlatformStatus, setPlatformModuleEnabled, type AuditLog, type PlatformStatus } from './platform-api'
 
 interface PlatformManagementProps {
   readonly onModuleSettingsUpdated: (disabledModuleIds: readonly ModuleId[]) => void
@@ -18,6 +18,9 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   const [error, setError] = useState<string | null>(null)
   const [changingModuleId, setChangingModuleId] = useState<string | null>(null)
   const [auditOpen, setAuditOpen] = useState(false)
+  const [auditLogs, setAuditLogs] = useState<readonly AuditLog[]>([])
+  const [auditCursor, setAuditCursor] = useState<string | null>(null)
+  const [auditLoading, setAuditLoading] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -34,6 +37,27 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   }, [onModuleSettingsUpdated])
 
   useEffect(() => { void load() }, [load])
+
+  const loadAuditLogs = useCallback(async (cursor: string | null, append = false) => {
+    setAuditLoading(true)
+    try {
+      const page = await readAuditLogs(cursor)
+      setAuditLogs((current) => append ? [...current, ...page.logs] : page.logs)
+      setAuditCursor(page.nextCursor)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : '无法读取操作记录。')
+    } finally {
+      setAuditLoading(false)
+    }
+  }, [])
+
+  function toggleAudit() {
+    setAuditOpen((open) => {
+      const next = !open
+      if (next && auditLogs.length === 0 && !auditLoading) void loadAuditLogs(null)
+      return next
+    })
+  }
 
   async function toggleModule(moduleId: PlatformStatus['modules'][number]['id'], enabled: boolean, label: string) {
     const action = enabled ? '启用' : '停用'
@@ -83,11 +107,17 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       </section>}
 
       {status && <section className="platform-management panel-card">
-        <header className="platform-management__header"><div><h2>操作记录</h2><p>保留最近 30 条平台管理操作。</p></div><button className="employee-data__secondary platform-management__audit-toggle" type="button" onClick={() => setAuditOpen((open) => !open)} aria-expanded={auditOpen}><History size={15} />{auditOpen ? '收起记录' : '查看记录'}<ChevronDown className={auditOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></header>
-        {auditOpen && (status.auditLogs.length === 0 ? <div className="account-admin__empty">暂无平台管理操作记录。</div> : <div className="platform-management__audit">
-          {status.auditLogs.map((log) => <article key={log.id}><div><strong>{log.action}</strong><small>{log.targetType} · {log.targetId}</small></div><span>{log.actorName ?? '已删除账号'} · {formatTime(log.createdAt)}</span></article>)}
-        </div>)}
+        <header className="platform-management__header"><div><h2>操作记录</h2><p>审计记录长期保留，按需加载。</p></div><button className="employee-data__secondary platform-management__audit-toggle" type="button" onClick={toggleAudit} aria-expanded={auditOpen}><History size={15} />{auditOpen ? '收起记录' : '查看记录'}<ChevronDown className={auditOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></header>
+        {auditOpen && (auditLoading && auditLogs.length === 0 ? <div className="account-admin__empty">正在加载操作记录…</div> : auditLogs.length === 0 ? <div className="account-admin__empty">暂无平台管理操作记录。</div> : <><div className="platform-management__audit">
+          {auditLogs.map((log) => <article key={log.id}><div><strong>{log.action}</strong><small>{log.targetType} · {log.targetId}{auditFields(log.detail) ? ` · 修改：${auditFields(log.detail)}` : ''}</small></div><span>{log.actorName ?? '已删除账号'} · {formatTime(log.createdAt)}</span></article>)}
+        </div>{auditCursor && <button className="employee-data__secondary platform-management__audit-more" type="button" disabled={auditLoading} onClick={() => void loadAuditLogs(auditCursor, true)}>{auditLoading ? <LoaderCircle className="spin" size={15} /> : '加载更多记录'}</button>}</>)}
       </section>}
     </>
   )
+}
+
+function auditFields(detail: unknown): string | null {
+  if (!detail || typeof detail !== 'object' || !('changedFields' in detail)) return null
+  const fields = (detail as { changedFields?: unknown }).changedFields
+  return Array.isArray(fields) && fields.every((field) => typeof field === 'string') ? fields.join('、') : null
 }

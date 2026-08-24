@@ -64,20 +64,14 @@ export class PlatformManagementService {
     readonly database: 'available'
     readonly agentRuntimes: { readonly expected: number; readonly available: number; readonly unavailable: readonly string[] }
     readonly modules: readonly { readonly id: ManagedModuleId; readonly label: string; readonly enabled: boolean; readonly updatedAt: string | null; readonly updatedBy: string | null }[]
-    readonly auditLogs: readonly { readonly id: string; readonly action: string; readonly targetType: string; readonly targetId: string; readonly detail: unknown; readonly createdAt: string; readonly actorName: string | null }[]
   }> {
     await this.pool.query('SELECT 1')
-    const [settings, runtimeHealth, auditLogs] = await Promise.all([
+    const [settings, runtimeHealth] = await Promise.all([
       this.pool.query<ModuleSettingRow>(
         `SELECT s.module_id, s.enabled, s.updated_at, a.display_name AS updated_by_name
          FROM platform_module_settings s LEFT JOIN accounts a ON a.id = s.updated_by_account_id`,
       ),
       checkConfiguredAgentRuntimeHealth(),
-      this.pool.query<AuditRow>(
-        `SELECT l.id, l.action, l.target_type, l.target_id, l.detail, l.created_at, a.display_name AS actor_name
-         FROM platform_audit_logs l LEFT JOIN accounts a ON a.id = l.actor_account_id
-         ORDER BY l.created_at DESC, l.id DESC LIMIT 30`,
-      ),
     ])
     const settingsById = new Map(settings.rows.map((row) => [row.module_id, row]))
     const unavailable = runtimeHealth.filter((runtime) => !runtime.available)
@@ -88,11 +82,29 @@ export class PlatformManagementService {
         const setting = settingsById.get(id)
         return { id, label: moduleLabels[id], enabled: setting?.enabled ?? true, updatedAt: setting ? timestamp(setting.updated_at) : null, updatedBy: setting?.updated_by_name ?? null }
       }),
-      auditLogs: auditLogs.rows.map((row) => ({ id: String(row.id), action: row.action, targetType: row.target_type, targetId: row.target_id, detail: row.detail, createdAt: timestamp(row.created_at), actorName: row.actor_name })),
     }
   }
 
-  async setModuleEnabled(moduleId: string, enabled: unknown, actorAccountId: string): Promise<void> {
+  async auditLogs(cursor: { readonly createdAt: string; readonly id: number } | null): Promise<{ readonly logs: readonly { readonly id: string; readonly action: string; readonly targetType: string; readonly targetId: string; readonly detail: unknown; readonly createdAt: string; readonly actorName: string | null }[]; readonly nextCursor: { readonly createdAt: string; readonly id: number } | null }> {
+    const values: unknown[] = []
+    const where = cursor ? (() => { values.push(cursor.createdAt, cursor.id); return 'WHERE (l.created_at, l.id) < ($1::timestamptz, $2::bigint)' })() : ''
+    const result = await this.pool.query<AuditRow>(
+      `SELECT l.id, l.action, l.target_type, l.target_id, l.detail, l.created_at,
+              COALESCE(l.actor_display_name, a.display_name) AS actor_name
+         FROM platform_audit_logs l LEFT JOIN accounts a ON a.id = l.actor_account_id
+         ${where}
+         ORDER BY l.created_at DESC, l.id DESC LIMIT 31`,
+      values,
+    )
+    const rows = result.rows.slice(0, 30)
+    const last = rows.at(-1)
+    return {
+      logs: rows.map((row) => ({ id: String(row.id), action: row.action, targetType: row.target_type, targetId: row.target_id, detail: row.detail, createdAt: timestamp(row.created_at), actorName: row.actor_name })),
+      nextCursor: result.rows.length > 30 && last ? { createdAt: timestamp(last.created_at), id: Number(last.id) } : null,
+    }
+  }
+
+  async setModuleEnabled(moduleId: string, enabled: unknown, actorAccountId: string, actorDisplayName: string): Promise<void> {
     if (!isManagedModuleId(moduleId)) throw new PlatformManagementError('该模块不支持在平台内调整。')
     if (typeof enabled !== 'boolean') throw new PlatformManagementError('模块状态必须为启用或停用。')
     await this.pool.query(
@@ -101,13 +113,13 @@ export class PlatformManagementService {
        ON CONFLICT (module_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_by_account_id = EXCLUDED.updated_by_account_id, updated_at = now()`,
       [moduleId, enabled, actorAccountId],
     )
-    await this.record(actorAccountId, enabled ? '启用模块' : '停用模块', '模块', moduleId, { enabled })
+    await this.record(actorAccountId, actorDisplayName, enabled ? '启用模块' : '停用模块', '模块', moduleId, { enabled })
   }
 
-  async record(actorAccountId: string, action: string, targetType: string, targetId: string, detail: Record<string, unknown> = {}): Promise<void> {
+  async record(actorAccountId: string, actorDisplayName: string, action: string, targetType: string, targetId: string, detail: Record<string, unknown> = {}): Promise<void> {
     await this.pool.query(
-      'INSERT INTO platform_audit_logs (actor_account_id, action, target_type, target_id, detail) VALUES ($1, $2, $3, $4, $5::jsonb)',
-      [actorAccountId, action, targetType, targetId, JSON.stringify(detail)],
+      'INSERT INTO platform_audit_logs (actor_account_id, actor_display_name, action, target_type, target_id, detail) VALUES ($1, $2, $3, $4, $5, $6::jsonb)',
+      [actorAccountId, actorDisplayName, action, targetType, targetId, JSON.stringify(detail)],
     )
   }
 }
