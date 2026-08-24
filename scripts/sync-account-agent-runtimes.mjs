@@ -12,7 +12,6 @@ const generatedPath = path.join(runtimeDirectory, 'agent-runtimes.json')
 const legacyPath = path.join(runtimeDirectory, 'account-agent-runtimes.json')
 const runtimeRoot = path.join(runtimeDirectory, 'dsh')
 const workspaceRoot = path.join(runtimeDirectory, 'workspaces')
-const sandboxRoot = path.join(runtimeDirectory, 'agent-sandboxes')
 const manifests = await agentRuntimeRegistry()
 
 const permissionManifests = manifests.filter((manifest) => manifest.access === 'permission')
@@ -97,7 +96,12 @@ for (const definition of definitions) {
     : path.join(workspaceRoot, definition.agentId, definition.accountId)
   const newDshDirectory = path.resolve(projectRoot, definition.dshDirectory)
   const newWorkspaceDirectory = path.resolve(projectRoot, definition.workspaceDirectory)
-  for (const [oldPath, newPath] of [[oldDshDirectory, newDshDirectory], [oldWorkspaceDirectory, newWorkspaceDirectory]]) {
+  /** @type {[string, string][]} */
+  const relocationPairs = [
+    [oldDshDirectory, newDshDirectory],
+    [oldWorkspaceDirectory, newWorkspaceDirectory],
+  ]
+  for (const [oldPath, newPath] of relocationPairs) {
     if (oldPath === newPath) continue
     try { await access(oldPath) } catch { continue }
     try { await access(newPath) } catch {
