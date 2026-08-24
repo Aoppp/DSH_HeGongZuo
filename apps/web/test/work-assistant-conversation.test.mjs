@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { mergeHistoryMessages, messagesFromHistory } from '../src/modules/work-assistant/main/conversation.ts'
+import { latestTurnFinished, mergeHistoryMessages, messagesFromHistory } from '../src/modules/work-assistant/main/conversation.ts'
 
 test('工作助理在服务端历史尚未写入时保留刚发送的消息', () => {
   const history = [{ id: 'user-saved', kind: 'user', text: '之前的消息' }]
@@ -41,4 +41,16 @@ test('工作助理显示 DSH 压缩后的正文片段', () => {
   assert.deepEqual(messages, [
     { id: 'assistant-1-2', kind: 'assistant', text: '正在整理文件。', state: 'running' },
   ])
+})
+
+test('工作助理以最新轮次的完成事件结束等待，不依赖滞后的运行状态', () => {
+  assert.equal(latestTurnFinished(/** @type {any} */ ([
+    { event: { type: 'user/message', seq: 10, data: { source: { kind: 'user' } } } },
+    { event: { type: 'assistant/message', seq: 11, data: {} } },
+    { event: { type: 'turn/end', seq: 12, data: { reason: { kind: 'completed' } } } },
+  ])), true)
+  assert.equal(latestTurnFinished(/** @type {any} */ ([
+    { event: { type: 'turn/end', seq: 12, data: { reason: { kind: 'completed' } } } },
+    { event: { type: 'user/message', seq: 13, data: { source: { kind: 'user' } } } },
+  ])), false)
 })

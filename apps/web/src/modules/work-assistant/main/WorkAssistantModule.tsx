@@ -4,7 +4,7 @@ import { type ChangeEvent, type DragEvent, type KeyboardEvent, useCallback, useE
 
 import type { ModuleProps } from '../../../app/types'
 import { AccountDshApiClient, unwrapDshResponse } from '../../../shared/dsh/client'
-import { mergeHistoryMessages, messagesFromHistory, type AssistantMessage } from './conversation'
+import { latestTurnFinished, mergeHistoryMessages, messagesFromHistory, type AssistantMessage } from './conversation'
 import './work-assistant.css'
 
 const maximumFileBytes = 200 * 1024 * 1024
@@ -103,9 +103,9 @@ export function WorkAssistantModule(_props: ModuleProps) {
     setQuotaBytes(result.quotaBytes)
   }, [])
 
-  const refreshHistory = useCallback(async (targetSessionId: SessionId) => {
+  const refreshHistory = useCallback(async (targetSessionId: SessionId): Promise<boolean> => {
     const history = unwrapDshResponse(await client.sessions.history({ sessionId: targetSessionId, maxMessages: 100 }))
-    if (activeSession.current !== targetSessionId) return
+    if (activeSession.current !== targetSessionId) return false
     const fromHistory = messagesFromHistory(history.events)
     setMessages((current) => {
       const next = mergeHistoryMessages(fromHistory, current)
@@ -114,14 +114,17 @@ export function WorkAssistantModule(_props: ModuleProps) {
       }
       return next
     })
+    return latestTurnFinished(history.events)
   }, [client])
 
   const waitForTaskCompletion = useCallback(async (targetSessionId: SessionId) => {
     const deadline = Date.now() + 5 * 60_000
     while (Date.now() < deadline) {
+      const completed = await refreshHistory(targetSessionId)
+      // 完成事件先于会话列表状态抵达时，直接结束等待，避免正文已显示仍持续转圈。
+      if (completed) return
       const sessions = unwrapDshResponse(await client.sessions.list({}))
       const current = sessions.items.find((item) => item.sessionId === targetSessionId)
-      await refreshHistory(targetSessionId)
       if (!current?.running) return
       if (Date.now() - lastProgressAt.current >= noProgressTimeoutMs) {
         try { unwrapDshResponse(await client.sessions.cancel({ sessionId: targetSessionId })) } catch { /* 任务可能已自行结束，后续状态读取会确认。 */ }

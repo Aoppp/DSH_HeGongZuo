@@ -74,3 +74,15 @@ export function mergeHistoryMessages(history: readonly AssistantMessage[], curre
   const pending = current.filter((message) => message.id.startsWith('pending-') && !persistedUsers.has(message.text))
   return [...history, ...inFlight, ...pending]
 }
+
+/** 当前最新一轮已有结束事件时，不应继续依赖可能延迟更新的会话 running 标记。 */
+export function latestTurnFinished(entries: readonly HistoryEntry[]): boolean {
+  let latestUserSequence = -1
+  let latestTurnEndSequence = -1
+  for (const entry of entries) {
+    const event = entry.event
+    if (event.type === 'user/message' && event.data.source.kind === 'user') latestUserSequence = Math.max(latestUserSequence, event.seq)
+    if (event.type === 'turn/end') latestTurnEndSequence = Math.max(latestTurnEndSequence, event.seq)
+  }
+  return latestUserSequence >= 0 && latestTurnEndSequence > latestUserSequence
+}
