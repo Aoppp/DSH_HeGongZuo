@@ -7,6 +7,14 @@ export interface AssistantMessage {
   readonly state?: 'running' | 'failed'
 }
 
+export function parseMarkdownTable(lines: readonly string[]): { readonly headers: readonly string[]; readonly rows: readonly (readonly string[])[] } | null {
+  const cells = (line: string) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim())
+  if (lines.length < 2 || !/^\|?.+\|.+\|?$/.test(lines[0] ?? '') || !/^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$/.test(lines[1] ?? '')) return null
+  const headers = cells(lines[0] ?? '')
+  if (headers.length < 2) return null
+  return { headers, rows: lines.slice(2).map(cells).filter((row) => row.length === headers.length) }
+}
+
 function visibleText(content: readonly { readonly type: string; readonly text?: string }[]): string {
   return content.filter((part) => part.type === 'text' && typeof part.text === 'string').map((part) => part.text ?? '').join('\n').trim()
 }

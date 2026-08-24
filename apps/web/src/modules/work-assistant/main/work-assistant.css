@@ -69,6 +69,11 @@
 .work-assistant__message code { border-radius: 4px; padding: 1px 4px; background: rgba(0, 0, 0, .08); font-size: .92em; }
 .work-assistant__message-heading { display: block; margin-bottom: 5px; }
 .work-assistant__message-progress { display: inline-flex; align-items: center; gap: 5px; margin-top: 7px; color: var(--ink-500); font-size: 11px; }
+.work-assistant__table-wrap { overflow-x: auto; margin: 8px 0; }
+.work-assistant__table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.work-assistant__table-wrap th,
+.work-assistant__table-wrap td { min-width: 88px; border: 1px solid #d9e1de; padding: 6px 8px; text-align: left; vertical-align: top; white-space: normal; }
+.work-assistant__table-wrap th { background: #edf4f1; color: var(--ink-700); font-weight: 600; }
 .work-assistant__working { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-500); font-size: 12px; }
 .work-assistant__composer { align-items: flex-end; border-top: 1px solid var(--line); padding-top: 14px; }
 .work-assistant__composer textarea { min-height: 66px; flex: 1; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 9px; color: var(--ink-800); font: inherit; font-size: 13px; }

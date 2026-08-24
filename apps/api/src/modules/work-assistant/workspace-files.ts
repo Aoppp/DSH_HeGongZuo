@@ -91,7 +91,7 @@ export class WorkAssistantWorkspaceFiles {
 
   workspacePath(accountId: string): string {
     if (!/^[a-z][a-z0-9]{1,31}$/.test(accountId)) throw new HttpError(400, '账号标识无效。')
-    return path.join(this.projectRoot, '.runtime', 'workspaces', 'work-assistant', accountId)
+    return path.join(this.projectRoot, '.runtime', 'agent-sandboxes', `work-assistant--${accountId}`, 'workspace')
   }
 
   private async prepareWorkspace(accountId: string): Promise<string> {

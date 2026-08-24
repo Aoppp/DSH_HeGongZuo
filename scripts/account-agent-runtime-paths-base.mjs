@@ -8,3 +8,4 @@ export const dshBinPath = path.join(projectRoot, 'node_modules', '@deepseek-ai',
 export const employeeAgentPath = path.join(projectRoot, 'packages', 'employee-agent')
 export const accountRuntimeRoot = path.join(projectRoot, '.runtime', 'dsh')
 export const accountWorkspaceRoot = path.join(projectRoot, '.runtime', 'workspaces')
+export const agentSandboxRoot = path.join(projectRoot, '.runtime', 'agent-sandboxes')

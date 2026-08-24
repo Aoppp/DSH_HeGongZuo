@@ -23,7 +23,8 @@ ProtectSystem=strict
 ProtectHome=true
 # DSH 运行时可能读取已安装的 Corepack/Pnpm；其余用户目录继续隔离。
 BindReadOnlyPaths=/home/__DEPLOY_USER__/.cache/node/corepack
-ReadWritePaths=__PROJECT_DIR__/.runtime
+# 每个实例仅可写入自身的 DSH 数据与工作区，无法修改项目源码、运行时配置或其他账号文件。
+ReadWritePaths=__PROJECT_DIR__/.runtime/agent-sandboxes/%i
 
 [Install]
 WantedBy=multi-user.target

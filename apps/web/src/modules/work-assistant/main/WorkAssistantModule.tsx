@@ -4,7 +4,7 @@ import { type ChangeEvent, type DragEvent, type KeyboardEvent, useCallback, useE
 
 import type { ModuleProps } from '../../../app/types'
 import { AccountDshApiClient, unwrapDshResponse } from '../../../shared/dsh/client'
-import { latestTurnFinished, mergeHistoryMessages, messagesFromHistory, type AssistantMessage } from './conversation'
+import { latestTurnFinished, mergeHistoryMessages, messagesFromHistory, parseMarkdownTable, type AssistantMessage } from './conversation'
 import './work-assistant.css'
 
 const maximumFileBytes = 200 * 1024 * 1024
@@ -34,6 +34,8 @@ function renderInline(text: string) {
 function MarkdownMessage({ text }: { readonly text: string }) {
   return <>{text.split(/\n{2,}/).map((block, blockIndex) => {
     const lines = block.split('\n').filter(Boolean)
+    const table = parseMarkdownTable(lines)
+    if (table) return <div className="work-assistant__table-wrap" key={blockIndex}><table><thead><tr>{table.headers.map((header, index) => <th key={index}>{renderInline(header)}</th>)}</tr></thead><tbody>{table.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{renderInline(cell)}</td>)}</tr>)}</tbody></table></div>
     if (lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line))) return <ul key={blockIndex}>{lines.map((line, lineIndex) => <li key={lineIndex}>{renderInline(line.replace(/^[-*]\s+/, ''))}</li>)}</ul>
     return <>{lines.map((line, lineIndex) => {
       const heading = line.match(/^#{1,3}\s+(.+)$/)

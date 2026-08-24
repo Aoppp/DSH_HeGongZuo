@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { latestTurnFinished, mergeHistoryMessages, messagesFromHistory } from '../src/modules/work-assistant/main/conversation.ts'
+import { latestTurnFinished, mergeHistoryMessages, messagesFromHistory, parseMarkdownTable } from '../src/modules/work-assistant/main/conversation.ts'
 
 test('工作助理在服务端历史尚未写入时保留刚发送的消息', () => {
   const history = [{ id: 'user-saved', kind: 'user', text: '之前的消息' }]
@@ -53,4 +53,12 @@ test('工作助理以最新轮次的完成事件结束等待，不依赖滞后�
     { event: { type: 'turn/end', seq: 12, data: { reason: { kind: 'completed' } } } },
     { event: { type: 'user/message', seq: 13, data: { source: { kind: 'user' } } } },
   ])), false)
+})
+
+test('工作助理将 Markdown 表格识别为结构化表格', () => {
+  assert.deepEqual(parseMarkdownTable(['| 姓名 | 部门 |', '| --- | :---: |', '| 张三 | 技术部 |']), {
+    headers: ['姓名', '部门'],
+    rows: [['张三', '技术部']],
+  })
+  assert.equal(parseMarkdownTable(['普通文本', '不是表格']), null)
 })

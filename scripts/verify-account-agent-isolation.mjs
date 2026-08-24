@@ -1,7 +1,7 @@
 import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import { accountAgentRuntimes, accountRuntimeRoot, accountWorkspaceRoot } from './account-agent-runtime-paths.mjs'
+import { accountAgentRuntimes, agentSandboxRoot } from './account-agent-runtime-paths.mjs'
 
 const uniqueHomes = new Set(accountAgentRuntimes.map((runtime) => path.resolve(runtime.dshHome)))
 const uniquePorts = new Set(accountAgentRuntimes.map((runtime) => runtime.port))
@@ -14,12 +14,12 @@ if (uniqueApiBasePaths.size !== accountAgentRuntimes.length) throw new Error('DS
 if (uniqueWorkspaces.size !== accountAgentRuntimes.length) throw new Error('员工 Agent 工作区未按账号唯一分配。')
 
 for (const runtime of accountAgentRuntimes) {
-  const relativeHome = path.relative(accountRuntimeRoot, runtime.dshHome)
+  const relativeHome = path.relative(agentSandboxRoot, runtime.dshHome)
   if (relativeHome.startsWith('..') || path.isAbsolute(relativeHome)) {
     throw new Error(`账号 ${runtime.accountId} 的 DSH_HOME 超出项目隔离目录。`)
   }
 
-  const relativeWorkspace = path.relative(accountWorkspaceRoot, runtime.workspacePath)
+  const relativeWorkspace = path.relative(agentSandboxRoot, runtime.workspacePath)
   if (relativeWorkspace.startsWith('..') || path.isAbsolute(relativeWorkspace)) {
     throw new Error(`账号 ${runtime.accountId} 的工作区超出项目隔离目录。`)
   }

@@ -1,6 +1,6 @@
 // 从账号权限与 packages/*/hegongzuo-agent.json 生成统一 Agent 运行时配置。
 // 新增同类 Agent 只需提交清单；无需修改本同步器或服务器 systemd 单元。
-import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { access, appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { pool } from '../apps/api/scripts/database.mjs'
@@ -12,6 +12,7 @@ const generatedPath = path.join(runtimeDirectory, 'agent-runtimes.json')
 const legacyPath = path.join(runtimeDirectory, 'account-agent-runtimes.json')
 const runtimeRoot = path.join(runtimeDirectory, 'dsh')
 const workspaceRoot = path.join(runtimeDirectory, 'workspaces')
+const sandboxRoot = path.join(runtimeDirectory, 'agent-sandboxes')
 const manifests = await agentRuntimeRegistry()
 
 const permissionManifests = manifests.filter((manifest) => manifest.access === 'permission')
@@ -66,6 +67,7 @@ function availablePort() {
 
 const definitions = requested.map((request) => {
   const port = previousPorts.get(request.runtimeId) ?? availablePort()
+  const sandboxDirectory = `.runtime/agent-sandboxes/${request.runtimeId}`
   return {
     runtimeId: request.runtimeId,
     agentId: request.id,
@@ -76,9 +78,35 @@ const definitions = requested.map((request) => {
     port,
     apiBasePath: request.apiBasePath.replace('{accountId}', request.accountId),
     packageDirectory: request.packageDirectory,
-    workspaceDirectory: `.runtime/workspaces/${request.id}/${request.accountId}`,
+    dshDirectory: `${sandboxDirectory}/dsh`,
+    workspaceDirectory: `${sandboxDirectory}/workspace`,
   }
 })
+
+const previousByRuntimeId = new Map(previous
+  .filter((item) => item && typeof item === 'object' && typeof item.runtimeId === 'string')
+  .map((item) => [item.runtimeId, item]))
+const relocatedRuntimeIds = []
+for (const definition of definitions) {
+  const prior = previousByRuntimeId.get(definition.runtimeId)
+  const oldDshDirectory = typeof prior?.dshDirectory === 'string'
+    ? path.resolve(projectRoot, prior.dshDirectory)
+    : path.join(runtimeRoot, definition.agentId, definition.accountId)
+  const oldWorkspaceDirectory = typeof prior?.workspaceDirectory === 'string'
+    ? path.resolve(projectRoot, prior.workspaceDirectory)
+    : path.join(workspaceRoot, definition.agentId, definition.accountId)
+  const newDshDirectory = path.resolve(projectRoot, definition.dshDirectory)
+  const newWorkspaceDirectory = path.resolve(projectRoot, definition.workspaceDirectory)
+  for (const [oldPath, newPath] of [[oldDshDirectory, newDshDirectory], [oldWorkspaceDirectory, newWorkspaceDirectory]]) {
+    if (oldPath === newPath) continue
+    try { await access(oldPath) } catch { continue }
+    try { await access(newPath) } catch {
+      await mkdir(path.dirname(newPath), { recursive: true })
+      await rename(oldPath, newPath)
+      relocatedRuntimeIds.push(definition.runtimeId)
+    }
+  }
+}
 
 // 仅对既有员工 Agent 保持旧配置文件，避免正在使用的前端代理和本地开发命令中断。
 const employeeDefinitions = definitions.filter((definition) => definition.agentId === 'employee-query')
@@ -114,5 +142,8 @@ await mkdir(runtimeDirectory, { recursive: true })
 await writeFile(generatedPath, `${JSON.stringify(definitions, null, 2)}\n`, 'utf8')
 await writeFile(legacyPath, `${JSON.stringify(employeeDefinitions.map(({ runtimeId: _runtimeId, agentId: _agentId, permissionId: _permissionId, runtime: _runtime, packageDirectory: _packageDirectory, ...definition }) => definition), null, 2)}\n`, 'utf8')
 console.log(`[和工作] Agent 运行时配置已同步（${definitions.length} 个实例）：${definitions.map((definition) => `${definition.runtimeId}→${definition.port}`).join('、')}。`)
+if (relocatedRuntimeIds.length > 0) {
+  await appendFile(path.join(runtimeDirectory, 'agent-restart-request'), `${[...new Set(relocatedRuntimeIds)].join('\n')}\n`, 'utf8')
+}
 
 await pool.end()

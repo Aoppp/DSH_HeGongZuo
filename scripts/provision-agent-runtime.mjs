@@ -4,18 +4,18 @@ import { createHash } from 'node:crypto'
 import { appendFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import { accountRuntimeRoot, dshBinPath, projectRoot } from './account-agent-runtime-paths-base.mjs'
+import { agentSandboxRoot, dshBinPath, projectRoot } from './account-agent-runtime-paths-base.mjs'
 
 const runtimeId = process.argv[2]?.trim() ?? ''
 if (!/^[a-z][a-z0-9-]{1,62}--[a-z][a-z0-9]{1,31}$/.test(runtimeId)) throw new Error('缺少有效 Agent 运行时标识。')
 const definitions = JSON.parse(await readFile(path.join(projectRoot, '.runtime', 'agent-runtimes.json'), 'utf8'))
 const definition = Array.isArray(definitions) ? definitions.find((item) => item?.runtimeId === runtimeId) : undefined
-if (!definition || definition.runtime !== 'dsh-web' || typeof definition.agentId !== 'string' || typeof definition.accountId !== 'string' || typeof definition.packageDirectory !== 'string' || typeof definition.workspaceDirectory !== 'string') throw new Error(`未找到可初始化的 Agent 运行时：${runtimeId}`)
+if (!definition || definition.runtime !== 'dsh-web' || typeof definition.agentId !== 'string' || typeof definition.accountId !== 'string' || typeof definition.packageDirectory !== 'string' || typeof definition.dshDirectory !== 'string' || typeof definition.workspaceDirectory !== 'string') throw new Error(`未找到可初始化的 Agent 运行时：${runtimeId}`)
 
-const dshHome = path.join(accountRuntimeRoot, definition.agentId, definition.accountId)
+const dshHome = path.resolve(projectRoot, definition.dshDirectory)
 const workspace = path.resolve(projectRoot, definition.workspaceDirectory)
 const pluginDirectory = path.resolve(projectRoot, definition.packageDirectory)
-if (!pluginDirectory.startsWith(`${projectRoot}${path.sep}`) || !workspace.startsWith(`${projectRoot}${path.sep}`)) throw new Error('Agent 路径超出项目目录。')
+if (!pluginDirectory.startsWith(`${projectRoot}${path.sep}`) || !dshHome.startsWith(`${agentSandboxRoot}${path.sep}`) || !workspace.startsWith(`${agentSandboxRoot}${path.sep}`)) throw new Error('Agent 路径超出项目隔离沙箱。')
 await mkdir(dshHome, { recursive: true })
 await mkdir(workspace, { recursive: true })
 
