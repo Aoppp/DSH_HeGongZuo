@@ -1,5 +1,5 @@
 import type { SessionId, WorkspaceView } from '@deepseek-ai/dsh-client-connection/client'
-import { Download, FileSpreadsheet, LoaderCircle, RotateCcw, Send, Trash2, Upload } from 'lucide-react'
+import { Download, FileSpreadsheet, LoaderCircle, RotateCcw, Send, Square, Trash2, Upload } from 'lucide-react'
 import { type ChangeEvent, type DragEvent, type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
@@ -8,6 +8,7 @@ import { mergeHistoryMessages, messagesFromHistory, type AssistantMessage } from
 import './work-assistant.css'
 
 const maximumFileBytes = 200 * 1024 * 1024
+const noProgressTimeoutMs = 2 * 60_000
 
 interface WorkspaceFile {
   readonly path: string
@@ -91,6 +92,7 @@ export function WorkAssistantModule(_props: ModuleProps) {
   const fileInput = useRef<HTMLInputElement>(null)
   const dragDepth = useRef(0)
   const activeSession = useRef<SessionId | null>(null)
+  const lastProgressAt = useRef(Date.now())
 
   const refreshFiles = useCallback(async () => {
     const result = await apiRequest<{ files: readonly WorkspaceFile[]; usedBytes: number; quotaBytes: number }>('/api/work-assistant/files')
@@ -103,7 +105,13 @@ export function WorkAssistantModule(_props: ModuleProps) {
     const history = unwrapDshResponse(await client.sessions.history({ sessionId: targetSessionId, maxMessages: 100 }))
     if (activeSession.current !== targetSessionId) return
     const fromHistory = messagesFromHistory(history.events)
-    setMessages((current) => mergeHistoryMessages(fromHistory, current))
+    setMessages((current) => {
+      const next = mergeHistoryMessages(fromHistory, current)
+      if (next.some((message, index) => message.id !== current[index]?.id || message.text !== current[index]?.text || message.state !== current[index]?.state) || next.length !== current.length) {
+        lastProgressAt.current = Date.now()
+      }
+      return next
+    })
   }, [client])
 
   const waitForTaskCompletion = useCallback(async (targetSessionId: SessionId) => {
@@ -113,6 +121,11 @@ export function WorkAssistantModule(_props: ModuleProps) {
       const current = sessions.items.find((item) => item.sessionId === targetSessionId)
       await refreshHistory(targetSessionId)
       if (!current?.running) return
+      if (Date.now() - lastProgressAt.current >= noProgressTimeoutMs) {
+        try { unwrapDshResponse(await client.sessions.cancel({ sessionId: targetSessionId })) } catch { /* 任务可能已自行结束，后续状态读取会确认。 */ }
+        await refreshHistory(targetSessionId)
+        throw new Error('处理长时间没有进展，已自动停止。请检查文件后重新发送。')
+      }
       await new Promise((resolve) => globalThis.setTimeout(resolve, 800))
     }
     throw new Error('任务处理时间较长，请稍后刷新本页查看结果。')
@@ -216,12 +229,25 @@ export function WorkAssistantModule(_props: ModuleProps) {
     setSending(true)
     setError(null)
     setDraft('')
+    lastProgressAt.current = Date.now()
     setMessages((current) => [...current, { id: `pending-${Date.now()}`, kind: 'user', text }])
     try {
       unwrapDshResponse(await client.promptSession({ sessionId, mode: 'queue', content: [{ type: 'text', text }], clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }))
       await Promise.all([waitForTaskCompletion(sessionId), refreshFiles()])
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '处理任务时发生错误。')
+    } finally { setSending(false) }
+  }
+
+  async function cancelProcessing() {
+    if (!sessionId || !sending) return
+    setError(null)
+    try {
+      unwrapDshResponse(await client.sessions.cancel({ sessionId }))
+      await refreshHistory(sessionId)
+      setError('已停止当前处理，可以继续发送新任务。')
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '停止处理失败，请刷新后重试。')
     } finally { setSending(false) }
   }
 
@@ -245,8 +271,8 @@ export function WorkAssistantModule(_props: ModuleProps) {
       </section>
       <section className="work-assistant__conversation panel-card">
         <header><div><h2>任务处理</h2><p>原始文件会保留；处理结果将生成新文件。</p></div><button className="work-assistant__clear" type="button" onClick={() => void clearConversation()} disabled={!sessionId || sending || clearing}>{clearing ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}清空对话</button></header>
-        <div className="work-assistant__messages">{initializing ? <div className="work-assistant__empty"><LoaderCircle className="spin" size={22} />正在连接工作空间…</div> : messages.length === 0 ? <div className="work-assistant__empty">例如：将“销售数据.xlsx”按客户汇总，或将“会议纪要.docx”整理为一份新的行动清单。</div> : messages.map((message) => <article className={`work-assistant__message work-assistant__message--${message.kind}`} key={message.id}>{message.kind === 'assistant' ? <MarkdownMessage text={message.text} /> : message.text}</article>)}{sending && <div className="work-assistant__working"><LoaderCircle className="spin" size={15} />正在处理文件…</div>}</div>
-        <div className="work-assistant__composer"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={keyDown} disabled={!sessionId || sending} placeholder="描述你希望如何整理当前工作区的文件或文档…" rows={3} /><button type="button" onClick={() => void submit()} disabled={!draft.trim() || !sessionId || sending}><Send size={18} />发送</button></div>
+        <div className="work-assistant__messages">{initializing ? <div className="work-assistant__empty"><LoaderCircle className="spin" size={22} />正在连接工作空间…</div> : messages.length === 0 ? <div className="work-assistant__empty">例如：将“销售数据.xlsx”按客户汇总，或将“会议纪要.docx”整理为一份新的行动清单。</div> : messages.map((message) => <article className={`work-assistant__message work-assistant__message--${message.kind}`} key={message.id}>{message.kind === 'assistant' ? <MarkdownMessage text={message.text} /> : message.text}{message.state === 'running' && <span className="work-assistant__message-progress"><LoaderCircle className="spin" size={13} />正在生成</span>}</article>)}{sending && <div className="work-assistant__working"><LoaderCircle className="spin" size={15} />正在处理文件，长时间无进展会自动停止。</div>}</div>
+        <div className="work-assistant__composer"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={keyDown} disabled={!sessionId || sending} placeholder="描述你希望如何整理当前工作区的文件或文档…" rows={3} />{sending ? <button className="work-assistant__cancel" type="button" onClick={() => void cancelProcessing()}><Square size={16} />停止处理</button> : <button type="button" onClick={() => void submit()} disabled={!draft.trim() || !sessionId}><Send size={18} />发送</button>}</div>
       </section>
     </div>
   </div>
