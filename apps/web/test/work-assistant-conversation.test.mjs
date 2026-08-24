@@ -50,6 +50,14 @@ test('工作助理显示 DSH 压缩后的正文片段', () => {
   ])
 })
 
+test('工作助理按压缩事件的 seq0 顺序合并回复片段', () => {
+  const messages = messagesFromHistory(/** @type {any} */ ([
+    { event: { type: 'text-chunks', seq0: 3, data: { turn: 1, step: 1, texts: ['后半段'] } } },
+    { event: { type: 'text-chunks', seq0: 2, data: { turn: 1, step: 1, texts: ['前半段'] } } },
+  ]))
+  assert.deepEqual(messages, [{ id: 'assistant-1-1', kind: 'assistant', text: '前半段后半段', state: 'running' }])
+})
+
 test('工作助理以最新轮次的完成事件结束等待，不依赖滞后的运行状态', () => {
   assert.equal(latestTurnFinished(/** @type {any} */ ([
     { event: { type: 'user/message', seq: 10, data: { source: { kind: 'user' } } } },
@@ -60,6 +68,10 @@ test('工作助理以最新轮次的完成事件结束等待，不依赖滞后�
     { event: { type: 'turn/end', seq: 12, data: { reason: { kind: 'completed' } } } },
     { event: { type: 'user/message', seq: 13, data: { source: { kind: 'user' } } } },
   ])), false)
+  assert.equal(latestTurnFinished(/** @type {any} */ ([
+    { event: { type: 'user/message', seq: 20, data: { source: { kind: 'user' } } } },
+    { event: { type: 'assistant/message', seq: 21, data: {} } },
+  ])), true)
 })
 
 test('工作助理将 Markdown 表格识别为结构化表格', () => {

@@ -19,6 +19,14 @@ function visibleText(content: readonly { readonly type: string; readonly text?: 
   return content.filter((part) => part.type === 'text' && typeof part.text === 'string').map((part) => part.text ?? '').join('\n').trim()
 }
 
+function eventSequence(event: { readonly seq?: unknown; readonly seq0?: unknown }): number {
+  if (typeof event.seq === 'number') return event.seq
+  // DSH 为压缩文本事件使用 seq0；若直接按 seq 排序会产生不稳定顺序，进而让
+  // 页面长期保留半截流式片段。
+  if (typeof event.seq0 === 'number') return event.seq0
+  return -1
+}
+
 export function messagesFromHistory(entries: readonly HistoryEntry[]): readonly AssistantMessage[] {
   const finalAssistantMessages = new Set<string>()
   for (const entry of entries) {
@@ -35,7 +43,7 @@ export function messagesFromHistory(entries: readonly HistoryEntry[]): readonly 
       messages.push(message)
     } else messages[position] = message
   }
-  for (const entry of entries.map((item) => item.event).sort((left, right) => left.seq - right.seq)) {
+  for (const entry of entries.map((item) => item.event).sort((left, right) => eventSequence(left) - eventSequence(right))) {
     // DSH 会把高频文本片段压缩为 text-chunks；该事件在当前客户端类型中仍是
     // 宽类型透传，因此以运行时校验读取，避免完成前页面没有任何正文可显示。
     const packed = entry as unknown as { readonly type?: unknown; readonly data?: { readonly turn?: unknown; readonly step?: unknown; readonly texts?: unknown } }
@@ -86,11 +94,14 @@ export function mergeHistoryMessages(history: readonly AssistantMessage[], curre
 /** 当前最新一轮已有结束事件时，不应继续依赖可能延迟更新的会话 running 标记。 */
 export function latestTurnFinished(entries: readonly HistoryEntry[]): boolean {
   let latestUserSequence = -1
-  let latestTurnEndSequence = -1
+  let latestCompletionSequence = -1
   for (const entry of entries) {
     const event = entry.event
-    if (event.type === 'user/message' && event.data.source.kind === 'user') latestUserSequence = Math.max(latestUserSequence, event.seq)
-    if (event.type === 'turn/end') latestTurnEndSequence = Math.max(latestTurnEndSequence, event.seq)
+    const sequence = eventSequence(event)
+    if (event.type === 'user/message' && event.data.source.kind === 'user') latestUserSequence = Math.max(latestUserSequence, sequence)
+    // assistant/message 是 DSH 已持久化的完整正文。某些历史响应会先返回它、稍后
+    // 才带 turn/end；将其视为完成可避免完整回复仍显示“正在生成”。
+    if (event.type === 'assistant/message' || event.type === 'turn/end') latestCompletionSequence = Math.max(latestCompletionSequence, sequence)
   }
-  return latestUserSequence >= 0 && latestTurnEndSequence > latestUserSequence
+  return latestUserSequence >= 0 && latestCompletionSequence > latestUserSequence
 }
