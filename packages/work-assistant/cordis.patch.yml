@@ -1,0 +1,4 @@
+# 和工作基础功能：为每个账号注册独立的工作文件处理空间。
+- insert:
+    - id: hegongzuo-work-assistant
+      name: '@hegongzuo/work-assistant'

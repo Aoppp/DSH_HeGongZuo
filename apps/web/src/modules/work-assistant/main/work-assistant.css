@@ -1,0 +1,55 @@
+.work-assistant__heading,
+.work-assistant__files > header,
+.work-assistant__conversation > header,
+.work-assistant__file-list article,
+.work-assistant__composer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.work-assistant__heading { margin-bottom: 18px; }
+.work-assistant__heading h1 { font-size: 24px; color: var(--ink-900); }
+.work-assistant__heading p,
+.work-assistant__files header p,
+.work-assistant__conversation header p { margin-top: 5px; color: var(--ink-400); font-size: 13px; }
+.work-assistant__status { border-radius: 999px; padding: 7px 11px; background: var(--jade-100); color: var(--jade-700); font-size: 12px; white-space: nowrap; }
+.work-assistant__status.is-loading { background: var(--ink-100); color: var(--ink-500); }
+.work-assistant__error { margin-bottom: 14px; border: 1px solid #f3c8c4; border-radius: 9px; padding: 10px 12px; background: #fff5f4; color: var(--danger-600); font-size: 13px; }
+.work-assistant__layout { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(0, 1.5fr); gap: 18px; align-items: start; }
+.work-assistant__files,
+.work-assistant__conversation { padding: 18px; }
+.work-assistant__files h2,
+.work-assistant__conversation h2 { font-size: 16px; color: var(--ink-800); }
+.work-assistant__upload,
+.work-assistant__composer button { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 9px 12px; background: var(--jade-700); color: white; font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.work-assistant__upload:disabled,
+.work-assistant__composer button:disabled { opacity: .55; cursor: not-allowed; }
+.work-assistant__files input { display: none; }
+.work-assistant__quota { margin: 18px 0 12px; color: var(--ink-500); font-size: 12px; }
+.work-assistant__quota i { display: block; overflow: hidden; height: 6px; margin-top: 7px; border-radius: 10px; background: var(--ink-100); }
+.work-assistant__quota b { display: block; height: 100%; border-radius: inherit; background: var(--jade-600); }
+.work-assistant__file-list { display: grid; gap: 7px; }
+.work-assistant__file-list article { padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: #fbfdfc; }
+.work-assistant__file-list article > svg { flex: 0 0 auto; color: var(--jade-700); }
+.work-assistant__file-list article > div { min-width: 0; flex: 1; }
+.work-assistant__file-list strong,
+.work-assistant__file-list small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.work-assistant__file-list strong { color: var(--ink-700); font-size: 13px; }
+.work-assistant__file-list small { margin-top: 3px; color: var(--ink-400); font-size: 11px; }
+.work-assistant__file-list a,
+.work-assistant__file-list button { display: grid; flex: 0 0 auto; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-500); cursor: pointer; }
+.work-assistant__file-list a:hover,
+.work-assistant__file-list button:hover { background: var(--ink-100); color: var(--ink-800); }
+.work-assistant__empty { display: grid; min-height: 150px; place-content: center; gap: 9px; color: var(--ink-400); font-size: 13px; text-align: center; }
+.work-assistant__empty svg { margin: 0 auto; color: var(--jade-600); }
+.work-assistant__messages { display: grid; align-content: start; gap: 10px; min-height: 370px; max-height: 550px; overflow: auto; margin: 16px 0; padding-right: 4px; }
+.work-assistant__message { max-width: 88%; border-radius: 10px; padding: 10px 12px; white-space: pre-wrap; font-size: 13px; line-height: 1.65; }
+.work-assistant__message--user { justify-self: end; background: var(--jade-700); color: white; }
+.work-assistant__message--assistant { justify-self: start; background: var(--ink-100); color: var(--ink-700); }
+.work-assistant__working { display: inline-flex; align-items: center; gap: 7px; color: var(--ink-500); font-size: 12px; }
+.work-assistant__composer { align-items: flex-end; border-top: 1px solid var(--line); padding-top: 14px; }
+.work-assistant__composer textarea { min-height: 66px; flex: 1; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 9px; color: var(--ink-800); font: inherit; font-size: 13px; }
+@media (max-width: 900px) { .work-assistant__layout { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .work-assistant__heading { align-items: flex-start; flex-direction: column; } .work-assistant__files > header { align-items: flex-start; } }

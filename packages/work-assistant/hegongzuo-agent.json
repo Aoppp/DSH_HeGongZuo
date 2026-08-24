@@ -1,0 +1,8 @@
+{
+  "id": "work-assistant",
+  "permissionId": "work-assistant",
+  "access": "base",
+  "label": "工作助理",
+  "runtime": "dsh-web",
+  "apiBasePath": "/api/agents/work-assistant"
+}

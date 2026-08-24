@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Code2, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
+import { BriefcaseBusiness, Code2, Files, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
 
 import { DeveloperConsoleModule } from '../modules/developer/console/DeveloperConsoleModule'
 import { EmployeeAgentModule } from '../modules/employee/agent/EmployeeAgentModule'
@@ -7,6 +7,7 @@ import { ManagementCockpitModule } from '../modules/management/cockpit/Managemen
 import { FinanceManagementModule } from '../modules/finance/management/FinanceManagementModule'
 import { ProjectManagementModule } from '../modules/project/management/ProjectManagementModule'
 import { OverviewModule } from '../modules/overview/main/OverviewModule'
+import { WorkAssistantModule } from '../modules/work-assistant/main/WorkAssistantModule'
 import type { AuthenticatedUser, ModuleId, PlatformModule } from './types'
 
 // 每个功能只在此注册一次。删除该项即可从导航和路由中同时移除功能。
@@ -28,6 +29,14 @@ export const platformModules: readonly PlatformModule[] = [
     description: '当前角色的工作入口',
     icon: LayoutDashboard,
     component: OverviewModule,
+  },
+  {
+    id: 'work-assistant',
+    path: '/work-assistant',
+    label: '工作助理',
+    description: '整理个人工作区中的表格文件',
+    icon: Files,
+    component: WorkAssistantModule,
   },
   {
     id: 'employee-data',

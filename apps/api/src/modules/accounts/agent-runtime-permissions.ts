@@ -23,6 +23,9 @@ export async function registeredAgentPermissions(projectRoot: string): Promise<r
       const label = manifest.label
       if (typeof id !== 'string' || !/^[a-z][a-z0-9-]{1,62}$/.test(id)) throw new Error('缺少有效 id。')
       if (typeof permissionId !== 'string' || !/^[a-z][a-z0-9-]{1,62}$/.test(permissionId)) throw new Error('缺少有效 permissionId。')
+      const access = manifest.access === undefined ? 'permission' : manifest.access
+      if (access !== 'permission' && access !== 'base') throw new Error('access 必须为 permission 或 base。')
+      if (access === 'base') continue
       agents.push({ id, permissionId, label: typeof label === 'string' && label.trim() ? label.trim() : id })
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') continue

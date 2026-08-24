@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 /** 权限由模块和扩展能力在运行时注册，前端不维护封闭枚举。 */
 export type AccountPermissionId = string
 
-export type ModuleId = 'management-cockpit' | 'overview' | 'employee-data' | 'employee-agent' | 'finance-management' | 'project-management' | 'developer-console'
+export type ModuleId = 'management-cockpit' | 'overview' | 'work-assistant' | 'employee-data' | 'employee-agent' | 'finance-management' | 'project-management' | 'developer-console'
 export type ModuleGroupId = 'employee-management' | 'finance-management' | 'project-management'
 
 export interface AuthenticatedUser {

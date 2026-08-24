@@ -27,6 +27,11 @@ export interface AgentRuntimeRequest {
   readonly pathPrefix: string
 }
 
+export interface AgentRuntimeAuthorization {
+  readonly permissionId: string
+  readonly access: 'permission' | 'base'
+}
+
 interface RegisteredAccountAgentRuntime extends AccountAgentRuntime {
   readonly agentId: string
   readonly permissionId: string
@@ -107,14 +112,16 @@ async function runtimeFor(user: AuthUser, agentId: string): Promise<RegisteredAc
   return runtime
 }
 
-export async function permissionForAgentRuntime(agentId: string): Promise<string | null> {
+export async function authorizationForAgentRuntime(agentId: string): Promise<AgentRuntimeAuthorization | null> {
   try {
     const definitions: unknown = JSON.parse(await readFile(allRuntimeConfigPath, 'utf8'))
     if (!Array.isArray(definitions)) return null
     const runtime = definitions.find((candidate) => typeof candidate === 'object' && candidate !== null
       && 'agentId' in candidate && candidate.agentId === agentId
       && 'permissionId' in candidate && typeof candidate.permissionId === 'string')
-    return runtime && typeof runtime === 'object' && 'permissionId' in runtime && typeof runtime.permissionId === 'string' ? runtime.permissionId : null
+    if (!runtime || typeof runtime !== 'object' || !('permissionId' in runtime) || typeof runtime.permissionId !== 'string') return null
+    const access = 'access' in runtime ? runtime.access : 'permission'
+    return access === 'base' || access === 'permission' ? { permissionId: runtime.permissionId, access } : null
   } catch { return null }
 }
 

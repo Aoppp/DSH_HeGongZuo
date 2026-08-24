@@ -5,13 +5,14 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { AccountValidationError, AccountsService } from './accounts.js'
-import { AgentRuntimeProxyError, agentRuntimeRequest, checkConfiguredAgentRuntimeHealth, isAgentRuntimeRequest, permissionForAgentRuntime, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
+import { AgentRuntimeProxyError, agentRuntimeRequest, authorizationForAgentRuntime, checkConfiguredAgentRuntimeHealth, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
 import { AuthError, AuthService, LoginRateLimitError } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/employee-input.js'
 import { PostgresEmployeeRepository } from './modules/employee/employee-repository.js'
 import { employeeAuditDetail } from './modules/employee/employee-audit.js'
 import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
+import { WorkAssistantWorkspaceFiles } from './modules/work-assistant/workspace-files.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
 import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtime-change.js'
 import { registeredAgentPermissionIds, registeredAgentPermissions } from './modules/accounts/agent-runtime-permissions.js'
@@ -27,6 +28,7 @@ const host = process.env.HEGONGZUO_API_HOST ?? '127.0.0.1'
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
 const platformManagement = new PlatformManagementService(database)
+const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 
 
 function cookieToken(cookieHeader: string | undefined): string | null {
@@ -209,6 +211,31 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/work-assistant/files' && request.method === 'GET') {
+    sendJson(response, 200, await workAssistantFiles.list(currentUser.accountId))
+    return
+  }
+
+  if (url.pathname === '/api/work-assistant/files' && request.method === 'POST') {
+    const file = await workAssistantFiles.upload(currentUser.accountId, request)
+    await platformManagement.record(currentUser.id, currentUser.displayName, '上传工作文件', '工作文件', file.path, { fileName: file.name, size: file.size })
+    sendJson(response, 201, { file })
+    return
+  }
+
+  if (url.pathname === '/api/work-assistant/files/download' && request.method === 'GET') {
+    await workAssistantFiles.download(currentUser.accountId, url.searchParams.get('path'), response)
+    return
+  }
+
+  if (url.pathname === '/api/work-assistant/files' && request.method === 'DELETE') {
+    const filePath = url.searchParams.get('path')
+    await workAssistantFiles.remove(currentUser.accountId, filePath)
+    await platformManagement.record(currentUser.id, currentUser.displayName, '删除工作文件', '工作文件', filePath ?? '')
+    sendJson(response, 200, { ok: true })
+    return
+  }
+
   const managedModuleId = platformModuleId(url.pathname)
   if (managedModuleId && request.method === 'PATCH') {
     requirePlatformAdministration(currentUser)
@@ -221,9 +248,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   const runtimeRequest = agentRuntimeRequest(request.url)
   if (runtimeRequest) {
-    const permissionId = await permissionForAgentRuntime(runtimeRequest.agentId)
-    if (!permissionId) throw new HttpError(503, '该功能服务尚未完成运行时配置。')
-    requirePermission(currentUser, permissionId)
+    const authorization = await authorizationForAgentRuntime(runtimeRequest.agentId)
+    if (!authorization) throw new HttpError(503, '该功能服务尚未完成运行时配置。')
+    if (authorization.access === 'permission') requirePermission(currentUser, authorization.permissionId)
     if (runtimeRequest.agentId === 'employee-query') await platformManagement.assertModuleEnabled('employee-agent')
     await proxyAgentRequest(request, response, currentUser, runtimeRequest)
     return
@@ -270,8 +297,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       if (error instanceof Error) throw new AccountValidationError(error.message)
       throw error
     }
-    const agentPermissionIds = await registeredAgentPermissionIds(projectRoot)
-    accountRuntimeTasks.enqueue(created, { transitionStatus: true, provision: created.permissions.some((permission) => agentPermissionIds.includes(permission)) })
+    accountRuntimeTasks.enqueue(created, { transitionStatus: true, provision: true })
     await platformManagement.record(currentUser.id, currentUser.displayName, '新增账号', '账号', created.id, { accountId: created.accountId, displayName: created.displayName })
     sendJson(response, 202, { account: created })
     return
@@ -294,7 +320,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
     const runtimeChange = runtimeChangeForAccountUpdate(existing, updated, agentPermissionIds)
-    if (runtimeChange.sync) accountRuntimeTasks.enqueue(updated, { transitionStatus: false, provision: runtimeChange.provision })
+    if (runtimeChange.sync) accountRuntimeTasks.enqueue(updated, { transitionStatus: false, provision: runtimeChange.provision || existing.accountId !== updated.accountId })
     await platformManagement.record(currentUser.id, currentUser.displayName, '更新账号', '账号', updated.id, { accountId: updated.accountId, displayName: updated.displayName, permissions: updated.permissions })
     sendJson(response, 202, { account: updated })
     return
@@ -339,8 +365,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePlatformAdministration(currentUser)
     const account = await accounts.findById(retryId)
     if (!account) throw new HttpError(404, '账号不存在。')
-    const agentPermissionIds = await registeredAgentPermissionIds(projectRoot)
-    accountRuntimeTasks.enqueue(account, { transitionStatus: true, provision: account.permissions.some((permission) => agentPermissionIds.includes(permission)) })
+    accountRuntimeTasks.enqueue(account, { transitionStatus: true, provision: true })
     await platformManagement.record(currentUser.id, currentUser.displayName, '重试账号初始化', '账号', account.id, { displayName: account.displayName })
     sendJson(response, 202, { account: { ...account, status: 'initializing' } })
     return
@@ -498,8 +523,8 @@ server.on('upgrade', (request, socket, head) => {
       socket.end('HTTP/1.1 401 Unauthorized\r\nconnection: close\r\n\r\n')
       return
     }
-    const permissionId = await permissionForAgentRuntime(runtimeRequest.agentId)
-    if (!permissionId || !user.permissions.includes(permissionId)) {
+    const authorization = await authorizationForAgentRuntime(runtimeRequest.agentId)
+    if (!authorization || (authorization.access === 'permission' && !user.permissions.includes(authorization.permissionId))) {
       socket.end('HTTP/1.1 403 Forbidden\r\nconnection: close\r\n\r\n')
       return
     }

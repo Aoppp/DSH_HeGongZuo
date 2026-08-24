@@ -14,7 +14,9 @@ const runtimeRoot = path.join(runtimeDirectory, 'dsh')
 const workspaceRoot = path.join(runtimeDirectory, 'workspaces')
 const manifests = await agentRuntimeRegistry()
 
-const permissionIds = manifests.map((manifest) => manifest.permissionId)
+const permissionManifests = manifests.filter((manifest) => manifest.access === 'permission')
+const baseManifests = manifests.filter((manifest) => manifest.access === 'base')
+const permissionIds = permissionManifests.map((manifest) => manifest.permissionId)
 const rows = permissionIds.length === 0 ? [] : (await pool.query(
   `SELECT a.account_id, a.created_at, a.id, p.permission_id
    FROM accounts a
@@ -25,13 +27,22 @@ const rows = permissionIds.length === 0 ? [] : (await pool.query(
    ORDER BY a.created_at, a.id, p.permission_id`,
   [permissionIds],
 )).rows
+const activeAccounts = baseManifests.length === 0 ? [] : (await pool.query(
+  `SELECT account_id, created_at, id
+     FROM accounts
+    WHERE status IN ('active', 'initializing')
+    ORDER BY created_at, id`,
+)).rows
 
 const manifestByPermission = new Map(manifests.map((manifest) => [manifest.permissionId, manifest]))
-const requested = rows.map((row) => {
+const requested = [
+  ...baseManifests.flatMap((manifest) => activeAccounts.map((account) => ({ ...manifest, accountId: account.account_id, runtimeId: runtimeId(manifest.id, account.account_id) }))),
+  ...rows.map((row) => {
   const manifest = manifestByPermission.get(row.permission_id)
   if (!manifest) throw new Error(`账号权限 ${row.permission_id} 没有对应 Agent 清单。`)
   return { ...manifest, accountId: row.account_id, runtimeId: runtimeId(manifest.id, row.account_id) }
-})
+  }),
+].sort((left, right) => left.runtimeId.localeCompare(right.runtimeId))
 
 let previous = []
 try {
@@ -60,6 +71,7 @@ const definitions = requested.map((request) => {
     agentId: request.id,
     accountId: request.accountId,
     permissionId: request.permissionId,
+    access: request.access,
     runtime: request.runtime,
     port,
     apiBasePath: request.apiBasePath.replace('{accountId}', request.accountId),

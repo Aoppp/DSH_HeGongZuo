@@ -6,7 +6,7 @@ import { projectRoot } from './account-agent-runtime-paths-base.mjs'
 const packagesDirectory = path.join(projectRoot, 'packages')
 const identifier = /^[a-z][a-z0-9-]{1,62}$/
 
-/** @typedef {{ id: string, permissionId: string, runtime: 'dsh-web', apiBasePath: string, packageDirectory: string }} AgentManifest */
+/** @typedef {{ id: string, permissionId: string, access: 'permission' | 'base', runtime: 'dsh-web', apiBasePath: string, packageDirectory: string }} AgentManifest */
 
 /**
  * 读取项目内所有 Agent 清单。新增 DSH 网页 Agent 时，只需在 packages/<name>/
@@ -30,11 +30,14 @@ export async function agentRuntimeRegistry() {
     const manifest = raw
     if (typeof manifest.id !== 'string' || !identifier.test(manifest.id)) throw new Error(`Agent 清单缺少有效 id：${path.relative(projectRoot, manifestPath)}`)
     if (typeof manifest.permissionId !== 'string' || !identifier.test(manifest.permissionId)) throw new Error(`Agent ${manifest.id} 缺少有效 permissionId。`)
+    const access = manifest.access === undefined ? 'permission' : manifest.access
+    if (access !== 'permission' && access !== 'base') throw new Error(`Agent ${manifest.id} 的 access 必须为 permission 或 base。`)
     if (manifest.runtime !== 'dsh-web') throw new Error(`Agent ${manifest.id} 的 runtime 必须为 dsh-web。`)
     if (typeof manifest.apiBasePath !== 'string' || !manifest.apiBasePath.startsWith('/')) throw new Error(`Agent ${manifest.id} 缺少有效 apiBasePath。`)
     manifests.push({
       id: manifest.id,
       permissionId: manifest.permissionId,
+      access,
       runtime: manifest.runtime,
       apiBasePath: manifest.apiBasePath,
       packageDirectory: path.relative(projectRoot, path.join(packagesDirectory, entry.name)),
