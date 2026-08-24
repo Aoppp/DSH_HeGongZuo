@@ -20,6 +20,13 @@ test('工作助理在历史写入完成后用持久消息替换临时消息', ()
   assert.deepEqual(mergeHistoryMessages(history, current), history)
 })
 
+test('工作助理从服务端补齐完成回复时替换本地流式片段', () => {
+  const history = [{ id: 'assistant-2-1', kind: 'assistant', text: '完整回复。' }]
+  const current = [{ id: 'assistant-2-1', kind: 'assistant', text: '完整回', state: 'running' }]
+
+  assert.deepEqual(mergeHistoryMessages(history, current), history)
+})
+
 test('工作助理显示尚未完成的回复片段', () => {
   const messages = messagesFromHistory(/** @type {any} */ ([
     { event: { type: 'user/message', seq: 1, data: { id: 'user-1', source: { kind: 'user' }, content: [{ type: 'text', text: '整理文件' }] } } },

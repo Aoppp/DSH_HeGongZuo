@@ -162,6 +162,30 @@ export function WorkAssistantModule(_props: ModuleProps) {
     return () => { cancelled = true }
   }, [client, refreshFiles, refreshHistory])
 
+  // 连接在服务重启、网络短暂切换时可能错过最后一个完成通知。仅在有任务等待时
+  // 主动从持久历史对账，使完整回复和完成状态无需依赖用户手动刷新页面。
+  useEffect(() => {
+    if (!sessionId || !sending) return
+    let cancelled = false
+    let reconciling = false
+    const reconcile = async () => {
+      if (reconciling) return
+      reconciling = true
+      try {
+        const completed = await refreshHistory(sessionId)
+        if (!cancelled && completed) setSending(false)
+      } catch {
+        // 当前请求链会展示错误；下一次定时对账仍可在连接恢复后补齐历史。
+      } finally { reconciling = false }
+    }
+    void reconcile()
+    const timer = globalThis.setInterval(() => { void reconcile() }, 2_500)
+    return () => {
+      cancelled = true
+      globalThis.clearInterval(timer)
+    }
+  }, [refreshHistory, sending, sessionId])
+
   async function upload(file: File) {
     if (file.size > maximumFileBytes) { setError('单个表格文件不能超过 200MB。'); return }
     setUploading(true)
