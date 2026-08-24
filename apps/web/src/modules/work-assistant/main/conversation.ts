@@ -28,6 +28,21 @@ export function messagesFromHistory(entries: readonly HistoryEntry[]): readonly 
     } else messages[position] = message
   }
   for (const entry of entries.map((item) => item.event).sort((left, right) => left.seq - right.seq)) {
+    // DSH 会把高频文本片段压缩为 text-chunks；该事件在当前客户端类型中仍是
+    // 宽类型透传，因此以运行时校验读取，避免完成前页面没有任何正文可显示。
+    const packed = entry as unknown as { readonly type?: unknown; readonly data?: { readonly turn?: unknown; readonly step?: unknown; readonly texts?: unknown } }
+    if (packed.type === 'text-chunks'
+      && typeof packed.data?.turn === 'number'
+      && typeof packed.data?.step === 'number'
+      && Array.isArray(packed.data.texts)
+      && packed.data.texts.every((text) => typeof text === 'string')) {
+      const id = `assistant-${packed.data.turn}-${packed.data.step}`
+      if (!finalAssistantMessages.has(id)) {
+        const existing = messages[positions.get(id) ?? -1]
+        upsert({ id, kind: 'assistant', text: `${existing?.text ?? ''}${packed.data.texts.join('')}`, state: 'running' })
+      }
+      continue
+    }
     if (entry.type === 'user/message' && entry.data.source.kind === 'user') {
       const text = visibleText(entry.data.content)
       if (text) upsert({ id: `user-${entry.data.id}`, kind: 'user', text })

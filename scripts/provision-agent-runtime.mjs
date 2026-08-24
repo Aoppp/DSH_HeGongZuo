@@ -54,7 +54,11 @@ let previousRevision = ''
 try { previousRevision = (await readFile(revisionPath, 'utf8')).trim() } catch { /* 首次初始化需要启动新实例。 */ }
 if (previousRevision !== revision) {
   await writeFile(revisionPath, `${revision}\n`, 'utf8')
-  // systemd 同步器只重启这里明确标记的运行时，避免定时协调造成无意义的全量重启。
-  await appendFile(path.join(projectRoot, '.runtime', 'agent-restart-request'), `${runtimeId}\n`, 'utf8')
+  // 批量初始化时先写入未监听的暂存文件，避免 systemd 在其他运行时仍未完成
+  // 初始化时抢先消费重启清单，导致后续能力包更新未重启。
+  const restartFile = process.env.HEGONGZUO_DEFER_AGENT_RESTART === '1'
+    ? 'agent-restart-pending'
+    : 'agent-restart-request'
+  await appendFile(path.join(projectRoot, '.runtime', restartFile), `${runtimeId}\n`, 'utf8')
 }
 console.log(`[和工作] 已完成 ${runtimeId} 的运行空间初始化。`)

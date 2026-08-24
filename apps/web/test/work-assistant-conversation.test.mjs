@@ -32,3 +32,13 @@ test('工作助理显示尚未完成的回复片段', () => {
     { id: 'assistant-1-1', kind: 'assistant', text: '正在读取文档。', state: 'running' },
   ])
 })
+
+test('工作助理显示 DSH 压缩后的正文片段', () => {
+  const messages = messagesFromHistory(/** @type {any} */ ([
+    { event: { type: 'text-chunks', seq: 2, data: { turn: 1, step: 2, texts: ['正在', '整理', '文件。'] } } },
+  ]))
+
+  assert.deepEqual(messages, [
+    { id: 'assistant-1-2', kind: 'assistant', text: '正在整理文件。', state: 'running' },
+  ])
+})
