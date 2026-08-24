@@ -305,6 +305,16 @@
   flex: 0 0 auto;
 }
 
+.platform-management__audit-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.platform-management__audit-export {
+  text-decoration: none;
+}
+
 .platform-management__audit-chevron {
   transition: transform 160ms ease;
 }

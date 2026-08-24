@@ -1,4 +1,4 @@
-import { Activity, Blocks, ChevronDown, Database, History, LoaderCircle, RefreshCw } from 'lucide-react'
+import { Activity, Blocks, ChevronDown, Database, Download, History, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ModuleId } from '../../../app/types'
@@ -107,7 +107,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       </section>}
 
       {status && <section className="platform-management panel-card">
-        <header className="platform-management__header"><div><h2>操作记录</h2><p>审计记录长期保留，按需加载。</p></div><button className="employee-data__secondary platform-management__audit-toggle" type="button" onClick={toggleAudit} aria-expanded={auditOpen}><History size={15} />{auditOpen ? '收起记录' : '查看记录'}<ChevronDown className={auditOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></header>
+        <header className="platform-management__header"><div><h2>操作记录</h2><p>审计记录长期保留，按需加载。</p></div><div className="platform-management__audit-actions"><a className="employee-data__secondary platform-management__audit-export" href="/api/platform/audit-logs/export"><Download size={15} />导出全部 CSV</a><button className="employee-data__secondary platform-management__audit-toggle" type="button" onClick={toggleAudit} aria-expanded={auditOpen}><History size={15} />{auditOpen ? '收起记录' : '查看记录'}<ChevronDown className={auditOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></div></header>
         {auditOpen && (auditLoading && auditLogs.length === 0 ? <div className="account-admin__empty">正在加载操作记录…</div> : auditLogs.length === 0 ? <div className="account-admin__empty">暂无平台管理操作记录。</div> : <><div className="platform-management__audit">
           {auditLogs.map((log) => <article key={log.id}><div><strong>{log.action}</strong><small>{log.targetType} · {log.targetId}{auditFields(log.detail) ? ` · 修改：${auditFields(log.detail)}` : ''}</small></div><span>{log.actorName ?? '已删除账号'} · {formatTime(log.createdAt)}</span></article>)}
         </div>{auditCursor && <button className="employee-data__secondary platform-management__audit-more" type="button" disabled={auditLoading} onClick={() => void loadAuditLogs(auditCursor, true)}>{auditLoading ? <LoaderCircle className="spin" size={15} /> : '加载更多记录'}</button>}</>)}

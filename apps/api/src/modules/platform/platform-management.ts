@@ -1,3 +1,4 @@
+import type { ServerResponse } from 'node:http'
 import type { Pool } from 'pg'
 
 import { checkConfiguredAgentRuntimeHealth } from '../../agent-runtime-proxy.js'
@@ -29,6 +30,7 @@ interface ModuleSettingRow {
 
 interface AuditRow {
   readonly id: string | number
+  readonly actor_account_id: string | null
   readonly action: string
   readonly target_type: string
   readonly target_id: string
@@ -37,8 +39,62 @@ interface AuditRow {
   readonly actor_name: string | null
 }
 
+interface AuditDetail {
+  readonly employeeName?: unknown
+  readonly changedFields?: unknown
+}
+
 function timestamp(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value
+}
+
+function auditDetail(value: unknown): AuditDetail {
+  return value && typeof value === 'object' ? value as AuditDetail : {}
+}
+
+function auditChangedFields(value: unknown): string {
+  const fields = auditDetail(value).changedFields
+  return Array.isArray(fields) && fields.every((field) => typeof field === 'string') ? fields.join('、') : ''
+}
+
+function auditEmployeeName(value: unknown): string {
+  const name = auditDetail(value).employeeName
+  return typeof name === 'string' ? name : ''
+}
+
+function csvCell(value: string | number | null | undefined): string {
+  const text = String(value ?? '')
+  // 防止 Excel 将审计内容当作公式执行。
+  const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text
+  return `"${safeText.replaceAll('"', '""')}"`
+}
+
+export function auditCsvLine(row: AuditRow): string {
+  return [
+    timestamp(row.created_at),
+    row.actor_name ?? '已删除账号',
+    row.actor_account_id,
+    row.action,
+    row.target_type,
+    row.target_id,
+    auditEmployeeName(row.detail),
+    auditChangedFields(row.detail),
+  ].map(csvCell).join(',') + '\r\n'
+}
+
+async function writeCsv(response: ServerResponse, content: string): Promise<boolean> {
+  if (response.destroyed) return false
+  if (response.write(content)) return true
+  await new Promise<void>((resolve) => {
+    const settle = () => {
+      response.off('drain', settle)
+      response.off('close', settle)
+      resolve()
+    }
+    response.once('drain', settle)
+    response.once('close', settle)
+  })
+  return !response.destroyed
 }
 
 function isManagedModuleId(value: string): value is ManagedModuleId {
@@ -102,6 +158,35 @@ export class PlatformManagementService {
       logs: rows.map((row) => ({ id: String(row.id), action: row.action, targetType: row.target_type, targetId: row.target_id, detail: row.detail, createdAt: timestamp(row.created_at), actorName: row.actor_name })),
       nextCursor: result.rows.length > 30 && last ? { createdAt: timestamp(last.created_at), id: Number(last.id) } : null,
     }
+  }
+
+  async exportAuditCsv(response: ServerResponse): Promise<void> {
+    response.writeHead(200, {
+      'content-type': 'text/csv; charset=utf-8',
+      'content-disposition': `attachment; filename="audit-records.csv"; filename*=UTF-8''${encodeURIComponent('操作记录.csv')}`,
+      'cache-control': 'no-store',
+    })
+    if (!await writeCsv(response, '\uFEFF操作时间,操作账号,操作账号编号,操作,对象类型,对象编号,目标员工,变更字段\r\n')) return
+
+    let cursor: { readonly createdAt: string; readonly id: number } | null = null
+    while (!response.destroyed) {
+      const values: unknown[] = []
+      const where: string = cursor ? (() => { values.push(cursor.createdAt, cursor.id); return 'WHERE (l.created_at, l.id) < ($1::timestamptz, $2::bigint)' })() : ''
+      const result: { readonly rows: readonly AuditRow[] } = await this.pool.query<AuditRow>(
+        `SELECT l.id, l.actor_account_id, l.action, l.target_type, l.target_id, l.detail, l.created_at,
+                COALESCE(l.actor_display_name, a.display_name) AS actor_name
+           FROM platform_audit_logs l LEFT JOIN accounts a ON a.id = l.actor_account_id
+           ${where}
+           ORDER BY l.created_at DESC, l.id DESC LIMIT 500`,
+        values,
+      )
+      if (result.rows.length === 0) break
+      if (!await writeCsv(response, result.rows.map(auditCsvLine).join(''))) return
+      const last: AuditRow | undefined = result.rows.at(-1)
+      if (!last || result.rows.length < 500) break
+      cursor = { createdAt: timestamp(last.created_at), id: Number(last.id) }
+    }
+    if (!response.destroyed) response.end()
   }
 
   async setModuleEnabled(moduleId: string, enabled: unknown, actorAccountId: string, actorDisplayName: string): Promise<void> {

@@ -203,6 +203,12 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/platform/audit-logs/export' && request.method === 'GET') {
+    requirePlatformAdministration(currentUser)
+    await platformManagement.exportAuditCsv(response)
+    return
+  }
+
   const managedModuleId = platformModuleId(url.pathname)
   if (managedModuleId && request.method === 'PATCH') {
     requirePlatformAdministration(currentUser)
