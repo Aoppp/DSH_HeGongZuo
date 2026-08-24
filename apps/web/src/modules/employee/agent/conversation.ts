@@ -88,12 +88,13 @@ export function buildConversation(entries: readonly HistoryEntry[]): Conversatio
       case 'tool/call': {
         const callId = String(event.data.callId)
         toolNames.set(callId, event.data.name)
+        const needsUnsupportedInteraction = event.data.name === 'ask_user_question'
         upsert({
           id: `tool-${callId}`,
           kind: 'tool',
           label: event.data.name,
-          text: '正在查询员工数据…',
-          state: 'running',
+          text: needsUnsupportedInteraction ? '当前对话等待补充信息，请终止并删除后重新发起查询。' : '正在查询员工数据…',
+          state: needsUnsupportedInteraction ? 'failed' : 'running',
           time: event.time,
         })
         break

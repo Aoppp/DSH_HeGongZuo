@@ -54,8 +54,9 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
   }
 
   function deleteConversation(session: (typeof agent.sessions)[number]) {
-    if (session.running) return
-    const confirmed = window.confirm(`确定永久删除对话“${session.title}”吗？\n\n该对话及其后台记录将一并删除，且无法恢复。`)
+    const confirmed = window.confirm(session.running
+      ? `确定终止并永久删除对话“${session.title}”吗？\n\n正在处理的任务会被取消，该对话及其后台记录将一并删除，且无法恢复。`
+      : `确定永久删除对话“${session.title}”吗？\n\n该对话及其后台记录将一并删除，且无法恢复。`)
     if (confirmed) void agent.deleteSession(session.id)
   }
 
@@ -96,9 +97,9 @@ export function EmployeeAgentModule({ user }: ModuleProps) {
                 <button
                   className="agent-session-delete"
                   type="button"
-                  title={session.running ? '对话正在处理，暂时不能删除' : '删除对话'}
+                  title={session.running ? '终止并删除对话' : '删除对话'}
                   aria-label={`删除对话：${session.title}`}
-                  disabled={session.running || agent.deletingSessionId !== null}
+                  disabled={agent.deletingSessionId !== null}
                   onClick={() => deleteConversation(session)}
                 >
                   {agent.deletingSessionId === session.id ? <LoaderCircle className="spin" size={13} /> : <Trash2 size={13} />}

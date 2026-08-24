@@ -56,6 +56,7 @@ export async function registerEmployeeAgent(ctx: Context, repository: EmployeeDa
       '身份证、银行卡、居住住址、身份证地址、紧急联系人及电话、个人邮箱属于受限信息，不得查询、推测或声称能够获取。',
       '',
       '需要员工详情时优先调用工具，不要根据姓名猜测员工 ID。',
+      '不得调用 ask_user_question 或其他交互式追问工具；信息不足时，直接在普通文字回答中说明需要补充的员工姓名、工号或筛选条件，然后结束本轮回答。',
     ].join('\n'),
   })
 

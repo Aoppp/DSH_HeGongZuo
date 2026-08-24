@@ -99,9 +99,6 @@ export async function permanentlyDeleteSession(
   if (!SESSION_ID_PATTERN.test(sessionId)) throw new SessionDeletionError('对话 ID 格式无效。', 400)
   const brandedSessionId = SessionId(sessionId)
   const liveAgent = ctx.agents.get(brandedSessionId)
-  if (liveAgent?.status === 'running') {
-    throw new SessionDeletionError('该对话正在处理任务，请等待完成后再删除。', 409)
-  }
 
   const header = (await ctx.sessionPersistence.list()).find((candidate) => candidate.id === sessionId)
   if (!header) throw new SessionDeletionError('该对话不存在或已被删除。', 404)
@@ -124,6 +121,8 @@ export async function permanentlyDeleteSession(
     if (!handle || handle.agent !== liveAgent) {
       throw new SessionDeletionError('该对话的运行时尚未进入可安全删除状态，请刷新页面后重试。', 409)
     }
+    // 无论会话是否仍在执行，都先释放运行时句柄；这会终止悬挂的工具调用，
+    // 避免“会话卡住且无法删除”的死锁。
     await handle.dispose()
     await ctx.sessionPersistence.inspect(brandedSessionId)
   }
