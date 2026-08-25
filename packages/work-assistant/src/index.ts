@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import '@deepseek-ai/dsh-system-prompt'
 import '@deepseek-ai/dsh-tools'
 import '@deepseek-ai/dsh-workspace'
+import { publishAgentRuntimeReadiness } from '@hegongzuo/agent-runtime-contract'
 
 import { registerSessionDeletionRoute } from './session-deletion.js'
 
@@ -11,7 +12,6 @@ export const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'webServer'
 export async function apply(ctx: Context): Promise<void> {
   const workspacePath = process.env.HEGONGZUO_AGENT_WORKSPACE?.trim()
   if (!workspacePath) throw new Error('工作助理缺少账号工作区。')
-  await ctx.workspaceRegistry.create(workspacePath, '工作文件')
 
   ctx.systemPrompt.section({
     name: 'hegongzuo:work-assistant',
@@ -31,4 +31,7 @@ export async function apply(ctx: Context): Promise<void> {
     ].join('\n'),
   })
   registerSessionDeletionRoute(ctx)
+  // 工作区是业务能力就绪标记，必须在提示词和路由注册成功后最后发布。
+  await ctx.workspaceRegistry.create(workspacePath, '工作文件')
+  publishAgentRuntimeReadiness(ctx, 'work-assistant')
 }

@@ -78,6 +78,15 @@ importers:
         specifier: 8.2.1
         version: 8.2.1(@types/node@22.20.1)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)
 
+  packages/agent-runtime-contract:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: 4.0.1
+        version: 4.0.1(@deepseek-ai/cordis-plugin-include@1.0.6)(@deepseek-ai/cordis-plugin-loader@1.0.2)
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: 0.1.0-rc.6
+        version: 0.1.0-rc.6(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.6(@deepseek-ai/cordis@4.0.1))
+
   packages/employee-agent:
     dependencies:
       '@deepseek-ai/cordis':
@@ -107,6 +116,9 @@ importers:
       '@deepseek-ai/dsh-workspace':
         specifier: 0.1.0-rc.6
         version: 0.1.0-rc.6(1cc52dfbc7fc17aad1b6b9c3711f64fc)
+      '@hegongzuo/agent-runtime-contract':
+        specifier: workspace:*
+        version: link:../agent-runtime-contract
       pg:
         specifier: ^8.23.0
         version: 8.23.0
@@ -149,6 +161,9 @@ importers:
       '@deepseek-ai/dsh-workspace':
         specifier: 0.1.0-rc.6
         version: 0.1.0-rc.6(1cc52dfbc7fc17aad1b6b9c3711f64fc)
+      '@hegongzuo/agent-runtime-contract':
+        specifier: workspace:*
+        version: link:../agent-runtime-contract
 
 packages:
 

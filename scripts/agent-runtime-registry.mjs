@@ -19,6 +19,7 @@ export async function agentRuntimeRegistry() {
   for (const entry of packageNames) {
     if (!entry.isDirectory()) continue
     const manifestPath = path.join(packagesDirectory, entry.name, 'hegongzuo-agent.json')
+    const packagePath = path.join(packagesDirectory, entry.name, 'package.json')
     let raw
     try {
       raw = JSON.parse(await readFile(manifestPath, 'utf8'))
@@ -28,6 +29,8 @@ export async function agentRuntimeRegistry() {
     }
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`Agent 清单格式无效：${path.relative(projectRoot, manifestPath)}`)
     const manifest = raw
+    const packageJson = JSON.parse(await readFile(packagePath, 'utf8'))
+    if (packageJson?.dependencies?.['@hegongzuo/agent-runtime-contract'] !== 'workspace:*') throw new Error(`Agent ${manifest.id ?? entry.name} 未接入统一运行时就绪契约。`)
     if (typeof manifest.id !== 'string' || !identifier.test(manifest.id)) throw new Error(`Agent 清单缺少有效 id：${path.relative(projectRoot, manifestPath)}`)
     if (typeof manifest.permissionId !== 'string' || !identifier.test(manifest.permissionId)) throw new Error(`Agent ${manifest.id} 缺少有效 permissionId。`)
     const access = manifest.access === undefined ? 'permission' : manifest.access

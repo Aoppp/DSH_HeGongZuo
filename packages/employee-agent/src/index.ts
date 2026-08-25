@@ -3,6 +3,7 @@ import '@deepseek-ai/dsh-system-prompt'
 import '@deepseek-ai/dsh-tools'
 import '@deepseek-ai/dsh-workspace'
 import pg, { type PoolConfig } from 'pg'
+import { publishAgentRuntimeReadiness } from '@hegongzuo/agent-runtime-contract'
 
 import { PostgresEmployeeRepository } from './postgres-repository.js'
 import type { EmployeeDataSource } from './repository.js'
@@ -23,10 +24,6 @@ export const inject = [
 
 export async function registerEmployeeAgent(ctx: Context, repository: EmployeeDataSource): Promise<void> {
   const workspacePath = process.env.HEGONGZUO_AGENT_WORKSPACE?.trim()
-  if (workspacePath) {
-    await ctx.workspaceRegistry.create(workspacePath, '员工管理 Agent')
-  }
-
   ctx.systemPrompt.section({
     name: 'hegongzuo:employee-management',
     order: 120,
@@ -63,6 +60,8 @@ export async function registerEmployeeAgent(ctx: Context, repository: EmployeeDa
   for (const tool of createEmployeeTools(repository)) {
     ctx.tools.register(tool)
   }
+  // 工作区是业务能力就绪标记，必须在提示词和工具注册成功后最后发布。
+  if (workspacePath) await ctx.workspaceRegistry.create(workspacePath, '员工管理 Agent')
 }
 
 export async function apply(ctx: Context): Promise<void> {
@@ -76,6 +75,7 @@ export async function apply(ctx: Context): Promise<void> {
   ctx.effect(() => async () => { await database.end() }, 'hegongzuo.employee-agent.postgresql')
   await registerEmployeeAgent(ctx, repository)
   registerSessionDeletionRoute(ctx)
+  publishAgentRuntimeReadiness(ctx, 'employee-query')
 }
 
 export { loadEmployeeDataset } from './data.js'

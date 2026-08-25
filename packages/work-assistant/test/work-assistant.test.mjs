@@ -6,8 +6,12 @@ import { apply } from '../dist/index.js'
 test('工作助理为账号工作目录注册默认工作区和处理边界', async () => {
   const workspaces = []
   const sections = []
-  const previous = process.env.HEGONGZUO_AGENT_WORKSPACE
+  const previousWorkspace = process.env.HEGONGZUO_AGENT_WORKSPACE
+  const previousAccountId = process.env.HEGONGZUO_ACCOUNT_ID
+  const previousAgentId = process.env.HEGONGZUO_AGENT_ID
   process.env.HEGONGZUO_AGENT_WORKSPACE = '/tmp/hegongzuo-work-assistant-test'
+  process.env.HEGONGZUO_ACCOUNT_ID = 'test'
+  process.env.HEGONGZUO_AGENT_ID = 'work-assistant'
   try {
     await apply({
       workspaceRegistry: { async create(workspacePath, title) { workspaces.push({ workspacePath, title }) } },
@@ -24,7 +28,11 @@ test('工作助理为账号工作目录注册默认工作区和处理边界', as
     assert.match(sections[0].text, /不得调用 ask_user_question/)
     assert.match(sections[0].text, /中间文件保存到 .work\//)
   } finally {
-    if (previous === undefined) delete process.env.HEGONGZUO_AGENT_WORKSPACE
-    else process.env.HEGONGZUO_AGENT_WORKSPACE = previous
+    if (previousWorkspace === undefined) delete process.env.HEGONGZUO_AGENT_WORKSPACE
+    else process.env.HEGONGZUO_AGENT_WORKSPACE = previousWorkspace
+    if (previousAccountId === undefined) delete process.env.HEGONGZUO_ACCOUNT_ID
+    else process.env.HEGONGZUO_ACCOUNT_ID = previousAccountId
+    if (previousAgentId === undefined) delete process.env.HEGONGZUO_AGENT_ID
+    else process.env.HEGONGZUO_AGENT_ID = previousAgentId
   }
 })

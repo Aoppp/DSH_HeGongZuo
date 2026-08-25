@@ -27,20 +27,26 @@ export async function runtimeHasWorkspace(port, workspacePath, fetchImpl = fetch
   return Array.isArray(items) && items.some((item) => typeof item === 'object' && item !== null && 'path' in item && item.path === workspacePath)
 }
 
+/** @param {number} port @param {string} agentId @param {string} accountId @param {typeof fetch} fetchImpl */
+async function runtimePublishesIdentity(port, agentId, accountId, fetchImpl) {
+  const response = await fetchImpl(`http://127.0.0.1:${port}/hegongzuo/api/readiness`, { signal: AbortSignal.timeout(3_000) })
+  if (!response.ok) return false
+  const value = await response.json()
+  return value?.ok === true && value.agentId === agentId && value.accountId === accountId
+}
+
 /**
- * 等待 DSH API 就绪，并为插件启动阶段遗漏的工作区执行幂等补建。
- * 该逻辑只使用运行时注册表中的当前实例路径，不接触其他账号目录。
- * @param {{ port: number, workspacePath: string, fetchImpl?: typeof fetch, attempts?: number, retryDelayMs?: number }} options
+ * 等待业务插件完成工作区注册。运行器不再代替插件创建通用工作区，避免基础
+ * DSH 进程在缺少业务提示和工具时被误判为可用。
+ * @param {{ port: number, workspacePath: string, agentId: string, accountId: string, fetchImpl?: typeof fetch, attempts?: number, retryDelayMs?: number }} options
  */
 export async function ensureRuntimeWorkspace(options) {
-  const { port, workspacePath, fetchImpl = fetch, attempts = 40, retryDelayMs = 500 } = options
+  const { port, workspacePath, agentId, accountId, fetchImpl = fetch, attempts = 40, retryDelayMs = 500 } = options
   let lastError
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      if (await runtimeHasWorkspace(port, workspacePath, fetchImpl)) return
-      const created = await runtimeRequest(port, 'workspace.create', { path: workspacePath }, fetchImpl)
-      if (created?.workspace?.path === workspacePath) return
-      throw new Error('工作区创建结果无效。')
+      if (await runtimeHasWorkspace(port, workspacePath, fetchImpl) && await runtimePublishesIdentity(port, agentId, accountId, fetchImpl)) return
+      throw new Error('业务插件尚未发布完整就绪身份。')
     } catch (reason) {
       lastError = reason
       if (attempt + 1 < attempts) await new Promise((resolve) => setTimeout(resolve, retryDelayMs))

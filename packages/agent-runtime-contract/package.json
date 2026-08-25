@@ -1,0 +1,24 @@
+{
+  "name": "@hegongzuo/agent-runtime-contract",
+  "version": "0.0.0",
+  "private": true,
+  "description": "和工作 Agent 运行时统一就绪契约",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-host-webserver": "0.1.0-rc.6"
+  }
+}

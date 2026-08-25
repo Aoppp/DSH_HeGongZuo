@@ -20,6 +20,7 @@ const allRuntimeConfigPath = process.env.HEGONGZUO_ALL_AGENT_RUNTIME_CONFIG
 
 interface AccountAgentRuntime {
   readonly accountId: string
+  readonly agentId?: string
   readonly port: number
   readonly workspaceDirectory: string
 }
@@ -152,8 +153,16 @@ async function probeRuntime(runtime: AccountAgentRuntime): Promise<boolean> {
     const record = body as { readonly rpcId?: unknown; readonly result?: { readonly ok?: unknown; readonly value?: { readonly items?: unknown } } }
     const items = record.result?.value?.items
     const expectedWorkspace = path.resolve(projectRoot, runtime.workspaceDirectory)
-    return record.rpcId === rpcId && record.result?.ok === true && Array.isArray(items)
+    const workspaceAvailable = record.rpcId === rpcId && record.result?.ok === true && Array.isArray(items)
       && items.some((item) => typeof item === 'object' && item !== null && 'path' in item && item.path === expectedWorkspace)
+    if (!workspaceAvailable || !runtime.agentId) return workspaceAvailable
+    const readiness = await fetch(`http://127.0.0.1:${runtime.port}/hegongzuo/api/readiness`, { signal: AbortSignal.timeout(2_000) })
+    if (!readiness.ok) return false
+    const identity: unknown = await readiness.json()
+    return typeof identity === 'object' && identity !== null
+      && 'ok' in identity && identity.ok === true
+      && 'agentId' in identity && identity.agentId === runtime.agentId
+      && 'accountId' in identity && identity.accountId === runtime.accountId
   } catch { return false }
 }
 
