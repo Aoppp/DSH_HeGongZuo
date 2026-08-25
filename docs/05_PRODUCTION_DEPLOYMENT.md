@@ -71,12 +71,10 @@ journalctl -u hegongzuo -f
 sudo systemctl disable --now hegongzuo
 sudo systemctl enable --now hegongzuo-api
 corepack pnpm dsh:accounts:sync
-sudo systemctl enable --now hegongzuo-agent@<账号>.service
+sudo systemctl enable --now hegongzuo-agent-sync.path hegongzuo-agent-reconcile.timer
 ```
 
-对 `.runtime/account-agent-runtimes.json` 中每个启用账号执行最后一条命令。新增、删除或停用账号后，先同步运行时配置，再由运维执行对应的启用、停止或禁用命令；API 不直接管理 systemd 单元。
-
-启用 `hegongzuo-agent-sync.path` 后，配置变更会触发 root 所有的同步脚本，自动启停对应账号实例；脚本仅接受符合账号格式的配置值，API 不直接调用 systemd。
+启用 `hegongzuo-agent-sync.path` 后，配置变更和有效的功能访问请求会触发 root 所有的同步脚本。实例不随服务器启动而全部常驻：首次访问时按需启动，空闲 30 分钟后由协调任务停止，运行空间继续保留。脚本仅接受符合账号格式的配置值，API 不直接调用 systemd。
 
 ### 迁移验证与回滚
 

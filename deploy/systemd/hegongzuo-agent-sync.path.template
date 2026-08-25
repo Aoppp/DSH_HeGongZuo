@@ -4,6 +4,7 @@ Description=监听和工作账号运行时配置变更
 [Path]
 PathChanged=__PROJECT_DIR__/.runtime/agent-runtimes.json
 PathChanged=__PROJECT_DIR__/.runtime/agent-restart-request
+PathChanged=__PROJECT_DIR__/.runtime/agent-activation-request
 Unit=hegongzuo-agent-sync.service
 
 [Install]

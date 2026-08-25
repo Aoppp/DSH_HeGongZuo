@@ -118,7 +118,7 @@ export class PlatformManagementService {
 
   async status(): Promise<{
     readonly database: 'available'
-    readonly agentRuntimes: { readonly expected: number; readonly available: number; readonly unavailable: readonly string[] }
+    readonly agentRuntimes: { readonly expected: number; readonly available: number; readonly running: number; readonly idle: number; readonly unavailable: readonly string[] }
     readonly modules: readonly { readonly id: ManagedModuleId; readonly label: string; readonly enabled: boolean; readonly updatedAt: string | null; readonly updatedBy: string | null }[]
   }> {
     await this.pool.query('SELECT 1')
@@ -133,7 +133,7 @@ export class PlatformManagementService {
     const unavailable = runtimeHealth.filter((runtime) => !runtime.available)
     return {
       database: 'available',
-      agentRuntimes: { expected: runtimeHealth.length, available: runtimeHealth.length - unavailable.length, unavailable: unavailable.map((runtime) => runtime.runtimeId) },
+      agentRuntimes: { expected: runtimeHealth.length, available: runtimeHealth.length - unavailable.length, running: runtimeHealth.filter((runtime) => runtime.state === 'running').length, idle: runtimeHealth.filter((runtime) => runtime.state === 'idle').length, unavailable: unavailable.map((runtime) => runtime.runtimeId) },
       modules: managedModuleIds.map((id) => {
         const setting = settingsById.get(id)
         return { id, label: moduleLabels[id], enabled: setting?.enabled ?? true, updatedAt: setting ? timestamp(setting.updated_at) : null, updatedBy: setting?.updated_by_name ?? null }

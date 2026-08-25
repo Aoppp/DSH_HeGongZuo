@@ -10,7 +10,7 @@ export interface PlatformModuleStatus {
 
 export interface PlatformStatus {
   readonly database: 'available'
-  readonly agentRuntimes: { readonly expected: number; readonly available: number; readonly unavailable: readonly string[] }
+  readonly agentRuntimes: { readonly expected: number; readonly available: number; readonly running: number; readonly idle: number; readonly unavailable: readonly string[] }
   readonly modules: readonly PlatformModuleStatus[]
 }
 

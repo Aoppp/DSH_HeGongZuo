@@ -3,8 +3,12 @@
 set -eu
 
 PROJECT_DIR=__PROJECT_DIR__
+DEPLOY_USER=__DEPLOY_USER__
 CONFIG_PATH="$PROJECT_DIR/.runtime/agent-runtimes.json"
 RESTART_REQUEST_PATH="$PROJECT_DIR/.runtime/agent-restart-request"
+ACTIVATION_REQUEST_PATH="$PROJECT_DIR/.runtime/agent-activation-request"
+ACTIVITY_DIR="$PROJECT_DIR/.runtime/agent-activity"
+IDLE_TIMEOUT_SECONDS=1800
 
 if [ ! -f "$CONFIG_PATH" ]; then
   echo "[和工作] 运行时配置不存在：$CONFIG_PATH" >&2
@@ -23,9 +27,19 @@ desired_runtimes=$(/usr/bin/node -e '
 running_runtimes=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^[[:space:]]*hegongzuo-agent@\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)\.service.*/\1/p')
 legacy_accounts=$(systemctl list-units --all --no-legend 'hegongzuo-agent@*.service' | sed -n 's/^[[:space:]]*hegongzuo-agent@\([a-z][a-z0-9]*\)\.service.*/\1/p')
 restart_runtimes=""
-if [ -f "$RESTART_REQUEST_PATH" ]; then
-  restart_runtimes=$(sed -n 's/^\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)$/\1/p' "$RESTART_REQUEST_PATH" | sort -u)
-fi
+activation_runtimes=""
+restart_processing="${RESTART_REQUEST_PATH}.processing.$$"
+activation_processing="${ACTIVATION_REQUEST_PATH}.processing.$$"
+restore_requests() {
+  if [ -f "$restart_processing" ]; then cat "$restart_processing" >> "$RESTART_REQUEST_PATH"; rm -f "$restart_processing"; fi
+  if [ -f "$activation_processing" ]; then cat "$activation_processing" >> "$ACTIVATION_REQUEST_PATH"; rm -f "$activation_processing"; fi
+}
+trap restore_requests EXIT HUP INT TERM
+if [ -f "$RESTART_REQUEST_PATH" ]; then mv "$RESTART_REQUEST_PATH" "$restart_processing"; fi
+if [ -f "$ACTIVATION_REQUEST_PATH" ]; then mv "$ACTIVATION_REQUEST_PATH" "$activation_processing"; fi
+if [ -f "$restart_processing" ]; then restart_runtimes=$(sed -n 's/^\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)$/\1/p' "$restart_processing" | sort -u); fi
+if [ -f "$activation_processing" ]; then activation_runtimes=$(sed -n 's/^\([a-z][a-z0-9-]*--[a-z][a-z0-9]*\)$/\1/p' "$activation_processing" | sort -u); fi
+install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$ACTIVITY_DIR"
 
 # v2.02 之前的实例仅以账号命名；切换为 agent--account 后必须先停用，
 # 否则会与新实例争用相同端口。
@@ -40,12 +54,32 @@ for runtime in $running_runtimes; do
 done
 
 for runtime in $desired_runtimes; do
-  was_active=false
-  if systemctl is-active --quiet "hegongzuo-agent@${runtime}.service"; then was_active=true; fi
-  systemctl enable --now "hegongzuo-agent@${runtime}.service"
-  if [ "$was_active" = true ] && printf '%s\n' "$restart_runtimes" | grep -Fxq "$runtime"; then
-    systemctl restart "hegongzuo-agent@${runtime}.service"
+  unit="hegongzuo-agent@${runtime}.service"
+  # 实例只按需启动，禁止随服务器启动而一次性拉起全部账号运行时。
+  systemctl disable "$unit" >/dev/null 2>&1 || true
+  if systemctl is-active --quiet "$unit"; then
+    activity_path="$ACTIVITY_DIR/$runtime"
+    if [ ! -f "$activity_path" ]; then
+      install -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$activity_path"
+    fi
+    if printf '%s\n' "$restart_runtimes" | grep -Fxq "$runtime"; then
+      systemctl restart "$unit"
+    else
+      now=$(date +%s)
+      modified=$(stat -c %Y "$activity_path")
+      if [ $((now - modified)) -gt "$IDLE_TIMEOUT_SECONDS" ]; then
+        systemctl stop "$unit"
+        echo "[和工作] 空闲运行时已释放：$runtime"
+      fi
+    fi
+  elif printf '%s\n' "$activation_runtimes" | grep -Fxq "$runtime"; then
+    if systemctl start "$unit"; then
+      echo "[和工作] 按需启动运行时：$runtime"
+    else
+      echo "[和工作] 按需启动失败，等待下一次请求重试：$runtime" >&2
+    fi
   fi
 done
 
-rm -f "$RESTART_REQUEST_PATH"
+rm -f "$restart_processing" "$activation_processing"
+trap - EXIT HUP INT TERM

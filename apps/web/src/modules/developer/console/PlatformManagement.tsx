@@ -87,7 +87,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
           <div className="platform-management__health">
             <article><span><Activity size={19} /></span><div><small>平台 API</small><strong>运行正常</strong></div></article>
             <article><span><Database size={19} /></span><div><small>数据服务</small><strong>{status.database === 'available' ? '连接正常' : '不可用'}</strong></div></article>
-            <article><span><Blocks size={19} /></span><div><small>员工查询服务</small><strong>{status.agentRuntimes.available} / {status.agentRuntimes.expected} 可用</strong>{status.agentRuntimes.unavailable.length > 0 && <em>存在不可用运行空间</em>}</div></article>
+            <article><span><Blocks size={19} /></span><div><small>功能运行空间</small><strong>{status.agentRuntimes.running} 个运行中，{status.agentRuntimes.idle} 个待命</strong>{status.agentRuntimes.unavailable.length > 0 && <em>存在不可用运行空间</em>}</div></article>
           </div>
         )}
       </section>

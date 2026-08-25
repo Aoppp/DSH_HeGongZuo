@@ -78,4 +78,4 @@ corepack pnpm verify:agent-isolation
 }
 ```
 
-部署或账号权限变更时，平台自动扫描 `packages/*/hegongzuo-agent.json`，生成 `.runtime/agent-runtimes.json`，并由 `hegongzuo-agent-sync.path` 自动启停 `hegongzuo-agent@<agent-id>--<account-id>` 实例。新增符合此约定的 Agent 不需要新增 systemd 服务或修改同步脚本；权限定义和对应业务入口仍应按模块边界单独开发。
+部署或账号权限变更时，平台自动扫描 `packages/*/hegongzuo-agent.json`，生成 `.runtime/agent-runtimes.json`。运行空间和能力包提前准备，但进程只在账号首次访问对应功能时由 `hegongzuo-agent-sync.path` 按需启动；页面连接期间持续续期，空闲 30 分钟后由协调任务停止，工作空间和会话仍然保留。新增符合此约定的 Agent 不需要新增 systemd 服务或修改同步脚本；权限定义和对应业务入口仍应按模块边界单独开发。

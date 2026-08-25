@@ -141,7 +141,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     await database.query('SELECT 1')
     const runtimes = await checkConfiguredAgentRuntimeHealth()
     const unavailable = runtimes.filter((runtime) => !runtime.available)
-    sendJson(response, unavailable.length ? 503 : 200, { ok: unavailable.length === 0, database: 'postgresql', agentRuntimes: { expected: runtimes.length, available: runtimes.length - unavailable.length, unavailable: unavailable.map((runtime) => runtime.runtimeId) } })
+    sendJson(response, unavailable.length ? 503 : 200, { ok: unavailable.length === 0, database: 'postgresql', agentRuntimes: { expected: runtimes.length, available: runtimes.length - unavailable.length, running: runtimes.filter((runtime) => runtime.state === 'running').length, idle: runtimes.filter((runtime) => runtime.state === 'idle').length, unavailable: unavailable.map((runtime) => runtime.runtimeId) } })
     return
   }
 

@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { Duplex } from 'node:stream'
 
 import type { AuthUser } from './auth.js'
+import { RuntimeDemand } from './modules/agent-runtime/runtime-demand.js'
 
 const legacyEmployeeAgentPathPrefix = '/api/employee-agent'
 const genericAgentPathPrefix = '/api/agents/'
@@ -13,6 +14,8 @@ const boundedRequestTimeoutMs = 30_000
 const agentTaskTimeoutMs = 5 * 60_000 + 30_000
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(sourceDirectory, '../../..')
+const runtimeDirectory = path.join(projectRoot, '.runtime')
+const runtimeDemand = new RuntimeDemand(runtimeDirectory)
 const runtimeConfigPath = process.env.HEGONGZUO_AGENT_RUNTIME_CONFIG
   ?? path.join(projectRoot, '.runtime', 'account-agent-runtimes.json')
 const allRuntimeConfigPath = process.env.HEGONGZUO_ALL_AGENT_RUNTIME_CONFIG
@@ -21,6 +24,7 @@ const allRuntimeConfigPath = process.env.HEGONGZUO_ALL_AGENT_RUNTIME_CONFIG
 interface AccountAgentRuntime {
   readonly accountId: string
   readonly agentId?: string
+  readonly runtimeId?: string
   readonly port: number
   readonly workspaceDirectory: string
 }
@@ -38,6 +42,7 @@ export interface AgentRuntimeAuthorization {
 interface RegisteredAccountAgentRuntime extends AccountAgentRuntime {
   readonly agentId: string
   readonly permissionId: string
+  readonly runtimeId: string
 }
 
 export interface AgentRuntimeHealth {
@@ -48,6 +53,7 @@ export interface AgentRuntimeHealth {
 export interface ConfiguredAgentRuntimeHealth extends AgentRuntimeHealth {
   readonly runtimeId: string
   readonly agentId: string
+  readonly state: 'running' | 'idle' | 'unavailable'
 }
 
 export class AgentRuntimeProxyError extends Error {
@@ -102,12 +108,14 @@ async function runtimeFor(user: AuthUser, agentId: string): Promise<RegisteredAc
     && 'port' in candidate
     && 'agentId' in candidate
     && 'permissionId' in candidate
+    && 'runtimeId' in candidate
     && 'workspaceDirectory' in candidate
     && candidate.accountId === user.accountId
     && candidate.agentId === agentId
     && typeof candidate.port === 'number'
     && typeof candidate.agentId === 'string'
     && typeof candidate.permissionId === 'string'
+    && typeof candidate.runtimeId === 'string'
     && typeof candidate.workspaceDirectory === 'string'
     && Number.isInteger(candidate.port)
     && candidate.port >= 1024
@@ -186,8 +194,24 @@ export async function checkConfiguredAgentRuntimeHealth(): Promise<readonly Conf
       && 'workspaceDirectory' in candidate && typeof candidate.workspaceDirectory === 'string'
       && 'port' in candidate && typeof candidate.port === 'number' && Number.isInteger(candidate.port)
       && candidate.port >= 1024 && candidate.port <= 65535)
-    return Promise.all(runtimes.map(async (runtime) => ({ runtimeId: runtime.runtimeId, agentId: runtime.agentId, accountId: runtime.accountId, available: await probeRuntime(runtime) })))
+    return Promise.all(runtimes.map(async (runtime) => {
+      const running = await probeRuntime(runtime)
+      const idle = !running && !await runtimeDemand.recentlyActive(runtime.runtimeId)
+      return { runtimeId: runtime.runtimeId, agentId: runtime.agentId, accountId: runtime.accountId, available: running || idle, state: running ? 'running' : idle ? 'idle' : 'unavailable' }
+    }))
   } catch { return [] }
+}
+
+async function ensureRuntimeAvailable(runtime: RegisteredAccountAgentRuntime): Promise<void> {
+  try {
+    await runtimeDemand.ensureAvailable(runtime.runtimeId, () => probeRuntime(runtime))
+  } catch (error) {
+    throw new AgentRuntimeProxyError(503, error instanceof Error ? error.message : '功能运行空间启动失败。')
+  }
+}
+
+function continueRuntimeActivity(runtimeId: string): void {
+  void runtimeDemand.touch(runtimeId).catch((error: unknown) => console.error(`[和工作] 运行时 ${runtimeId} 活动状态写入失败：`, error))
 }
 
 function proxyHeaders(headers: IncomingHttpHeaders, runtime: AccountAgentRuntime): IncomingHttpHeaders {
@@ -212,6 +236,8 @@ export async function proxyAgentRequest(
   agent: AgentRuntimeRequest,
 ): Promise<void> {
   const runtime = await runtimeFor(user, agent.agentId)
+  await ensureRuntimeAvailable(runtime)
+  if (request.destroyed || response.destroyed) return
   const upstream = createRequest({
     host: '127.0.0.1',
     port: runtime.port,
@@ -223,6 +249,7 @@ export async function proxyAgentRequest(
     upstreamResponse.once('error', () => unavailable(response))
     response.once('error', () => upstreamResponse.destroy())
     upstreamResponse.pipe(response)
+    continueRuntimeActivity(runtime.runtimeId)
   })
   upstream.once('error', () => unavailable(response))
   upstream.setTimeout(upstreamTimeout(request.url, agent.pathPrefix), () => upstream.destroy(new Error('功能服务响应超时。')))
@@ -246,8 +273,10 @@ function serializedUpgradeHeaders(headers: IncomingHttpHeaders): string {
 }
 
 /** 任一端断开时同步释放双向管道，且不让 Socket 的 error 事件冒泡为进程异常。 */
-function bridgeUpgradeSockets(clientSocket: Duplex, upstreamSocket: Duplex): void {
+function bridgeUpgradeSockets(clientSocket: Duplex, upstreamSocket: Duplex, onClose: () => void): void {
+  let closed = false
   const closeBridge = () => {
+    if (!closed) { closed = true; onClose() }
     clientSocket.unpipe(upstreamSocket)
     upstreamSocket.unpipe(clientSocket)
     if (!clientSocket.destroyed) clientSocket.destroy()
@@ -269,6 +298,11 @@ export async function proxyAgentUpgrade(
   agent: AgentRuntimeRequest,
 ): Promise<void> {
   const runtime = await runtimeFor(user, agent.agentId)
+  await ensureRuntimeAvailable(runtime)
+  if (socket.destroyed) return
+  const activityTimer = setInterval(() => continueRuntimeActivity(runtime.runtimeId), 60_000)
+  activityTimer.unref()
+  const stopActivityTimer = () => clearInterval(activityTimer)
   const upstream = createRequest({
     host: '127.0.0.1',
     port: runtime.port,
@@ -285,14 +319,15 @@ export async function proxyAgentUpgrade(
     socket.write(`HTTP/1.1 ${status} ${statusMessage}\r\n${serializedUpgradeHeaders(upstreamResponse.headers)}\r\n\r\n`)
     if (head.length > 0) upstreamSocket.write(head)
     if (upstreamHead.length > 0) socket.write(upstreamHead)
-    bridgeUpgradeSockets(socket, upstreamSocket)
+    bridgeUpgradeSockets(socket, upstreamSocket, stopActivityTimer)
   })
   upstream.once('response', (upstreamResponse) => {
     clearTimeout(upgradeTimer)
+    stopActivityTimer()
     upstreamResponse.resume()
     writeUpgradeError(socket, 502, '功能服务未能建立实时连接。')
   })
-  upstream.once('error', () => { clearTimeout(upgradeTimer); writeUpgradeError(socket, 502, '功能服务暂时不可用，请稍后重试。') })
-  socket.once('close', () => upstream.destroy())
+  upstream.once('error', () => { clearTimeout(upgradeTimer); stopActivityTimer(); writeUpgradeError(socket, 502, '功能服务暂时不可用，请稍后重试。') })
+  socket.once('close', () => { stopActivityTimer(); upstream.destroy() })
   upstream.end()
 }
