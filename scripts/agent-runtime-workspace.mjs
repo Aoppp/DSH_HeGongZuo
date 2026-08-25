@@ -15,17 +15,25 @@ async function runtimeRequest(port, method, payload, fetchImpl) {
   return body.result.value
 }
 
-/** 检查运行时是否已经注册指定工作区。 */
+/**
+ * 检查运行时是否已经注册指定工作区。
+ * @param {number} port
+ * @param {string} workspacePath
+ * @param {typeof fetch} [fetchImpl]
+ */
 export async function runtimeHasWorkspace(port, workspacePath, fetchImpl = fetch) {
   const value = await runtimeRequest(port, 'workspace.list', {}, fetchImpl)
-  return Array.isArray(value?.items) && value.items.some((item) => item?.path === workspacePath)
+  const items = /** @type {unknown} */ (value?.items)
+  return Array.isArray(items) && items.some((item) => typeof item === 'object' && item !== null && 'path' in item && item.path === workspacePath)
 }
 
 /**
  * 等待 DSH API 就绪，并为插件启动阶段遗漏的工作区执行幂等补建。
  * 该逻辑只使用运行时注册表中的当前实例路径，不接触其他账号目录。
+ * @param {{ port: number, workspacePath: string, fetchImpl?: typeof fetch, attempts?: number, retryDelayMs?: number }} options
  */
-export async function ensureRuntimeWorkspace({ port, workspacePath, fetchImpl = fetch, attempts = 40, retryDelayMs = 500 }) {
+export async function ensureRuntimeWorkspace(options) {
+  const { port, workspacePath, fetchImpl = fetch, attempts = 40, retryDelayMs = 500 } = options
   let lastError
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
