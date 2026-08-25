@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { request as createRequest, type IncomingHttpHeaders, type IncomingMessage, type ServerResponse } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -20,6 +21,7 @@ const allRuntimeConfigPath = process.env.HEGONGZUO_ALL_AGENT_RUNTIME_CONFIG
 interface AccountAgentRuntime {
   readonly accountId: string
   readonly port: number
+  readonly workspaceDirectory: string
 }
 
 export interface AgentRuntimeRequest {
@@ -99,11 +101,13 @@ async function runtimeFor(user: AuthUser, agentId: string): Promise<RegisteredAc
     && 'port' in candidate
     && 'agentId' in candidate
     && 'permissionId' in candidate
+    && 'workspaceDirectory' in candidate
     && candidate.accountId === user.accountId
     && candidate.agentId === agentId
     && typeof candidate.port === 'number'
     && typeof candidate.agentId === 'string'
     && typeof candidate.permissionId === 'string'
+    && typeof candidate.workspaceDirectory === 'string'
     && Number.isInteger(candidate.port)
     && candidate.port >= 1024
     && candidate.port <= 65535
@@ -129,17 +133,28 @@ async function configuredRuntimes(): Promise<readonly AccountAgentRuntime[]> {
   try {
     const definitions: unknown = JSON.parse(await readFile(runtimeConfigPath, 'utf8'))
     if (!Array.isArray(definitions)) return []
-    return definitions.filter((candidate): candidate is AccountAgentRuntime => typeof candidate === 'object' && candidate !== null && 'accountId' in candidate && 'port' in candidate && typeof candidate.accountId === 'string' && typeof candidate.port === 'number' && Number.isInteger(candidate.port) && candidate.port >= 1024 && candidate.port <= 65535)
+    return definitions.filter((candidate): candidate is AccountAgentRuntime => typeof candidate === 'object' && candidate !== null && 'accountId' in candidate && 'port' in candidate && 'workspaceDirectory' in candidate && typeof candidate.accountId === 'string' && typeof candidate.port === 'number' && typeof candidate.workspaceDirectory === 'string' && Number.isInteger(candidate.port) && candidate.port >= 1024 && candidate.port <= 65535)
   } catch { return [] }
 }
 
-function probeRuntime(runtime: AccountAgentRuntime): Promise<boolean> {
-  return new Promise((resolve) => {
-    const request = createRequest({ host: '127.0.0.1', port: runtime.port, path: '/', method: 'GET', timeout: 2_000 }, (response) => { response.resume(); resolve((response.statusCode ?? 500) < 500) })
-    request.once('timeout', () => { request.destroy(); resolve(false) })
-    request.once('error', () => resolve(false))
-    request.end()
-  })
+async function probeRuntime(runtime: AccountAgentRuntime): Promise<boolean> {
+  const rpcId = randomUUID()
+  try {
+    const response = await fetch(`http://127.0.0.1:${runtime.port}/api/workspace.list`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'client-request', rpcId, method: 'workspace.list', payload: {} }),
+      signal: AbortSignal.timeout(2_000),
+    })
+    if (!response.ok) return false
+    const body: unknown = await response.json()
+    if (!body || typeof body !== 'object') return false
+    const record = body as { readonly rpcId?: unknown; readonly result?: { readonly ok?: unknown; readonly value?: { readonly items?: unknown } } }
+    const items = record.result?.value?.items
+    const expectedWorkspace = path.resolve(projectRoot, runtime.workspaceDirectory)
+    return record.rpcId === rpcId && record.result?.ok === true && Array.isArray(items)
+      && items.some((item) => typeof item === 'object' && item !== null && 'path' in item && item.path === expectedWorkspace)
+  } catch { return false }
 }
 
 export async function checkAgentRuntimeHealth(accountIds: readonly string[]): Promise<readonly AgentRuntimeHealth[]> {
@@ -159,6 +174,7 @@ export async function checkConfiguredAgentRuntimeHealth(): Promise<readonly Conf
       && 'runtimeId' in candidate && typeof candidate.runtimeId === 'string'
       && 'agentId' in candidate && typeof candidate.agentId === 'string'
       && 'accountId' in candidate && typeof candidate.accountId === 'string'
+      && 'workspaceDirectory' in candidate && typeof candidate.workspaceDirectory === 'string'
       && 'port' in candidate && typeof candidate.port === 'number' && Number.isInteger(candidate.port)
       && candidate.port >= 1024 && candidate.port <= 65535)
     return Promise.all(runtimes.map(async (runtime) => ({ runtimeId: runtime.runtimeId, agentId: runtime.agentId, accountId: runtime.accountId, available: await probeRuntime(runtime) })))

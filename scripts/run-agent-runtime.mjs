@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 import { agentSandboxRoot, dshBinPath, projectRoot } from './account-agent-runtime-paths-base.mjs'
+import { ensureRuntimeWorkspace } from './agent-runtime-workspace.mjs'
 
 const runtimeId = process.argv[2]?.trim() ?? ''
 if (!/^[a-z][a-z0-9-]{1,62}--[a-z][a-z0-9]{1,31}$/.test(runtimeId)) throw new Error('必须指定有效 Agent 运行时标识。')
@@ -13,5 +14,13 @@ const workspace = path.resolve(projectRoot, definition.workspaceDirectory)
 const dshHome = path.resolve(projectRoot, definition.dshDirectory)
 if (!workspace.startsWith(`${agentSandboxRoot}${path.sep}`) || !dshHome.startsWith(`${agentSandboxRoot}${path.sep}`)) throw new Error('Agent 工作区路径无效。')
 const child = spawn(process.execPath, [dshBinPath, '--profile', 'web', '--host', '127.0.0.1', '--port', String(definition.port)], { cwd: workspace, env: { ...process.env, DSH_HOME: dshHome, HEGONGZUO_ACCOUNT_ID: definition.accountId, HEGONGZUO_AGENT_ID: definition.agentId, HEGONGZUO_AGENT_WORKSPACE: workspace }, stdio: 'inherit' })
-const result = await new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })))
+const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })))
+try {
+  await ensureRuntimeWorkspace({ port: definition.port, workspacePath: workspace })
+} catch (reason) {
+  child.kill('SIGTERM')
+  await exited
+  throw reason
+}
+const result = await exited
 process.exitCode = result.code === 0 ? 0 : 1
