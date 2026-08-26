@@ -1,8 +1,9 @@
-import { BriefcaseBusiness, Code2, Files, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
+import { BriefcaseBusiness, CalendarClock, Code2, Files, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
 
 import { DeveloperConsoleModule } from '../modules/developer/console/DeveloperConsoleModule'
 import { EmployeeAgentModule } from '../modules/employee/agent/EmployeeAgentModule'
 import { EmployeeDataModule } from '../modules/employee/data/EmployeeDataModule'
+import { EmployeeWorkRecordsModule } from '../modules/employee/work-records/EmployeeWorkRecordsModule'
 import { ManagementCockpitModule } from '../modules/management/cockpit/ManagementCockpitModule'
 import { FinanceManagementModule } from '../modules/finance/management/FinanceManagementModule'
 import { ProjectManagementModule } from '../modules/project/management/ProjectManagementModule'
@@ -57,6 +58,16 @@ export const platformModules: readonly PlatformModule[] = [
     requiredPermission: 'employee-query',
     group: 'employee-management',
     component: EmployeeAgentModule,
+  },
+  {
+    id: 'employee-work-records',
+    path: '/employee/work-records',
+    label: '考勤与汇报',
+    description: '查看员工打卡情况与工作汇报',
+    icon: CalendarClock,
+    requiredPermission: 'employee-work-records',
+    group: 'employee-management',
+    component: EmployeeWorkRecordsModule,
   },
   {
     id: 'finance-management',

@@ -26,6 +26,13 @@ export interface CockpitSnapshot {
     readonly agentRuntimes: { readonly expected: number; readonly available: number; readonly running: number; readonly idle: number; readonly unavailable: readonly string[] }
     readonly modules: readonly { readonly id: string; readonly label: string; readonly enabled: boolean }[]
   }
+  readonly workRecords: {
+    readonly source: 'mock' | 'wecom'
+    readonly connectionStatus: 'demo' | 'connected' | 'error'
+    readonly date: string
+    readonly reports: { readonly expected: number; readonly submitted: number; readonly missing: number }
+    readonly attendance: { readonly expected: number; readonly normal: number; readonly exceptions: number }
+  } | null
   readonly recentActivity: readonly {
     readonly id: string
     readonly action: string

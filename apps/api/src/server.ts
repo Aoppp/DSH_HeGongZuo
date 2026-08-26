@@ -18,6 +18,8 @@ import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtim
 import { registeredAgentPermissionIds, registeredAgentPermissions } from './modules/accounts/agent-runtime-permissions.js'
 import { PlatformManagementError, PlatformManagementService } from './modules/platform/platform-management.js'
 import { ManagementCockpitService } from './modules/management/management-cockpit.js'
+import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/mock-work-records-source.js'
+import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
 
@@ -29,7 +31,8 @@ const host = process.env.HEGONGZUO_API_HOST ?? '127.0.0.1'
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
 const platformManagement = new PlatformManagementService(database)
-const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement)
+const employeeWorkRecords = new MockEmployeeWorkRecordsSource()
+const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
 const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 
 
@@ -202,6 +205,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/employee/work-records' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-work-records')
+    await platformManagement.assertModuleEnabled('employee-work-records')
+    const date = url.searchParams.get('date') ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+    if (!isCalendarDate(date)) throw new HttpError(400, '查询日期格式无效。')
+    sendJson(response, 200, await employeeWorkRecords.snapshot(date))
+    return
+  }
+
   if (url.pathname === '/api/platform/status' && request.method === 'GET') {
     requirePlatformAdministration(currentUser)
     sendJson(response, 200, await platformManagement.status())
@@ -275,6 +287,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const basePermissions = [
       { id: 'employee-data', label: '档案维护', group: '员工管理' },
       { id: 'employee-query', label: '数据查询', group: '员工管理' },
+      { id: 'employee-work-records', label: '考勤与汇报', group: '员工管理' },
       { id: 'finance-management', label: '待开发', group: '财务管理' },
       { id: 'project-management', label: '待开发', group: '项目管理' },
       { id: 'management-cockpit', label: '驾驶舱', group: '其他' },

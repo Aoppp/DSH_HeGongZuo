@@ -8,7 +8,7 @@ export const employeeStatuses = [
 export type EmployeeStatus = (typeof employeeStatuses)[number]
 
 // 员工管理模块对账号系统公开的能力标识；平台前后端以此为唯一事实来源。
-export const employeeManagementPermissionIds = ['employee-data', 'employee-query'] as const
+export const employeeManagementPermissionIds = ['employee-data', 'employee-query', 'employee-work-records'] as const
 export type EmployeeManagementPermissionId = (typeof employeeManagementPermissionIds)[number]
 
 // 平台业务管理权限的单一事实来源；新增管理模块时在此注册对应权限。

@@ -1,0 +1,51 @@
+.employee-work-records { display: grid; gap: 16px; color: #172033; }
+.work-records-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+.work-records-heading h1 { margin: 0; font-size: 26px; letter-spacing: -.03em; }
+.work-records-heading p { margin: 7px 0 0; color: #667085; font-size: 14px; }
+.work-records-heading__actions { display: flex; align-items: center; gap: 9px; }
+.work-records-heading__actions label, .work-records-heading__actions button { display: inline-flex; align-items: center; gap: 7px; min-height: 38px; border: 1px solid #d8dee9; border-radius: 9px; background: #fff; color: #344054; }
+.work-records-heading__actions label { padding: 0 10px; }
+.work-records-heading__actions input { border: 0; outline: 0; color: inherit; font: inherit; }
+.work-records-heading__actions button { padding: 0 13px; cursor: pointer; }
+.work-records-heading__actions button:disabled { opacity: .6; cursor: default; }
+.work-records-demo { padding: 5px 9px; border-radius: 999px; background: #fff4dd; color: #9a5b00; font-size: 12px; font-weight: 650; }
+.work-records-connection { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 14px; border: 1px solid #dbe5f0; border-radius: 10px; background: #f7faff; color: #40506a; font-size: 13px; }
+.work-records-connection span { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.work-records-connection i { width: 7px; height: 7px; border-radius: 50%; background: #e2a62b; }
+.work-records-connection small { color: #7a8699; }
+.work-records-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.work-records-metrics article { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid #e4e8ef; border-radius: 12px; background: #fff; box-shadow: 0 4px 15px rgba(23, 32, 51, .035); }
+.work-records-metrics article > i { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border-radius: 10px; background: #eef5ff; color: #2f6db2; }
+.work-records-metrics article.is-warning > i { background: #fff6df; color: #b26a00; }
+.work-records-metrics article.is-danger > i { background: #fff0ef; color: #c7443e; }
+.work-records-metrics span { color: #667085; font-size: 12px; }
+.work-records-metrics strong { margin-left: 8px; color: #172033; font-size: 23px; }
+.work-records-metrics small { margin-left: 3px; }
+.work-records-panel { min-width: 0; overflow: hidden; border: 1px solid #e1e6ee; border-radius: 13px; background: #fff; }
+.work-records-tabs { display: flex; gap: 4px; padding: 12px 14px 0; border-bottom: 1px solid #e9edf2; }
+.work-records-tabs button { padding: 10px 13px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #667085; font-weight: 650; cursor: pointer; }
+.work-records-tabs button.is-active { border-bottom-color: #2869aa; color: #205f9f; }
+.work-records-tabs span { margin-left: 5px; padding: 2px 6px; border-radius: 999px; background: #f0f2f5; font-size: 11px; }
+.work-report-list { display: grid; gap: 11px; padding: 14px; }
+.work-report-list article { border: 1px solid #e7ebf0; border-radius: 10px; overflow: hidden; }
+.work-report-list header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; background: #fafbfc; }
+.work-report-list header div, .work-report-list header p { display: flex; align-items: center; gap: 9px; margin: 0; }
+.work-report-list header span, .work-report-list header p, .work-report-list time { color: #7a8699; font-size: 12px; font-style: normal; }
+.work-report-list dl { display: grid; gap: 12px; margin: 0; padding: 14px; }
+.work-report-list dl div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; }
+.work-report-list dt { color: #667085; font-size: 13px; }
+.work-report-list dd { margin: 0; color: #283548; font-size: 13px; line-height: 1.6; }
+.work-attendance-table { overflow-x: auto; }
+.work-attendance-table table { width: 100%; border-collapse: collapse; white-space: nowrap; font-size: 13px; }
+.work-attendance-table th { padding: 12px 14px; border-bottom: 1px solid #e8ecf1; background: #fafbfc; color: #667085; text-align: left; font-weight: 600; }
+.work-attendance-table td { padding: 14px; border-bottom: 1px solid #eef1f4; color: #4a5568; }
+.work-attendance-table td strong { color: #202c3f; }
+.attendance-status { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #eaf8f0; color: #227448; font-size: 12px; font-weight: 650; }
+.attendance-status--late, .attendance-status--early_leave { background: #fff4df; color: #9a5d00; }
+.attendance-status--missing { background: #fff0ef; color: #b83e39; }
+.work-records-loading, .work-records-empty { padding: 48px 20px; color: #7a8699; text-align: center; }
+.work-records-loading { display: flex; align-items: center; justify-content: center; gap: 9px; }
+.work-records-error { display: flex; align-items: center; gap: 8px; padding: 11px 13px; border: 1px solid #f2c5c1; border-radius: 9px; background: #fff4f3; color: #a53b36; font-size: 13px; }
+.work-records-error button { margin-left: auto; border: 0; background: none; color: inherit; cursor: pointer; font-weight: 650; }
+@media (max-width: 1000px) { .work-records-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) { .work-records-heading, .work-records-connection { align-items: stretch; flex-direction: column; } .work-records-heading__actions { flex-wrap: wrap; } .work-records-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .work-records-connection small { line-height: 1.5; } }

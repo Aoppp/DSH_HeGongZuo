@@ -25,6 +25,7 @@ type EditorMode = 'create' | 'edit' | null
 const employeePermissionLabels: Record<string, string> = {
   'employee-data': '档案维护',
   'employee-query': '数据查询',
+  'employee-work-records': '考勤与汇报',
   'finance-management': '待开发',
   'project-management': '待开发',
   'management-cockpit': '驾驶舱',
@@ -32,7 +33,7 @@ const employeePermissionLabels: Record<string, string> = {
 }
 
 const permissionGroups: readonly { readonly label: string; readonly permissions: readonly AccountPermissionId[] }[] = [
-  { label: '员工管理', permissions: ['employee-data', 'employee-query'] },
+  { label: '员工管理', permissions: ['employee-data', 'employee-query', 'employee-work-records'] },
   { label: '财务管理', permissions: ['finance-management'] },
   { label: '项目管理', permissions: ['project-management'] },
   { label: '其他', permissions: ['management-cockpit', 'platform-administration'] },
@@ -42,6 +43,7 @@ const accountPermissionLabels: Record<string, string> = {
   ...employeePermissionLabels,
   'employee-data': '员工档案维护',
   'employee-query': '员工查询',
+  'employee-work-records': '考勤与汇报',
   'finance-management': '财务管理',
   'project-management': '项目管理',
   'management-cockpit': '管理驾驶舱',

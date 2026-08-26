@@ -28,6 +28,9 @@ test('管理驾驶舱聚合现有员工、合同、账号、平台和审计数�
       async status() { return { database: 'available', agentRuntimes: { expected: 6, available: 5, running: 2, idle: 3, unavailable: ['one'] }, modules: [] } },
       async auditLogs() { return { logs: [{ id: '1', action: '编辑员工档案', targetType: '员工', targetId: 'EMP-1', actorName: '管理员', createdAt: '2026-08-26T00:00:00.000Z' }], nextCursor: null } },
     },
+    {
+      async snapshot(date) { return { date, source: 'mock', connectionStatus: 'demo', generatedAt: '2026-08-26T00:00:00.000Z', reports: { expected: 3, submitted: 2, missing: 1, records: [] }, attendance: { expected: 3, normal: 2, exceptions: 1, records: [] } } },
+    },
   )
 
   const result = await service.snapshot()
@@ -36,4 +39,5 @@ test('管理驾驶舱聚合现有员工、合同、账号、平台和审计数�
   assert.deepEqual(result.accounts, { total: 3, active: 1, disabled: 1, attention: 1 })
   assert.equal(result.platform.agentRuntimes.available, 5)
   assert.equal(result.recentActivity[0].action, '编辑员工档案')
+  assert.deepEqual(result.workRecords.reports, { expected: 3, submitted: 2, missing: 1 })
 })

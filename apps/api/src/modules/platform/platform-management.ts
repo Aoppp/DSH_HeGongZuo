@@ -7,6 +7,7 @@ export const managedModuleIds = [
   'management-cockpit',
   'employee-data',
   'employee-agent',
+  'employee-work-records',
   'finance-management',
   'project-management',
 ] as const
@@ -17,6 +18,7 @@ const moduleLabels: Record<ManagedModuleId, string> = {
   'management-cockpit': '管理驾驶舱',
   'employee-data': '员工数据',
   'employee-agent': '员工查询',
+  'employee-work-records': '考勤与汇报',
   'finance-management': '财务管理',
   'project-management': '项目管理',
 }

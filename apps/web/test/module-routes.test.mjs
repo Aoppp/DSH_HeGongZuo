@@ -7,11 +7,13 @@ const modules = [
   { id: 'management-cockpit', path: '/management' },
   { id: 'overview', path: '/overview' },
   { id: 'employee-data', path: '/employee/data' },
+  { id: 'employee-work-records', path: '/employee/work-records' },
 ]
 
 test('模块地址会规范化尾部斜杠并定位到已注册模块', () => {
   assert.equal(normalizeModulePath('/employee/data/'), '/employee/data')
   assert.equal(moduleForPath(modules, '/employee/data/').id, 'employee-data')
+  assert.equal(moduleForPath(modules, '/employee/work-records').id, 'employee-work-records')
 })
 
 test('CEO 优先进入管理驾驶舱，其他账号进入概览', () => {
