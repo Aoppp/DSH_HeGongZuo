@@ -8,7 +8,7 @@ import type {
 } from '@deepseek-ai/dsh-client-connection/client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { appendSessionEvents, countUserConversationTurns, maximumConversationTurns, maximumSavedConversations } from './conversation'
+import { appendSessionEvents, countUserConversationTurns, eventSequence, latestTurnFinished, latestTurnFinishedAfter, maximumConversationTurns, maximumSavedConversations, mergeHistoryEntries } from './conversation'
 import { AccountDshApiClient, unwrapDshResponse } from './dsh-api-client'
 
 export type AgentConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'error'
@@ -27,6 +27,24 @@ function agentRequestError(reason: unknown): string {
 }
 
 function reconnectDelay(attempt: number): number { return Math.min(5_000, 500 * 2 ** Math.min(attempt, 4)) }
+
+function reconciliationDelay(attempt: number): number { return Math.min(1_000, 100 * 2 ** attempt) }
+
+async function wait(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) throw signal.reason
+  await new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      signal?.removeEventListener('abort', abort)
+      resolve()
+    }
+    const timer = globalThis.setTimeout(finish, milliseconds)
+    const abort = () => {
+      globalThis.clearTimeout(timer)
+      reject(signal?.reason)
+    }
+    signal?.addEventListener('abort', abort, { once: true })
+  })
+}
 
 function sessionTitle(session: SessionSummary): string {
   const projectionValues = session.projections?.values as Readonly<Record<string, unknown>> | undefined
@@ -57,12 +75,14 @@ export function useEmployeeAgent() {
   const [activeSessionId, setActiveSessionId] = useState<SessionId | null>(null)
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [sending, setSending] = useState(false)
+  const [completionPending, setCompletionPending] = useState(false)
   const [deletingSessionId, setDeletingSessionId] = useState<SessionId | null>(null)
   const activeSessionRef = useRef<SessionId | null>(null)
   const workspaceRef = useRef<WorkspaceView | null>(null)
   const pendingEventsRef = useRef(new Map<number, SessionEvent>())
   const eventFlushTimerRef = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
-  const sessionEventRevisionRef = useRef(0)
+  const eventHighWaterRef = useRef(-1)
+  const pendingCompletionRef = useRef<{ readonly sessionId: SessionId; readonly afterSequence: number } | null>(null)
 
   const clearPendingEvents = useCallback(() => {
     pendingEventsRef.current.clear()
@@ -71,7 +91,7 @@ export function useEmployeeAgent() {
   }, [])
 
   const queueSessionEvent = useCallback((event: SessionEvent) => {
-    sessionEventRevisionRef.current += 1
+    eventHighWaterRef.current = Math.max(eventHighWaterRef.current, eventSequence(event))
     pendingEventsRef.current.set(event.seq, event)
     if (eventFlushTimerRef.current !== null) return
     eventFlushTimerRef.current = globalThis.setTimeout(() => {
@@ -82,21 +102,44 @@ export function useEmployeeAgent() {
     }, 80)
   }, [])
 
-  const loadHistory = useCallback(async (sessionId: SessionId, signal?: AbortSignal) => {
+  const loadHistory = useCallback(async (sessionId: SessionId, recentOnly = false, signal?: AbortSignal) => {
     if (!api) return
-    const response = unwrapDshResponse(await api.sessions.history({ sessionId, maxMessages: 100 }, signal))
-    clearPendingEvents()
-    setHistory(response.events)
-  }, [api, clearPendingEvents])
+    const response = unwrapDshResponse(await api.sessions.history({ sessionId, maxMessages: recentOnly ? 12 : 100 }, signal))
+    if (activeSessionRef.current !== sessionId) return false
+    // 历史落盘与实时事件可能同时到达，只能合并，不能用较旧的响应覆盖实时状态。
+    setHistory((current) => mergeHistoryEntries(current, response.events))
+    for (const entry of response.events) eventHighWaterRef.current = Math.max(eventHighWaterRef.current, eventSequence(entry.event))
+    const pending = pendingCompletionRef.current
+    const finished = pending?.sessionId === sessionId
+      ? latestTurnFinishedAfter(response.events, pending.afterSequence)
+      : latestTurnFinished(response.events)
+    if (finished && pending?.sessionId === sessionId) {
+      pendingCompletionRef.current = null
+      setCompletionPending(false)
+    }
+    return finished
+  }, [api])
+
+  const reconcileSession = useCallback(async (sessionId: SessionId, attempts = 1, signal?: AbortSignal) => {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const finished = await loadHistory(sessionId, true, signal)
+      if (finished || activeSessionRef.current !== sessionId) return Boolean(finished)
+      if (attempt + 1 < attempts) await wait(reconciliationDelay(attempt), signal)
+    }
+    return false
+  }, [loadHistory])
 
   const selectSession = useCallback(async (sessionId: SessionId, signal?: AbortSignal) => {
     clearPendingEvents()
     activeSessionRef.current = sessionId
+    eventHighWaterRef.current = -1
+    pendingCompletionRef.current = null
+    setCompletionPending(false)
     setActiveSessionId(sessionId)
     setHistory([])
     setError(null)
     try {
-      await loadHistory(sessionId, signal)
+      await loadHistory(sessionId, false, signal)
     } catch (reason) {
       if (!isAbortReason(reason)) setError(reason instanceof Error ? reason.message : String(reason))
     }
@@ -144,22 +187,28 @@ export function useEmployeeAgent() {
     setError(null)
     try {
       const sessionId = activeSessionRef.current ?? await createSession()
-      const eventRevision = sessionEventRevisionRef.current
+      pendingCompletionRef.current = { sessionId, afterSequence: eventHighWaterRef.current }
+      setCompletionPending(true)
       unwrapDshResponse(await api.promptSession({
         sessionId,
         mode: 'queue',
         content: [{ type: 'text', text }],
         clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }))
-      // 实时事件已完整到达时无需再次加载整段历史；没有收到事件时再兜底同步。
-      if (sessionEventRevisionRef.current === eventRevision) await loadHistory(sessionId)
+      // prompt 完成只代表服务端任务结束；无论实时通道是否收到过片段，都必须以
+      // 已持久化历史补齐最终消息，避免末帧丢失后只能靠刷新恢复。
+      await reconcileSession(sessionId, 5)
       if (workspaceRef.current) await refreshSessions(workspaceRef.current)
     } catch (reason) {
+      if (!isAbortReason(reason)) {
+        pendingCompletionRef.current = null
+        setCompletionPending(false)
+      }
       setError(agentRequestError(reason))
     } finally {
       setSending(false)
     }
-  }, [api, createSession, history, loadHistory, refreshSessions])
+  }, [api, createSession, history, reconcileSession, refreshSessions])
 
   const deleteSession = useCallback(async (sessionId: SessionId) => {
     if (!api) return
@@ -171,6 +220,8 @@ export function useEmployeeAgent() {
       const remainingSessions = targetWorkspace ? await refreshSessions(targetWorkspace) : []
       if (activeSessionRef.current === sessionId) {
         activeSessionRef.current = null
+        pendingCompletionRef.current = null
+        setCompletionPending(false)
         setActiveSessionId(null)
         setHistory([])
         const nextSession = remainingSessions[0]
@@ -195,6 +246,8 @@ export function useEmployeeAgent() {
     const markConnected = () => {
       setConnectionState('connected')
       setError((current) => current === '连接暂时中断，正在自动恢复…' ? null : current)
+      const current = activeSessionRef.current
+      if (current) void reconcileSession(current, 2, controller.signal).catch(() => undefined)
     }
 
     async function bootstrap() {
@@ -229,6 +282,9 @@ export function useEmployeeAgent() {
             const frame = envelope.payload
             if (frame.type === 'session/event' && frame.sessionId === activeSessionRef.current) {
               queueSessionEvent(frame.event)
+              if (frame.event.type === 'turn/end') {
+                void reconcileSession(frame.sessionId, 5, controller.signal).catch(() => undefined)
+              }
             }
           }
         } catch (reason) {
@@ -250,6 +306,9 @@ export function useEmployeeAgent() {
               setSessions((current) => current.map((session) => session.id === frame.sessionId
                 ? { ...session, running: frame.running }
                 : session))
+              if (!frame.running && frame.sessionId === activeSessionRef.current) {
+                void reconcileSession(frame.sessionId, 5, controller.signal).catch(() => undefined)
+              }
             }
             if (frame.type === 'host/agent-error' && frame.sessionId === activeSessionRef.current && !isAbortReason(frame.message)) {
               setError(frame.message)
@@ -274,8 +333,18 @@ export function useEmployeeAgent() {
       clearPendingEvents()
       workspaceRef.current = null
       activeSessionRef.current = null
+      pendingCompletionRef.current = null
     }
-  }, [api, clearPendingEvents, queueSessionEvent, refreshSessions, selectSession])
+  }, [api, clearPendingEvents, queueSessionEvent, reconcileSession, refreshSessions, selectSession])
+
+  const activeSessionRunning = sessions.some((session) => session.id === activeSessionId && session.running)
+  useEffect(() => {
+    if (!activeSessionId || (!sending && !activeSessionRunning && !completionPending)) return
+    const timer = globalThis.setInterval(() => {
+      void reconcileSession(activeSessionId, 1).catch(() => undefined)
+    }, 3_000)
+    return () => globalThis.clearInterval(timer)
+  }, [activeSessionId, activeSessionRunning, completionPending, reconcileSession, sending])
 
   return {
     activeSessionId,

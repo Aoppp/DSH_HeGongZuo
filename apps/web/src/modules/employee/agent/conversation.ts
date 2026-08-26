@@ -25,8 +25,61 @@ function assistantKey(turn: number, step: number): string {
   return `assistant-${turn}-${step}`
 }
 
+export function eventSequence(event: { readonly seq?: unknown; readonly seq0?: unknown }): number {
+  if (typeof event.seq === 'number') return event.seq
+  if (typeof event.seq0 === 'number') return event.seq0
+  return -1
+}
+
+function packedSequenceRange(event: { readonly seq0?: unknown; readonly data?: unknown }): readonly [number, number] | null {
+  if (typeof event.seq0 !== 'number' || !event.data || typeof event.data !== 'object' || !('texts' in event.data) || !Array.isArray(event.data.texts)) return null
+  return [event.seq0, event.seq0 + Math.max(0, event.data.texts.length - 1)]
+}
+
+/** 将短历史窗口与实时事件按序号合并，避免旧历史覆盖刚到达的完整回复。 */
+export function mergeHistoryEntries(current: readonly HistoryEntry[], incoming: readonly HistoryEntry[]): HistoryEntry[] {
+  if (incoming.length === 0) return [...current]
+  const merged = new Map<number, HistoryEntry>()
+  const incomingPackedRanges = incoming.map((entry) => packedSequenceRange(entry.event)).filter((range): range is readonly [number, number] => range !== null)
+  const currentPackedRanges = current.map((entry) => packedSequenceRange(entry.event)).filter((range): range is readonly [number, number] => range !== null)
+  const coveredBy = (sequence: number, ranges: readonly (readonly [number, number])[]) => ranges.some(([start, end]) => sequence >= start && sequence <= end)
+  for (const entry of current) {
+    const sequence = eventSequence(entry.event)
+    if (!packedSequenceRange(entry.event) && coveredBy(sequence, incomingPackedRanges)) continue
+    merged.set(sequence, entry)
+  }
+  for (const entry of incoming) {
+    const sequence = eventSequence(entry.event)
+    if (!packedSequenceRange(entry.event) && coveredBy(sequence, currentPackedRanges)) continue
+    merged.set(sequence, entry)
+  }
+  return [...merged.values()].sort((left, right) => eventSequence(left.event) - eventSequence(right.event))
+}
+
+/** 判断最新轮次是否已有完整回答或结束事件。 */
+export function latestTurnFinished(entries: readonly HistoryEntry[]): boolean {
+  let latestObservedTurn = -1
+  let latestCompletedTurn = -1
+  for (const { event } of entries) {
+    const turn = 'data' in event && event.data && typeof event.data === 'object' && 'turn' in event.data && typeof event.data.turn === 'number'
+      ? event.data.turn
+      : -1
+    latestObservedTurn = Math.max(latestObservedTurn, turn)
+    if (event.type === 'assistant/message') {
+      const hasToolCall = event.data.message.content.some((part) => part.type === 'tool-call')
+      if (!hasToolCall) latestCompletedTurn = Math.max(latestCompletedTurn, turn)
+    }
+    if (event.type === 'turn/end') latestCompletedTurn = Math.max(latestCompletedTurn, turn)
+  }
+  return latestObservedTurn >= 0 && latestCompletedTurn >= latestObservedTurn
+}
+
+export function latestTurnFinishedAfter(entries: readonly HistoryEntry[], sequence: number): boolean {
+  return latestTurnFinished(entries.filter((entry) => eventSequence(entry.event) > sequence))
+}
+
 export function buildConversation(entries: readonly HistoryEntry[]): ConversationItem[] {
-  const events = entries.map((entry) => entry.event).sort((left, right) => left.seq - right.seq)
+  const events = entries.map((entry) => entry.event).sort((left, right) => eventSequence(left) - eventSequence(right))
   const finalAssistantSteps = new Set<string>()
   const items: ConversationItem[] = []
   const positions = new Map<string, number>()
@@ -49,6 +102,26 @@ export function buildConversation(entries: readonly HistoryEntry[]): Conversatio
   }
 
   for (const event of events) {
+    const packed = event as unknown as { readonly type?: unknown; readonly time?: unknown; readonly data?: { readonly turn?: unknown; readonly step?: unknown; readonly texts?: unknown } }
+    if (packed.type === 'text-chunks'
+      && typeof packed.data?.turn === 'number'
+      && typeof packed.data?.step === 'number'
+      && Array.isArray(packed.data.texts)
+      && packed.data.texts.every((text) => typeof text === 'string')) {
+      const key = assistantKey(packed.data.turn, packed.data.step)
+      if (!finalAssistantSteps.has(key)) {
+        const position = positions.get(key)
+        const previousText = position === undefined ? '' : items[position]?.text ?? ''
+        upsert({
+          id: key,
+          kind: 'assistant',
+          text: `${previousText}${packed.data.texts.join('')}`,
+          state: 'running',
+          time: typeof packed.time === 'number' ? packed.time : 0,
+        })
+      }
+      continue
+    }
     switch (event.type) {
       case 'user/message': {
         if (event.data.source.kind !== 'user') break
@@ -154,8 +227,5 @@ export function appendSessionEvent(entries: readonly HistoryEntry[], event: Sess
 
 /** 批量合并高频流式事件，避免每个文本片段都遍历和重绘整段会话。 */
 export function appendSessionEvents(entries: readonly HistoryEntry[], events: readonly SessionEvent[]): HistoryEntry[] {
-  if (events.length === 0) return [...entries]
-  const merged = new Map(entries.map((entry) => [entry.event.seq, entry]))
-  for (const event of events) merged.set(event.seq, { event })
-  return [...merged.values()].sort((left, right) => left.event.seq - right.event.seq)
+  return mergeHistoryEntries(entries, events.map((event) => ({ event })))
 }
