@@ -17,6 +17,7 @@ import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js
 import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtime-change.js'
 import { registeredAgentPermissionIds, registeredAgentPermissions } from './modules/accounts/agent-runtime-permissions.js'
 import { PlatformManagementError, PlatformManagementService } from './modules/platform/platform-management.js'
+import { ManagementCockpitService } from './modules/management/management-cockpit.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
 
@@ -28,6 +29,7 @@ const host = process.env.HEGONGZUO_API_HOST ?? '127.0.0.1'
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
 const platformManagement = new PlatformManagementService(database)
+const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement)
 const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 
 
@@ -189,6 +191,14 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   if (url.pathname === '/api/platform/access' && request.method === 'GET') {
     sendJson(response, 200, { disabledModuleIds: await platformManagement.disabledModuleIds() })
+    return
+  }
+
+  if (url.pathname === '/api/management/cockpit' && request.method === 'GET') {
+    requirePermission(currentUser, 'management-cockpit')
+    if (currentUser.position !== 'CEO') throw new HttpError(403, '当前账号不能访问管理驾驶舱。')
+    await platformManagement.assertModuleEnabled('management-cockpit')
+    sendJson(response, 200, await managementCockpit.snapshot())
     return
   }
 

@@ -85,6 +85,26 @@ interface ContractExpiryAlertRow {
   readonly days_left: number
 }
 
+interface EmployeeManagementCountRow {
+  readonly employed: string
+  readonly departed: string
+  readonly probation: string
+  readonly on_leave: string
+}
+
+interface EmployeeDepartmentCountRow {
+  readonly name: string
+  readonly count: string
+}
+
+export interface EmployeeManagementSummary {
+  readonly employed: number
+  readonly departed: number
+  readonly probation: number
+  readonly onLeave: number
+  readonly departments: readonly { readonly name: string; readonly count: number }[]
+}
+
 const columns = `
   id, display_name, work_email, work_phone,
   department_name, job_title,
@@ -252,6 +272,35 @@ export class PostgresEmployeeRepository {
       contractEndDate: toDate(row.contract_end_date) ?? '',
       daysLeft: row.days_left,
     }))
+  }
+
+  async managementSummary(): Promise<EmployeeManagementSummary> {
+    const [counts, departments] = await Promise.all([
+      this.pool.query<EmployeeManagementCountRow>(
+        `SELECT count(*) FILTER (WHERE status <> 'inactive')::text AS employed,
+                count(*) FILTER (WHERE status = 'inactive')::text AS departed,
+                count(*) FILTER (WHERE status = 'probation')::text AS probation,
+                count(*) FILTER (WHERE status = 'on_leave')::text AS on_leave
+           FROM employees`,
+      ),
+      this.pool.query<EmployeeDepartmentCountRow>(
+        `SELECT COALESCE(NULLIF(trim(department_name), ''), '未分配部门') AS name,
+                count(*)::text AS count
+           FROM employees
+          WHERE status <> 'inactive'
+          GROUP BY COALESCE(NULLIF(trim(department_name), ''), '未分配部门')
+          ORDER BY count(*) DESC, name ASC
+          LIMIT 10`,
+      ),
+    ])
+    const count = counts.rows[0]
+    return {
+      employed: Number(count?.employed ?? 0),
+      departed: Number(count?.departed ?? 0),
+      probation: Number(count?.probation ?? 0),
+      onLeave: Number(count?.on_leave ?? 0),
+      departments: departments.rows.map((row) => ({ name: row.name, count: Number(row.count) })),
+    }
   }
 
   async get(id: string): Promise<EmployeeRecord | null> {
