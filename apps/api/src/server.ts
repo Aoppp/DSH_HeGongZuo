@@ -205,12 +205,17 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
-  if (url.pathname === '/api/employee/work-records' && request.method === 'GET') {
-    requirePermission(currentUser, 'employee-work-records')
-    await platformManagement.assertModuleEnabled('employee-work-records')
+  if ((url.pathname === '/api/employee/attendance' || url.pathname === '/api/employee/reports') && request.method === 'GET') {
+    const attendanceRequest = url.pathname.endsWith('/attendance')
+    const permissionId = attendanceRequest ? 'employee-attendance' : 'employee-reports'
+    requirePermission(currentUser, permissionId)
+    await platformManagement.assertModuleEnabled(permissionId)
     const date = url.searchParams.get('date') ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
     if (!isCalendarDate(date)) throw new HttpError(400, '查询日期格式无效。')
-    sendJson(response, 200, await employeeWorkRecords.snapshot(date))
+    const snapshot = await employeeWorkRecords.snapshot(date)
+    sendJson(response, 200, attendanceRequest
+      ? { date: snapshot.date, source: snapshot.source, connectionStatus: snapshot.connectionStatus, generatedAt: snapshot.generatedAt, attendance: snapshot.attendance }
+      : { date: snapshot.date, source: snapshot.source, connectionStatus: snapshot.connectionStatus, generatedAt: snapshot.generatedAt, reports: snapshot.reports })
     return
   }
 
@@ -287,7 +292,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const basePermissions = [
       { id: 'employee-data', label: '档案维护', group: '员工管理' },
       { id: 'employee-query', label: '数据查询', group: '员工管理' },
-      { id: 'employee-work-records', label: '考勤与汇报', group: '员工管理' },
+      { id: 'employee-attendance', label: '考勤管理', group: '员工管理' },
+      { id: 'employee-reports', label: '工作汇报', group: '员工管理' },
       { id: 'finance-management', label: '待开发', group: '财务管理' },
       { id: 'project-management', label: '待开发', group: '项目管理' },
       { id: 'management-cockpit', label: '驾驶舱', group: '其他' },

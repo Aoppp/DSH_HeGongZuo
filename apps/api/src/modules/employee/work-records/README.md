@@ -1,6 +1,6 @@
 # 企业微信考勤与汇报接入边界
 
-当前模块通过 `EmployeeWorkRecordsSource` 读取数据，生产环境尚未配置企业微信时使用 `MockEmployeeWorkRecordsSource`。正式联通时新增企业微信数据源实现并在服务启动处切换，前端接口和驾驶舱数据结构无需改变。
+考勤管理与工作汇报是两个独立业务模块，分别使用独立权限、页面和接口；底层通过共享的 `EmployeeWorkRecordsSource` 读取企业微信员工数据，避免重复维护访问凭证和人员映射。生产环境尚未配置企业微信时使用 `MockEmployeeWorkRecordsSource`。正式联通时新增企业微信数据源实现并在服务启动处切换，两个前端模块和驾驶舱数据结构无需改变。
 
 ## 企业微信数据形式
 

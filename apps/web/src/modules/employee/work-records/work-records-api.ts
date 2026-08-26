@@ -1,10 +1,13 @@
 export type AttendanceStatus = 'normal' | 'late' | 'early_leave' | 'missing'
 
-export interface WorkRecordsSnapshot {
+interface SourceState {
   readonly date: string
   readonly source: 'mock' | 'wecom'
   readonly connectionStatus: 'demo' | 'connected' | 'error'
   readonly generatedAt: string
+}
+
+export interface EmployeeReportsSnapshot extends SourceState {
   readonly reports: {
     readonly expected: number
     readonly submitted: number
@@ -18,6 +21,9 @@ export interface WorkRecordsSnapshot {
       readonly fields: readonly { readonly label: string; readonly value: string }[]
     }[]
   }
+}
+
+export interface EmployeeAttendanceSnapshot extends SourceState {
   readonly attendance: {
     readonly expected: number
     readonly normal: number
@@ -36,11 +42,19 @@ export interface WorkRecordsSnapshot {
   }
 }
 
-export async function readWorkRecords(date: string, signal?: AbortSignal): Promise<WorkRecordsSnapshot> {
-  const response = await fetch(`/api/employee/work-records?date=${encodeURIComponent(date)}`, { credentials: 'same-origin', ...(signal ? { signal } : {}) })
+async function readSnapshot<T>(path: string, date: string, label: string, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`${path}?date=${encodeURIComponent(date)}`, { credentials: 'same-origin', ...(signal ? { signal } : {}) })
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as { readonly error?: unknown }
-    throw new Error(typeof body.error === 'string' ? body.error : `考勤与汇报加载失败（HTTP ${response.status}）。`)
+    throw new Error(typeof body.error === 'string' ? body.error : `${label}加载失败（HTTP ${response.status}）。`)
   }
-  return response.json() as Promise<WorkRecordsSnapshot>
+  return response.json() as Promise<T>
+}
+
+export function readEmployeeReports(date: string, signal?: AbortSignal): Promise<EmployeeReportsSnapshot> {
+  return readSnapshot('/api/employee/reports', date, '工作汇报', signal)
+}
+
+export function readEmployeeAttendance(date: string, signal?: AbortSignal): Promise<EmployeeAttendanceSnapshot> {
+  return readSnapshot('/api/employee/attendance', date, '考勤数据', signal)
 }

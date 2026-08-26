@@ -1,9 +1,10 @@
-import { BriefcaseBusiness, CalendarClock, Code2, Files, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
+import { BriefcaseBusiness, CalendarCheck, ClipboardList, Code2, Files, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
 
 import { DeveloperConsoleModule } from '../modules/developer/console/DeveloperConsoleModule'
 import { EmployeeAgentModule } from '../modules/employee/agent/EmployeeAgentModule'
 import { EmployeeDataModule } from '../modules/employee/data/EmployeeDataModule'
-import { EmployeeWorkRecordsModule } from '../modules/employee/work-records/EmployeeWorkRecordsModule'
+import { EmployeeAttendanceModule } from '../modules/employee/attendance/EmployeeAttendanceModule'
+import { EmployeeReportsModule } from '../modules/employee/reports/EmployeeReportsModule'
 import { ManagementCockpitModule } from '../modules/management/cockpit/ManagementCockpitModule'
 import { FinanceManagementModule } from '../modules/finance/management/FinanceManagementModule'
 import { ProjectManagementModule } from '../modules/project/management/ProjectManagementModule'
@@ -60,14 +61,24 @@ export const platformModules: readonly PlatformModule[] = [
     component: EmployeeAgentModule,
   },
   {
-    id: 'employee-work-records',
-    path: '/employee/work-records',
-    label: '考勤与汇报',
-    description: '查看员工打卡情况与工作汇报',
-    icon: CalendarClock,
-    requiredPermission: 'employee-work-records',
+    id: 'employee-attendance',
+    path: '/employee/attendance',
+    label: '考勤管理',
+    description: '查看员工打卡和考勤异常',
+    icon: CalendarCheck,
+    requiredPermission: 'employee-attendance',
     group: 'employee-management',
-    component: EmployeeWorkRecordsModule,
+    component: EmployeeAttendanceModule,
+  },
+  {
+    id: 'employee-reports',
+    path: '/employee/reports',
+    label: '工作汇报',
+    description: '查看员工日报与提交情况',
+    icon: ClipboardList,
+    requiredPermission: 'employee-reports',
+    group: 'employee-management',
+    component: EmployeeReportsModule,
   },
   {
     id: 'finance-management',

@@ -7,7 +7,8 @@ test('账号权限覆盖业务模块与平台管理能力', () => {
   assert.deepEqual(platformManagementPermissionIds, [
     'employee-data',
     'employee-query',
-    'employee-work-records',
+    'employee-attendance',
+    'employee-reports',
     'finance-management',
     'project-management',
     'management-cockpit',
