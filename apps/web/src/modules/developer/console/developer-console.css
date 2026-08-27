@@ -495,11 +495,17 @@
 
 .account-admin__permission-summary {
   display: flex;
+  width: 100%;
   min-width: 0;
   align-items: center;
   gap: 5px;
+  border: 0;
+  padding: 0;
   overflow: hidden;
+  text-align: left;
+  background: transparent;
   white-space: nowrap;
+  cursor: help;
 }
 
 .account-admin__permission-summary > span {
@@ -518,6 +524,43 @@
   flex: none;
   color: var(--jade-700);
   background: var(--jade-100);
+}
+
+.account-admin__permission-tooltip {
+  position: fixed;
+  z-index: 100;
+  display: grid;
+  width: 320px;
+  gap: 9px;
+  border: 1px solid #d9e5e1;
+  border-radius: 10px;
+  padding: 11px 12px;
+  color: var(--ink-700);
+  background: white;
+  box-shadow: 0 10px 30px rgba(16, 40, 33, 0.16);
+  pointer-events: none;
+}
+
+.account-admin__permission-tooltip--above {
+  transform: translateY(-100%);
+}
+
+.account-admin__permission-tooltip > strong {
+  font-size: 11px;
+}
+
+.account-admin__permission-tooltip > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.account-admin__permission-tooltip span {
+  border-radius: 6px;
+  padding: 4px 7px;
+  color: var(--ink-600);
+  font-size: 10px;
+  background: #eef4f2;
 }
 
 .account-admin__table code {
@@ -698,7 +741,7 @@
 .platform-management__credential-list article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; }
 .platform-management__credential-list article div { display: grid; gap: 4px; }
 .platform-management__credential-list article strong { font-size: 12px; font-weight: 600; }
-.platform-management__credential-list article button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: #ad3e39; cursor: pointer; }
+.platform-management__credential-list article button { display: inline-flex; align-items: center; gap: 4px; border: 0; background: transparent; color: #ad3e39; font-size: 11px; cursor: pointer; }
 
 .platform-management__credential-dialog { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 20px; }
 .platform-management__credential-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(24, 38, 34, 0.42); cursor: default; }

@@ -64,6 +64,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
   const [draft, setDraft] = useState<{ id?: string; accountId: string; displayName: string; position: string; permissions: AccountPermissionId[] } | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+  const [permissionPreview, setPermissionPreview] = useState<{ accountName: string; labels: string[]; left: number; top: number; above: boolean } | null>(null)
 
   const loadAccounts = useCallback(async () => {
     setLoading(true)
@@ -198,6 +199,20 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
     return account.permissions.map((permission) => catalogLabels.get(permission) ?? accountPermissionLabels[permission] ?? permission)
   }
 
+  function showPermissionPreview(element: HTMLElement, account: AccountRecord) {
+    const labels = permissionLabels(account)
+    if (labels.length === 0) return
+    const bounds = element.getBoundingClientRect()
+    const above = bounds.bottom > window.innerHeight - 180
+    setPermissionPreview({
+      accountName: account.displayName,
+      labels,
+      left: Math.max(12, Math.min(bounds.left, window.innerWidth - 332)),
+      top: above ? bounds.top - 8 : bounds.bottom + 8,
+      above,
+    })
+  }
+
   return (
     <section className="account-admin panel-card">
       <header className="account-admin__header">
@@ -219,12 +234,13 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
             <tr><th>姓名</th><th>登录名</th><th>职位</th><th>权限</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
           </thead>
           <tbody>
-            {accounts.map((account) => (
-              <tr key={account.id}>
+            {accounts.map((account) => {
+              const labels = permissionLabels(account)
+              return <tr key={account.id}>
                 <td><strong>{account.displayName}</strong>{account.id === user.id && <small>当前账号</small>}</td>
                 <td><code>{account.accountId}</code></td>
                 <td>{account.position || <span className="account-admin__muted">未填写</span>}</td>
-                <td className="account-admin__permission-cell">{permissionLabels(account).length > 0 ? <div className="account-admin__permission-summary" title={permissionLabels(account).join('、')}>{permissionLabels(account).slice(0, 2).map((label) => <span key={label}>{label}</span>)}{permissionLabels(account).length > 2 && <span className="account-admin__permission-more">+{permissionLabels(account).length - 2}</span>}</div> : <span className="account-admin__muted">未开通功能</span>}</td>
+                <td className="account-admin__permission-cell">{labels.length > 0 ? <button className="account-admin__permission-summary" type="button" aria-label={`查看${account.displayName}的完整权限`} onMouseEnter={(event) => showPermissionPreview(event.currentTarget, account)} onMouseLeave={() => setPermissionPreview(null)} onFocus={(event) => showPermissionPreview(event.currentTarget, account)} onBlur={() => setPermissionPreview(null)}>{labels.slice(0, 2).map((label) => <span key={label}>{label}</span>)}{labels.length > 2 && <span className="account-admin__permission-more">+{labels.length - 2}</span>}</button> : <span className="account-admin__muted">未开通功能</span>}</td>
                 <td><span className={`account-status account-status--${account.status}`}>{account.status === 'active' ? '正常' : account.status === 'disabled' ? '已停用' : account.status === 'initializing' ? '初始化中' : '初始化失败'}</span></td>
                 <td><small>{account.createdAt.slice(0, 10)}</small></td>
                 <td>
@@ -237,11 +253,13 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                   </div>
                 </td>
               </tr>
-            ))}
+            })}
           </tbody>
         </table>
         {loading && <div className="account-admin__empty">正在加载账号…</div>}
       </div>
+
+      {permissionPreview && <div className={`account-admin__permission-tooltip${permissionPreview.above ? ' account-admin__permission-tooltip--above' : ''}`} role="tooltip" style={{ left: permissionPreview.left, top: permissionPreview.top }}><strong>{permissionPreview.accountName}的权限</strong><div>{permissionPreview.labels.map((label) => <span key={label}>{label}</span>)}</div></div>}
 
       {editorMode && draft && (
         <div className="employee-editor" role="dialog" aria-modal="true" aria-label={editorMode === 'create' ? '新增账号' : '编辑账号'}>
