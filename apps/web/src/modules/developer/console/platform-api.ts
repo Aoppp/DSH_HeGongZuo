@@ -57,8 +57,9 @@ export function readAuditLogs(cursor: string | null): Promise<AuditLogPage> {
   return request<AuditLogPage>(`/api/platform/audit-logs${query}`)
 }
 
-export interface MeetingUploadCredentialStatus { readonly configured: boolean; readonly tokenHint: string | null; readonly createdAt: string | null; readonly lastUsedAt: string | null }
-export interface NewMeetingUploadCredential extends MeetingUploadCredentialStatus { readonly token: string }
+export interface MeetingUploadCredential { readonly id: string; readonly name: string; readonly tokenHint: string; readonly createdAt: string; readonly lastUsedAt: string | null }
+export interface NewMeetingUploadCredential extends MeetingUploadCredential { readonly token: string }
 
-export function readMeetingUploadCredential(): Promise<MeetingUploadCredentialStatus> { return request('/api/platform/meeting-upload-credential') }
-export function rotateMeetingUploadCredential(): Promise<NewMeetingUploadCredential> { return request('/api/platform/meeting-upload-credential', { method: 'POST' }) }
+export function readMeetingUploadCredentials(): Promise<readonly MeetingUploadCredential[]> { return request<{ credentials: readonly MeetingUploadCredential[] }>('/api/platform/meeting-upload-credentials').then((result) => result.credentials) }
+export function createMeetingUploadCredential(name: string): Promise<NewMeetingUploadCredential> { return request('/api/platform/meeting-upload-credentials', { method: 'POST', body: JSON.stringify({ name }) }) }
+export function deleteMeetingUploadCredential(id: string): Promise<void> { return request(`/api/platform/meeting-upload-credentials/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(() => undefined) }

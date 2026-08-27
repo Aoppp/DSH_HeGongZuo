@@ -133,6 +133,10 @@ function bearerToken(request: IncomingMessage): string | null {
   return header?.startsWith('Bearer ') ? header.slice(7).trim() || null : null
 }
 
+function meetingCredentialId(pathname: string): string | null {
+  return pathname.match(/^\/api\/platform\/meeting-upload-credentials\/(muc_[a-f0-9]{16}|primary)$/)?.[1] ?? null
+}
+
 function auditCursor(value: string | null): { readonly createdAt: string; readonly id: number } | null {
   if (!value) return null
   try {
@@ -252,17 +256,29 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
-  if (url.pathname === '/api/platform/meeting-upload-credential' && request.method === 'GET') {
+  if (url.pathname === '/api/platform/meeting-upload-credentials' && request.method === 'GET') {
     requirePlatformAdministration(currentUser)
-    sendJson(response, 200, await meetingUploadCredentials.status())
+    sendJson(response, 200, { credentials: await meetingUploadCredentials.list() })
     return
   }
 
-  if (url.pathname === '/api/platform/meeting-upload-credential' && request.method === 'POST') {
+  if (url.pathname === '/api/platform/meeting-upload-credentials' && request.method === 'POST') {
     requirePlatformAdministration(currentUser)
-    const credential = await meetingUploadCredentials.rotate()
-    await platformManagement.record(currentUser.id, currentUser.displayName, '生成会议上传凭证', '会议上传凭证', 'primary')
+    const body = await readJson(request)
+    const name = body && typeof body === 'object' && typeof (body as Record<string, unknown>).name === 'string' ? String((body as Record<string, unknown>).name).trim() : ''
+    if (!name || name.length > 80) throw new HttpError(400, '凭证名称不能为空且不能超过 80 个字符。')
+    const credential = await meetingUploadCredentials.create(name)
+    await platformManagement.record(currentUser.id, currentUser.displayName, '生成会议上传凭证', '会议上传凭证', credential.id, { name })
     sendJson(response, 201, credential)
+    return
+  }
+
+  const credentialId = meetingCredentialId(url.pathname)
+  if (credentialId && request.method === 'DELETE') {
+    requirePlatformAdministration(currentUser)
+    if (!await meetingUploadCredentials.remove(credentialId)) throw new HttpError(404, '会议上传凭证不存在。')
+    await platformManagement.record(currentUser.id, currentUser.displayName, '删除会议上传凭证', '会议上传凭证', credentialId)
+    sendJson(response, 200, { success: true })
     return
   }
 

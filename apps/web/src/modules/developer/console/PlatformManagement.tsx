@@ -1,8 +1,8 @@
-import { Activity, Blocks, ChevronDown, Copy, Database, Download, History, KeyRound, LoaderCircle, RefreshCw } from 'lucide-react'
+import { Activity, Blocks, Check, ChevronDown, Copy, Database, Download, History, KeyRound, LoaderCircle, RefreshCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ModuleId } from '../../../app/types'
-import { readAuditLogs, readMeetingUploadCredential, readPlatformStatus, rotateMeetingUploadCredential, setPlatformModuleEnabled, type AuditLog, type MeetingUploadCredentialStatus, type PlatformStatus } from './platform-api'
+import { createMeetingUploadCredential, deleteMeetingUploadCredential, readAuditLogs, readMeetingUploadCredentials, readPlatformStatus, setPlatformModuleEnabled, type AuditLog, type MeetingUploadCredential, type PlatformStatus } from './platform-api'
 
 interface PlatformManagementProps {
   readonly onModuleSettingsUpdated: (disabledModuleIds: readonly ModuleId[]) => void
@@ -21,17 +21,20 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   const [auditLogs, setAuditLogs] = useState<readonly AuditLog[]>([])
   const [auditCursor, setAuditCursor] = useState<string | null>(null)
   const [auditLoading, setAuditLoading] = useState(false)
-  const [meetingCredential, setMeetingCredential] = useState<MeetingUploadCredentialStatus | null>(null)
+  const [meetingCredentials, setMeetingCredentials] = useState<readonly MeetingUploadCredential[]>([])
+  const [credentialName, setCredentialName] = useState('线下会议电脑')
   const [newMeetingToken, setNewMeetingToken] = useState<string | null>(null)
-  const [rotatingToken, setRotatingToken] = useState(false)
+  const [newMeetingTokenId, setNewMeetingTokenId] = useState<string | null>(null)
+  const [creatingToken, setCreatingToken] = useState(false)
+  const [copiedToken, setCopiedToken] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [next, credential] = await Promise.all([readPlatformStatus(), readMeetingUploadCredential()])
+      const [next, credentials] = await Promise.all([readPlatformStatus(), readMeetingUploadCredentials()])
       setStatus(next)
-      setMeetingCredential(credential)
+      setMeetingCredentials(credentials)
       onModuleSettingsUpdated(next.modules.filter((module) => !module.enabled).map((module) => module.id))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '无法读取平台状态。')
@@ -63,12 +66,28 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
     })
   }
 
-  async function rotateToken() {
-    if (meetingCredential?.configured && !window.confirm('重新生成后，原会议上传凭证会立即失效。确认继续吗？')) return
-    setRotatingToken(true); setError(null)
-    try { const result = await rotateMeetingUploadCredential(); setMeetingCredential(result); setNewMeetingToken(result.token) }
+  async function createToken() {
+    const name = credentialName.trim()
+    if (!name) { setError('请填写会议上传凭证名称。'); return }
+    setCreatingToken(true); setError(null); setCopiedToken(false)
+    try { const result = await createMeetingUploadCredential(name); setMeetingCredentials((current) => [result, ...current]); setNewMeetingToken(result.token); setNewMeetingTokenId(result.id); setCredentialName('') }
     catch (reason) { setError(reason instanceof Error ? reason.message : '会议上传凭证生成失败。') }
-    finally { setRotatingToken(false) }
+    finally { setCreatingToken(false) }
+  }
+
+  async function copyToken() {
+    if (!newMeetingToken) return
+    try {
+      if (navigator.clipboard?.writeText && window.isSecureContext) await navigator.clipboard.writeText(newMeetingToken)
+      else { const input = document.createElement('textarea'); input.value = newMeetingToken; input.style.position = 'fixed'; input.style.opacity = '0'; document.body.append(input); input.select(); if (!document.execCommand('copy')) throw new Error('copy failed'); input.remove() }
+      setCopiedToken(true)
+    } catch { setError('无法自动复制，请选中凭证文本后手动复制。') }
+  }
+
+  async function removeToken(credential: MeetingUploadCredential) {
+    if (!window.confirm(`确认删除“${credential.name}”吗？使用该凭证的翻译脚本将立即无法上传。`)) return
+    try { await deleteMeetingUploadCredential(credential.id); setMeetingCredentials((current) => current.filter((item) => item.id !== credential.id)); if (newMeetingTokenId === credential.id) { setNewMeetingToken(null); setNewMeetingTokenId(null) } }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '会议上传凭证删除失败。') }
   }
 
   async function toggleModule(moduleId: PlatformStatus['modules'][number]['id'], enabled: boolean, label: string) {
@@ -119,8 +138,8 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       </section>}
 
       {status && <section className="platform-management panel-card">
-        <header className="platform-management__header"><div><h2>会议上传凭证</h2><p>供线下会议电脑上传会议记录，只具备上传能力。</p></div><button className="employee-data__secondary" type="button" disabled={rotatingToken} onClick={() => void rotateToken()}>{rotatingToken ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}{meetingCredential?.configured ? '重新生成' : '生成凭证'}</button></header>
-        <div className="platform-management__credential"><div><small>当前状态</small><strong>{meetingCredential?.configured ? `已配置（${meetingCredential.tokenHint}）` : '尚未配置'}</strong>{meetingCredential?.lastUsedAt && <span>最后使用：{formatTime(meetingCredential.lastUsedAt)}</span>}</div>{newMeetingToken && <div className="platform-management__token"><p>请立即复制，关闭后不再完整显示。</p><code>{newMeetingToken}</code><button type="button" onClick={() => void navigator.clipboard.writeText(newMeetingToken)}><Copy size={14} />复制</button></div>}</div>
+        <header className="platform-management__header"><div><h2>会议上传凭证</h2><p>供线下会议电脑上传会议记录，只具备上传能力。</p></div><div className="platform-management__credential-create"><input value={credentialName} maxLength={80} placeholder="凭证名称" onChange={(event) => setCredentialName(event.target.value)} /><button className="employee-data__secondary" type="button" disabled={creatingToken || !credentialName.trim()} onClick={() => void createToken()}>{creatingToken ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}生成凭证</button></div></header>
+        <div className="platform-management__credential">{newMeetingToken && <div className="platform-management__token"><p>请立即复制，刷新或离开页面后不再完整显示。</p><code>{newMeetingToken}</code><button type="button" onClick={() => void copyToken()}>{copiedToken ? <Check size={14} /> : <Copy size={14} />}{copiedToken ? '已复制' : '复制'}</button></div>}<div className="platform-management__credential-list">{meetingCredentials.length === 0 ? <p>尚未创建会议上传凭证。</p> : meetingCredentials.map((credential) => <article key={credential.id}><div><strong>{credential.name}</strong><small>{credential.tokenHint} · 创建于 {formatTime(credential.createdAt)}{credential.lastUsedAt ? ` · 最后使用 ${formatTime(credential.lastUsedAt)}` : ' · 尚未使用'}</small></div><button type="button" title="删除凭证" onClick={() => void removeToken(credential)}><Trash2 size={15} />删除</button></article>)}</div></div>
       </section>}
 
       {status && <section className="platform-management panel-card">
