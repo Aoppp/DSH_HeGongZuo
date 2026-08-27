@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarCheck, ClipboardList, Code2, Files, Gauge, Landmark, LayoutDashboard, Users } from 'lucide-react'
+import { BriefcaseBusiness, CalendarCheck, ClipboardList, Code2, Files, Gauge, Landmark, LayoutDashboard, Presentation, Users } from 'lucide-react'
 
 import { DeveloperConsoleModule } from '../modules/developer/console/DeveloperConsoleModule'
 import { EmployeeAgentModule } from '../modules/employee/agent/EmployeeAgentModule'
@@ -10,6 +10,7 @@ import { FinanceManagementModule } from '../modules/finance/management/FinanceMa
 import { ProjectManagementModule } from '../modules/project/management/ProjectManagementModule'
 import { OverviewModule } from '../modules/overview/main/OverviewModule'
 import { WorkAssistantModule } from '../modules/work-assistant/main/WorkAssistantModule'
+import { MeetingRecordsModule } from '../modules/meetings/records/MeetingRecordsModule'
 import type { AuthenticatedUser, ModuleId, PlatformModule } from './types'
 
 // 每个功能只在此注册一次。删除该项即可从导航和路由中同时移除功能。
@@ -89,6 +90,15 @@ export const platformModules: readonly PlatformModule[] = [
     requiredPermission: 'finance-management',
     group: 'finance-management',
     component: FinanceManagementModule,
+  },
+  {
+    id: 'meeting-records',
+    path: '/meetings',
+    label: '会议管理',
+    description: '查看会议摘要与原始记录',
+    icon: Presentation,
+    requiredPermission: 'meeting-records',
+    component: MeetingRecordsModule,
   },
   {
     id: 'project-management',

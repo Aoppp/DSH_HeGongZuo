@@ -9,6 +9,7 @@ export const managedModuleIds = [
   'employee-agent',
   'employee-attendance',
   'employee-reports',
+  'meeting-records',
   'finance-management',
   'project-management',
 ] as const
@@ -21,6 +22,7 @@ const moduleLabels: Record<ManagedModuleId, string> = {
   'employee-agent': '员工查询',
   'employee-attendance': '考勤管理',
   'employee-reports': '工作汇报',
+  'meeting-records': '会议管理',
   'finance-management': '财务管理',
   'project-management': '项目管理',
 }

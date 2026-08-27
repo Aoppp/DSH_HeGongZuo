@@ -20,6 +20,9 @@ import { PlatformManagementError, PlatformManagementService } from './modules/pl
 import { ManagementCockpitService } from './modules/management/management-cockpit.js'
 import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/mock-work-records-source.js'
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
+import { MeetingRepository } from './modules/meetings/meeting-repository.js'
+import { MeetingUploadCredentials } from './modules/meetings/meeting-upload-credentials.js'
+import { MeetingValidationError, parseMeetingInput } from './modules/meetings/meeting-input.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
 
@@ -34,6 +37,8 @@ const platformManagement = new PlatformManagementService(database)
 const employeeWorkRecords = new MockEmployeeWorkRecordsSource()
 const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
 const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
+const meetings = new MeetingRepository(database)
+const meetingUploadCredentials = new MeetingUploadCredentials(database)
 
 
 function cookieToken(cookieHeader: string | undefined): string | null {
@@ -119,6 +124,15 @@ function platformModuleId(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
+function meetingRecordId(pathname: string): string | null {
+  return pathname.match(/^\/api\/meeting-records\/([0-9]{5,})$/)?.[1] ?? null
+}
+
+function bearerToken(request: IncomingMessage): string | null {
+  const header = request.headers.authorization
+  return header?.startsWith('Bearer ') ? header.slice(7).trim() || null : null
+}
+
 function auditCursor(value: string | null): { readonly createdAt: string; readonly id: number } | null {
   if (!value) return null
   try {
@@ -147,6 +161,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const runtimes = await checkConfiguredAgentRuntimeHealth()
     const unavailable = runtimes.filter((runtime) => !runtime.available)
     sendJson(response, unavailable.length ? 503 : 200, { ok: unavailable.length === 0, database: 'postgresql', agentRuntimes: { expected: runtimes.length, available: runtimes.length - unavailable.length, running: runtimes.filter((runtime) => runtime.state === 'running').length, idle: runtimes.filter((runtime) => runtime.state === 'idle').length, unavailable: unavailable.map((runtime) => runtime.runtimeId) } })
+    return
+  }
+
+  if (url.pathname === '/api/meeting-records' && request.method === 'POST') {
+    const token = bearerToken(request)
+    if (!token || !await meetingUploadCredentials.authenticate(token)) throw new HttpError(401, '会议上传凭证无效。')
+    await platformManagement.assertModuleEnabled('meeting-records')
+    const idempotencyKey = typeof request.headers['idempotency-key'] === 'string' ? request.headers['idempotency-key'].trim() : ''
+    if (!/^[A-Za-z0-9._:-]{16,200}$/.test(idempotencyKey)) throw new HttpError(400, 'Idempotency-Key 必须是 16 至 200 位的稳定唯一值。')
+    const result = await meetings.create(parseMeetingInput(await readJson(request)), idempotencyKey)
+    const protocol = String(request.headers['x-forwarded-proto'] ?? 'https').split(',').at(-1)?.trim() || 'https'
+    const hostName = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '').split(',').at(-1)?.trim()
+    sendJson(response, result.created ? 201 : 200, { success: true, id: result.record.id, url: `${protocol}://${hostName}/meetings?record=${result.record.id}`, created: result.created })
     return
   }
 
@@ -225,6 +252,20 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/platform/meeting-upload-credential' && request.method === 'GET') {
+    requirePlatformAdministration(currentUser)
+    sendJson(response, 200, await meetingUploadCredentials.status())
+    return
+  }
+
+  if (url.pathname === '/api/platform/meeting-upload-credential' && request.method === 'POST') {
+    requirePlatformAdministration(currentUser)
+    const credential = await meetingUploadCredentials.rotate()
+    await platformManagement.record(currentUser.id, currentUser.displayName, '生成会议上传凭证', '会议上传凭证', 'primary')
+    sendJson(response, 201, credential)
+    return
+  }
+
   if (url.pathname === '/api/platform/audit-logs' && request.method === 'GET') {
     requirePlatformAdministration(currentUser)
     const page = await platformManagement.auditLogs(auditCursor(url.searchParams.get('cursor')))
@@ -294,6 +335,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       { id: 'employee-query', label: '数据查询', group: '员工管理' },
       { id: 'employee-attendance', label: '考勤管理', group: '员工管理' },
       { id: 'employee-reports', label: '工作汇报', group: '员工管理' },
+      { id: 'meeting-records', label: '查看全部会议记录', group: '会议管理' },
       { id: 'finance-management', label: '待开发', group: '财务管理' },
       { id: 'project-management', label: '待开发', group: '项目管理' },
       { id: 'management-cockpit', label: '驾驶舱', group: '其他' },
@@ -395,6 +437,27 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     accountRuntimeTasks.enqueue(account, { transitionStatus: true, provision: true })
     await platformManagement.record(currentUser.id, currentUser.displayName, '重试账号初始化', '账号', account.id, { displayName: account.displayName })
     sendJson(response, 202, { account: { ...account, status: 'initializing' } })
+    return
+  }
+
+  if (url.pathname === '/api/meeting-records' && request.method === 'GET') {
+    requirePermission(currentUser, 'meeting-records')
+    await platformManagement.assertModuleEnabled('meeting-records')
+    const page = Math.max(1, Number(url.searchParams.get('page')) || 1)
+    const pageSize = Math.min(50, Math.max(1, Number(url.searchParams.get('pageSize')) || 10))
+    const date = url.searchParams.get('date') ?? ''
+    if (date && !isCalendarDate(date)) throw new HttpError(400, '查询日期格式无效。')
+    sendJson(response, 200, await meetings.list({ query: (url.searchParams.get('query') ?? '').trim().slice(0, 200), mode: url.searchParams.get('mode') ?? '', date, page, pageSize }))
+    return
+  }
+
+  const meetingId = meetingRecordId(url.pathname)
+  if (meetingId && request.method === 'GET') {
+    requirePermission(currentUser, 'meeting-records')
+    await platformManagement.assertModuleEnabled('meeting-records')
+    const record = await meetings.get(meetingId)
+    if (!record) throw new HttpError(404, '会议记录不存在。')
+    sendJson(response, 200, { record })
     return
   }
 
@@ -511,7 +574,7 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
+    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof MeetingValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
       const status = error instanceof LoginRateLimitError
         ? 429
         : error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError
@@ -526,7 +589,7 @@ const server = createServer((request, response) => {
       return
     }
     console.error('[和工作 API] 请求失败：', error)
-    sendJson(response, 500, { error: '服务器处理员工数据时发生错误。' })
+    sendJson(response, 500, { error: '服务器处理请求时发生错误。' })
   })
 })
 

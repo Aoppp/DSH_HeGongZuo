@@ -56,3 +56,9 @@ export function readAuditLogs(cursor: string | null): Promise<AuditLogPage> {
   const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
   return request<AuditLogPage>(`/api/platform/audit-logs${query}`)
 }
+
+export interface MeetingUploadCredentialStatus { readonly configured: boolean; readonly tokenHint: string | null; readonly createdAt: string | null; readonly lastUsedAt: string | null }
+export interface NewMeetingUploadCredential extends MeetingUploadCredentialStatus { readonly token: string }
+
+export function readMeetingUploadCredential(): Promise<MeetingUploadCredentialStatus> { return request('/api/platform/meeting-upload-credential') }
+export function rotateMeetingUploadCredential(): Promise<NewMeetingUploadCredential> { return request('/api/platform/meeting-upload-credential', { method: 'POST' }) }

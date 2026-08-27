@@ -27,6 +27,7 @@ const employeePermissionLabels: Record<string, string> = {
   'employee-query': '数据查询',
   'employee-attendance': '考勤管理',
   'employee-reports': '工作汇报',
+  'meeting-records': '查看全部会议记录',
   'finance-management': '待开发',
   'project-management': '待开发',
   'management-cockpit': '驾驶舱',
@@ -35,6 +36,7 @@ const employeePermissionLabels: Record<string, string> = {
 
 const permissionGroups: readonly { readonly label: string; readonly permissions: readonly AccountPermissionId[] }[] = [
   { label: '员工管理', permissions: ['employee-data', 'employee-query', 'employee-attendance', 'employee-reports'] },
+  { label: '会议管理', permissions: ['meeting-records'] },
   { label: '财务管理', permissions: ['finance-management'] },
   { label: '项目管理', permissions: ['project-management'] },
   { label: '其他', permissions: ['management-cockpit', 'platform-administration'] },
@@ -46,6 +48,7 @@ const accountPermissionLabels: Record<string, string> = {
   'employee-query': '员工查询',
   'employee-attendance': '考勤管理',
   'employee-reports': '工作汇报',
+  'meeting-records': '查看全部会议记录',
   'finance-management': '财务管理',
   'project-management': '项目管理',
   'management-cockpit': '管理驾驶舱',

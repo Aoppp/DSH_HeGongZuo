@@ -9,6 +9,7 @@ test('账号权限覆盖业务模块与平台管理能力', () => {
     'employee-query',
     'employee-attendance',
     'employee-reports',
+    'meeting-records',
     'finance-management',
     'project-management',
     'management-cockpit',

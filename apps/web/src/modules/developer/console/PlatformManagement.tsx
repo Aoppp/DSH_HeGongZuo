@@ -1,8 +1,8 @@
-import { Activity, Blocks, ChevronDown, Database, Download, History, LoaderCircle, RefreshCw } from 'lucide-react'
+import { Activity, Blocks, ChevronDown, Copy, Database, Download, History, KeyRound, LoaderCircle, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ModuleId } from '../../../app/types'
-import { readAuditLogs, readPlatformStatus, setPlatformModuleEnabled, type AuditLog, type PlatformStatus } from './platform-api'
+import { readAuditLogs, readMeetingUploadCredential, readPlatformStatus, rotateMeetingUploadCredential, setPlatformModuleEnabled, type AuditLog, type MeetingUploadCredentialStatus, type PlatformStatus } from './platform-api'
 
 interface PlatformManagementProps {
   readonly onModuleSettingsUpdated: (disabledModuleIds: readonly ModuleId[]) => void
@@ -21,13 +21,17 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   const [auditLogs, setAuditLogs] = useState<readonly AuditLog[]>([])
   const [auditCursor, setAuditCursor] = useState<string | null>(null)
   const [auditLoading, setAuditLoading] = useState(false)
+  const [meetingCredential, setMeetingCredential] = useState<MeetingUploadCredentialStatus | null>(null)
+  const [newMeetingToken, setNewMeetingToken] = useState<string | null>(null)
+  const [rotatingToken, setRotatingToken] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const next = await readPlatformStatus()
+      const [next, credential] = await Promise.all([readPlatformStatus(), readMeetingUploadCredential()])
       setStatus(next)
+      setMeetingCredential(credential)
       onModuleSettingsUpdated(next.modules.filter((module) => !module.enabled).map((module) => module.id))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '无法读取平台状态。')
@@ -57,6 +61,14 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       if (next && auditLogs.length === 0 && !auditLoading) void loadAuditLogs(null)
       return next
     })
+  }
+
+  async function rotateToken() {
+    if (meetingCredential?.configured && !window.confirm('重新生成后，原会议上传凭证会立即失效。确认继续吗？')) return
+    setRotatingToken(true); setError(null)
+    try { const result = await rotateMeetingUploadCredential(); setMeetingCredential(result); setNewMeetingToken(result.token) }
+    catch (reason) { setError(reason instanceof Error ? reason.message : '会议上传凭证生成失败。') }
+    finally { setRotatingToken(false) }
   }
 
   async function toggleModule(moduleId: PlatformStatus['modules'][number]['id'], enabled: boolean, label: string) {
@@ -104,6 +116,11 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
             </article>
           ))}
         </div>
+      </section>}
+
+      {status && <section className="platform-management panel-card">
+        <header className="platform-management__header"><div><h2>会议上传凭证</h2><p>供线下会议电脑上传会议记录，只具备上传能力。</p></div><button className="employee-data__secondary" type="button" disabled={rotatingToken} onClick={() => void rotateToken()}>{rotatingToken ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}{meetingCredential?.configured ? '重新生成' : '生成凭证'}</button></header>
+        <div className="platform-management__credential"><div><small>当前状态</small><strong>{meetingCredential?.configured ? `已配置（${meetingCredential.tokenHint}）` : '尚未配置'}</strong>{meetingCredential?.lastUsedAt && <span>最后使用：{formatTime(meetingCredential.lastUsedAt)}</span>}</div>{newMeetingToken && <div className="platform-management__token"><p>请立即复制，关闭后不再完整显示。</p><code>{newMeetingToken}</code><button type="button" onClick={() => void navigator.clipboard.writeText(newMeetingToken)}><Copy size={14} />复制</button></div>}</div>
       </section>}
 
       {status && <section className="platform-management panel-card">

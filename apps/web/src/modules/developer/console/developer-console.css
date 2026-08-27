@@ -655,3 +655,10 @@
     justify-content: center;
   }
 }
+.platform-management__credential { display: grid; gap: 12px; padding: 16px; }
+.platform-management__credential > div:first-child { display: flex; align-items: center; gap: 10px; }
+.platform-management__credential small,.platform-management__credential span { color: var(--ink-500); font-size: 12px; }
+.platform-management__token { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 12px; border: 1px solid #f0d59d; border-radius: 9px; background: #fff9ec; }
+.platform-management__token p { grid-column: 1 / -1; margin: 0; color: #8a5a00; font-size: 12px; }
+.platform-management__token code { overflow: auto; padding: 8px; border-radius: 6px; background: #fff; color: #27364a; }
+.platform-management__token button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #d4b36f; border-radius: 7px; background: #fff; cursor: pointer; }

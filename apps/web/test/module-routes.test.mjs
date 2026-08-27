@@ -9,6 +9,7 @@ const modules = [
   { id: 'employee-data', path: '/employee/data' },
   { id: 'employee-attendance', path: '/employee/attendance' },
   { id: 'employee-reports', path: '/employee/reports' },
+  { id: 'meeting-records', path: '/meetings' },
 ]
 
 test('模块地址会规范化尾部斜杠并定位到已注册模块', () => {
@@ -16,6 +17,7 @@ test('模块地址会规范化尾部斜杠并定位到已注册模块', () => {
   assert.equal(moduleForPath(modules, '/employee/data/').id, 'employee-data')
   assert.equal(moduleForPath(modules, '/employee/attendance').id, 'employee-attendance')
   assert.equal(moduleForPath(modules, '/employee/reports').id, 'employee-reports')
+  assert.equal(moduleForPath(modules, '/meetings').id, 'meeting-records')
 })
 
 test('CEO 优先进入管理驾驶舱，其他账号进入概览', () => {
