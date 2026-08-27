@@ -194,6 +194,10 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
     return groups
   }, [])
 
+  function permissionLabels(account: AccountRecord): string[] {
+    return account.permissions.map((permission) => catalogLabels.get(permission) ?? accountPermissionLabels[permission] ?? permission)
+  }
+
   return (
     <section className="account-admin panel-card">
       <header className="account-admin__header">
@@ -220,7 +224,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                 <td><strong>{account.displayName}</strong>{account.id === user.id && <small>当前账号</small>}</td>
                 <td><code>{account.accountId}</code></td>
                 <td>{account.position || <span className="account-admin__muted">未填写</span>}</td>
-                <td><small>{account.permissions.map((permission) => catalogLabels.get(permission) ?? accountPermissionLabels[permission] ?? permission).join(' · ') || '未开通功能'}</small></td>
+                <td className="account-admin__permission-cell">{permissionLabels(account).length > 0 ? <div className="account-admin__permission-summary" title={permissionLabels(account).join('、')}>{permissionLabels(account).slice(0, 2).map((label) => <span key={label}>{label}</span>)}{permissionLabels(account).length > 2 && <span className="account-admin__permission-more">+{permissionLabels(account).length - 2}</span>}</div> : <span className="account-admin__muted">未开通功能</span>}</td>
                 <td><span className={`account-status account-status--${account.status}`}>{account.status === 'active' ? '正常' : account.status === 'disabled' ? '已停用' : account.status === 'initializing' ? '初始化中' : '初始化失败'}</span></td>
                 <td><small>{account.createdAt.slice(0, 10)}</small></td>
                 <td>

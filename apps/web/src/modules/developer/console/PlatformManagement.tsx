@@ -22,7 +22,9 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   const [auditCursor, setAuditCursor] = useState<string | null>(null)
   const [auditLoading, setAuditLoading] = useState(false)
   const [meetingCredentials, setMeetingCredentials] = useState<readonly MeetingUploadCredential[]>([])
-  const [credentialName, setCredentialName] = useState('线下会议电脑')
+  const [credentialName, setCredentialName] = useState('')
+  const [credentialEditorOpen, setCredentialEditorOpen] = useState(false)
+  const [credentialFormError, setCredentialFormError] = useState<string | null>(null)
   const [newMeetingToken, setNewMeetingToken] = useState<string | null>(null)
   const [newMeetingTokenId, setNewMeetingTokenId] = useState<string | null>(null)
   const [creatingToken, setCreatingToken] = useState(false)
@@ -68,11 +70,23 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
 
   async function createToken() {
     const name = credentialName.trim()
-    if (!name) { setError('请填写会议上传凭证名称。'); return }
-    setCreatingToken(true); setError(null); setCopiedToken(false)
-    try { const result = await createMeetingUploadCredential(name); setMeetingCredentials((current) => [result, ...current]); setNewMeetingToken(result.token); setNewMeetingTokenId(result.id); setCredentialName('') }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '会议上传凭证生成失败。') }
+    if (!name) { setCredentialFormError('请填写凭证名称。'); return }
+    setCreatingToken(true); setCredentialFormError(null); setCopiedToken(false)
+    try { const result = await createMeetingUploadCredential(name); setMeetingCredentials((current) => [result, ...current]); setNewMeetingToken(result.token); setNewMeetingTokenId(result.id); setCredentialName(''); setCredentialEditorOpen(false) }
+    catch (reason) { setCredentialFormError(reason instanceof Error ? reason.message : '会议上传凭证生成失败。') }
     finally { setCreatingToken(false) }
+  }
+
+  function openCredentialEditor() {
+    setCredentialName('')
+    setCredentialFormError(null)
+    setCredentialEditorOpen(true)
+  }
+
+  function closeCredentialEditor() {
+    if (creatingToken) return
+    setCredentialEditorOpen(false)
+    setCredentialFormError(null)
   }
 
   async function copyToken() {
@@ -138,9 +152,11 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       </section>}
 
       {status && <section className="platform-management panel-card">
-        <header className="platform-management__header"><div><h2>会议上传凭证</h2><p>供线下会议电脑上传会议记录，只具备上传能力。</p></div><div className="platform-management__credential-create"><input value={credentialName} maxLength={80} placeholder="凭证名称" onChange={(event) => setCredentialName(event.target.value)} /><button className="employee-data__secondary" type="button" disabled={creatingToken || !credentialName.trim()} onClick={() => void createToken()}>{creatingToken ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}生成凭证</button></div></header>
+        <header className="platform-management__header"><div><h2>会议上传凭证</h2><p>供线下会议电脑上传会议记录，只具备上传能力。</p></div><button className="employee-data__secondary" type="button" onClick={openCredentialEditor}><KeyRound size={15} />生成凭证</button></header>
         <div className="platform-management__credential">{newMeetingToken && <div className="platform-management__token"><p>请立即复制，刷新或离开页面后不再完整显示。</p><code>{newMeetingToken}</code><button type="button" onClick={() => void copyToken()}>{copiedToken ? <Check size={14} /> : <Copy size={14} />}{copiedToken ? '已复制' : '复制'}</button></div>}<div className="platform-management__credential-list">{meetingCredentials.length === 0 ? <p>尚未创建会议上传凭证。</p> : meetingCredentials.map((credential) => <article key={credential.id}><div><strong>{credential.name}</strong><small>{credential.tokenHint} · 创建于 {formatTime(credential.createdAt)}{credential.lastUsedAt ? ` · 最后使用 ${formatTime(credential.lastUsedAt)}` : ' · 尚未使用'}</small></div><button type="button" title="删除凭证" onClick={() => void removeToken(credential)}><Trash2 size={15} />删除</button></article>)}</div></div>
       </section>}
+
+      {credentialEditorOpen && <div className="platform-management__credential-dialog" role="dialog" aria-modal="true" aria-label="命名会议上传凭证"><button className="platform-management__credential-backdrop" type="button" aria-label="取消生成" onClick={closeCredentialEditor} /><form onSubmit={(event) => { event.preventDefault(); void createToken() }}><header><div><small>会议上传凭证</small><strong>为新凭证命名</strong></div><button type="button" title="关闭" onClick={closeCredentialEditor}><span aria-hidden="true">×</span></button></header><label>凭证名称<input autoFocus value={credentialName} maxLength={80} placeholder="如：会议室电脑" onChange={(event) => setCredentialName(event.target.value)} /></label><p>名称仅用于区分不同设备，不会影响上传接口。</p>{credentialFormError && <div className="platform-management__credential-error">{credentialFormError}</div>}<footer><button className="employee-data__secondary" type="button" onClick={closeCredentialEditor} disabled={creatingToken}>取消</button><button className="employee-data__primary" type="submit" disabled={creatingToken || !credentialName.trim()}>{creatingToken ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}生成</button></footer></form></div>}
 
       {status && <section className="platform-management panel-card">
         <header className="platform-management__header"><div><h2>操作记录</h2><p>审计记录长期保留，按需加载。</p></div><div className="platform-management__audit-actions"><a className="employee-data__secondary platform-management__audit-export" href="/api/platform/audit-logs/export"><Download size={15} />导出全部 CSV</a><button className="employee-data__secondary platform-management__audit-toggle" type="button" onClick={toggleAudit} aria-expanded={auditOpen}><History size={15} />{auditOpen ? '收起记录' : '查看记录'}<ChevronDown className={auditOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></div></header>

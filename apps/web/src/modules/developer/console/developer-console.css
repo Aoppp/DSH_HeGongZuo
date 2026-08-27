@@ -488,6 +488,38 @@
   font-size: 10px;
 }
 
+.account-admin__permission-cell {
+  width: 220px;
+  max-width: 220px;
+}
+
+.account-admin__permission-summary {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.account-admin__permission-summary > span {
+  overflow: hidden;
+  max-width: 86px;
+  border-radius: 6px;
+  padding: 3px 7px;
+  color: var(--ink-600);
+  font-size: 10px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  background: #eef4f2;
+}
+
+.account-admin__permission-summary > .account-admin__permission-more {
+  flex: none;
+  color: var(--jade-700);
+  background: var(--jade-100);
+}
+
 .account-admin__table code {
   border-radius: 5px;
   padding: 2px 6px;
@@ -657,8 +689,6 @@
 }
 .platform-management__credential { display: grid; gap: 12px; padding: 16px; }
 .platform-management__credential small,.platform-management__credential span { color: var(--ink-500); font-size: 12px; }
-.platform-management__credential-create { display: flex; align-items: center; gap: 8px; }
-.platform-management__credential-create input { min-height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: 7px; font: inherit; }
 .platform-management__token { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 12px; border: 1px solid #f0d59d; border-radius: 9px; background: #fff9ec; }
 .platform-management__token p { grid-column: 1 / -1; margin: 0; color: #8a5a00; font-size: 12px; }
 .platform-management__token code { overflow: auto; padding: 8px; border-radius: 6px; background: #fff; color: #27364a; }
@@ -667,4 +697,20 @@
 .platform-management__credential-list > p { margin: 0; color: var(--ink-500); font-size: 13px; }
 .platform-management__credential-list article { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 8px; }
 .platform-management__credential-list article div { display: grid; gap: 4px; }
+.platform-management__credential-list article strong { font-size: 12px; font-weight: 600; }
 .platform-management__credential-list article button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: #ad3e39; cursor: pointer; }
+
+.platform-management__credential-dialog { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 20px; }
+.platform-management__credential-backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(24, 38, 34, 0.42); cursor: default; }
+.platform-management__credential-dialog form { position: relative; display: grid; width: min(420px, 100%); gap: 15px; border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: white; box-shadow: 0 20px 60px rgba(16, 40, 33, 0.18); }
+.platform-management__credential-dialog header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.platform-management__credential-dialog header div { display: grid; gap: 3px; }
+.platform-management__credential-dialog header small { color: var(--ink-400); font-size: 11px; }
+.platform-management__credential-dialog header strong { color: var(--ink-900); font-size: 15px; }
+.platform-management__credential-dialog header button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: 7px; color: var(--ink-500); font-size: 22px; line-height: 1; background: transparent; cursor: pointer; }
+.platform-management__credential-dialog label { display: grid; gap: 7px; color: var(--ink-700); font-size: 12px; font-weight: 600; }
+.platform-management__credential-dialog input { width: 100%; min-height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 11px; color: var(--ink-900); font: inherit; outline: none; }
+.platform-management__credential-dialog input:focus { border-color: var(--jade-600); box-shadow: 0 0 0 3px var(--jade-100); }
+.platform-management__credential-dialog form > p { margin: -5px 0 0; color: var(--ink-400); font-size: 11px; }
+.platform-management__credential-error { color: var(--danger-600); font-size: 11px; }
+.platform-management__credential-dialog footer { display: flex; justify-content: flex-end; gap: 8px; padding-top: 3px; }
