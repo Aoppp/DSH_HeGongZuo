@@ -249,7 +249,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                     <button type="button" title="重置为默认密码" onClick={() => void resetPassword(account)}><KeyRound size={14} /></button>
                     <button type="button" title={account.status === 'active' ? '停用账号' : '启用账号'} onClick={() => void toggleStatus(account)} disabled={account.id === user.id}>{account.status === 'active' ? '停用' : '启用'}</button>
                     {account.status === 'initialization_failed' && <button type="button" title="重新初始化" onClick={() => void retryInitialization(account)}>重试初始化</button>}
-                    <button type="button" className="account-admin__danger" title="删除账号" onClick={() => void removeAccount(account)} disabled={account.id === user.id}><Trash2 size={14} /> 删除</button>
+                    <button type="button" className="developer-console__danger-action" title="删除账号" onClick={() => void removeAccount(account)} disabled={account.id === user.id}><Trash2 size={14} />删除</button>
                   </div>
                 </td>
               </tr>
