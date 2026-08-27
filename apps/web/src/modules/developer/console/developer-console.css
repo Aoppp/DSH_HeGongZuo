@@ -305,6 +305,10 @@
   flex: 0 0 auto;
 }
 
+.platform-management__collapse-toggle {
+  flex: 0 0 auto;
+}
+
 .platform-management__audit-actions {
   display: flex;
   align-items: center;
@@ -736,13 +740,14 @@
   min-height: 26px;
   align-items: center;
   gap: 4px;
-  border: 1px solid var(--danger-400);
+  border: 1px solid #d98f89;
   border-radius: 7px;
   padding: 0 9px;
   color: var(--danger-600);
   font-size: 11px;
   line-height: 1;
   background: white;
+  box-shadow: 0 0 0 1px rgba(200, 75, 75, 0.04);
   white-space: nowrap;
   cursor: pointer;
 }
@@ -752,6 +757,7 @@
   border-color: var(--danger-600);
   color: var(--danger-700);
   background: #fbecec;
+  box-shadow: none;
 }
 
 .platform-management__credential-dialog { position: fixed; z-index: 80; inset: 0; display: grid; place-items: center; padding: 20px; }

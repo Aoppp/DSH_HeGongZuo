@@ -17,6 +17,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [changingModuleId, setChangingModuleId] = useState<string | null>(null)
+  const [modulesOpen, setModulesOpen] = useState(true)
   const [auditOpen, setAuditOpen] = useState(false)
   const [auditLogs, setAuditLogs] = useState<readonly AuditLog[]>([])
   const [auditCursor, setAuditCursor] = useState<string | null>(null)
@@ -138,8 +139,8 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       </section>
 
       {status && <section className="platform-management panel-card">
-        <header className="platform-management__header"><div><h2>模块管理</h2><p>启停业务入口；停用后对应业务接口也会拒绝访问。</p></div></header>
-        <div className="platform-management__modules">
+        <header className="platform-management__header"><div><h2>模块管理</h2><p>启停业务入口；停用后对应业务接口也会拒绝访问。</p></div><button className="employee-data__secondary platform-management__collapse-toggle" type="button" onClick={() => setModulesOpen((open) => !open)} aria-expanded={modulesOpen}>{modulesOpen ? '收起' : '展开'}<ChevronDown className={modulesOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></header>
+        {modulesOpen && <div className="platform-management__modules">
           {status.modules.map((module) => (
             <article key={module.id}>
               <div><strong>{module.label}</strong><small>{module.enabled ? '已启用' : '已停用'}{module.updatedAt ? ` · ${formatTime(module.updatedAt)}` : ''}</small></div>
@@ -148,7 +149,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
               </button>
             </article>
           ))}
-        </div>
+        </div>}
       </section>}
 
       {status && <section className="platform-management panel-card">
