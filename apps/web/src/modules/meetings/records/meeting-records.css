@@ -6,5 +6,24 @@
 .meeting-records__actions { display: flex; gap: 8px; flex: 0 0 auto; }.meeting-records__actions button,.meeting-records__pagination button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid #cfd8e3; border-radius: 8px; background: #fff; color: #315778; cursor: pointer; }.meeting-records__actions button:disabled,.meeting-records__pagination button:disabled { opacity: .45; cursor: default; }
 .meeting-records__empty { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 160px; color: #7a8699; }.meeting-records__error { padding: 11px 13px; border: 1px solid #efc6c2; border-radius: 8px; background: #fff3f2; color: #a33f39; }.meeting-records__pagination { display: flex; justify-content: space-between; align-items: center; color: #667085; font-size: 13px; }.meeting-records__pagination div { display: flex; gap: 8px; }
 .meeting-detail { position: fixed; inset: 0; z-index: 50; display: flex; justify-content: flex-end; }.meeting-detail__backdrop { position: absolute; inset: 0; border: 0; background: rgba(20,29,43,.35); }.meeting-detail > section { position: relative; display: grid; grid-template-rows: auto 1fr; width: min(780px,92vw); height: 100%; background: #fff; box-shadow: -12px 0 30px rgba(20,29,43,.14); }.meeting-detail header { display: flex; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid #e4e8ee; }.meeting-detail header div { display: grid; gap: 4px; }.meeting-detail header small,.meeting-detail header span { color: #7a8699; }.meeting-detail header strong { font-size: 17px; }.meeting-detail header button { align-self: start; border: 0; background: none; cursor: pointer; }.meeting-detail main { overflow: auto; padding: 24px; }
-.meeting-markdown { color: #29364a; font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }.meeting-markdown h1 { font-size: 22px; }.meeting-markdown h2 { margin-top: 24px; font-size: 18px; }.meeting-markdown h3 { margin-top: 20px; font-size: 16px; }.meeting-markdown p { margin: 7px 0; white-space: pre-wrap; }.meeting-markdown__bullet { display: flex; gap: 8px; margin: 5px 0; }
+.meeting-markdown { color: #29364a; font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
+.meeting-markdown h1,.meeting-markdown h2,.meeting-markdown h3 { color: #182235; line-height: 1.4; }
+.meeting-markdown h1 { margin: 0 0 18px; font-size: 22px; }
+.meeting-markdown h2 { margin: 26px 0 10px; padding-bottom: 7px; border-bottom: 1px solid #e8ecf1; font-size: 18px; }
+.meeting-markdown h3 { margin: 20px 0 8px; font-size: 16px; }
+.meeting-markdown p { margin: 8px 0; white-space: pre-wrap; }
+.meeting-markdown ul,.meeting-markdown ol { margin: 8px 0; padding-left: 24px; }
+.meeting-markdown li { margin: 4px 0; padding-left: 2px; }
+.meeting-markdown strong { color: #182235; font-weight: 700; }
+.meeting-markdown code { border-radius: 5px; padding: 2px 5px; color: #174c43; background: #edf7f4; font-family: ui-monospace,SFMono-Regular,Menlo,monospace; font-size: 12px; }
+.meeting-markdown pre { overflow-x: auto; margin: 12px 0; border-radius: 9px; padding: 13px 15px; color: #e8edf5; background: #202936; white-space: pre; }
+.meeting-markdown pre code { padding: 0; color: inherit; background: transparent; }
+.meeting-markdown blockquote { margin: 12px 0; border-left: 3px solid #79ad9f; padding: 8px 13px; color: #526276; background: #f5f9f8; }
+.meeting-markdown hr { height: 1px; border: 0; margin: 20px 0; background: #e1e6ed; }
+.meeting-markdown a { color: #2867a1; text-decoration: underline; text-underline-offset: 2px; }
+.meeting-markdown__table { overflow-x: auto; margin: 13px 0; }
+.meeting-markdown table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.meeting-markdown th,.meeting-markdown td { border: 1px solid #dce3e9; padding: 8px 10px; text-align: left; vertical-align: top; }
+.meeting-markdown th { color: #24364a; background: #f3f6f8; font-weight: 700; }
+.meeting-markdown tbody tr:nth-child(even) { background: #fafbfc; }
 @media(max-width:760px){.meeting-records__filters,.meeting-records__list article { align-items: stretch; flex-direction: column; }.meeting-records__filters select { width: 100%; }.meeting-records__identity p { align-items: flex-start; flex-wrap: wrap; }.meeting-records__actions { justify-content: flex-end; }}
