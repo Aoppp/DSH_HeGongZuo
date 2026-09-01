@@ -36,8 +36,22 @@ export interface DailyReportPage {
   readonly totalPages: number
 }
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(path, { credentials: 'same-origin', ...(signal ? { signal } : {}) })
+export interface DailyReportSyncRun {
+  readonly id: number
+  readonly source: 'history' | 'wecom'
+  readonly status: 'running' | 'succeeded' | 'partial' | 'failed' | 'skipped'
+  readonly startedAt: string
+  readonly finishedAt: string | null
+  readonly stats: { readonly pulled: number; readonly inserted: number; readonly updated: number; readonly unchanged: number; readonly failed: number }
+}
+
+export interface DailyReportSyncState {
+  readonly queued: boolean
+  readonly run: DailyReportSyncRun | null
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, { ...init, credentials: 'same-origin' })
   if (!response.ok) {
     const body = await response.json().catch(() => ({})) as { error?: unknown }
     throw new Error(typeof body.error === 'string' ? body.error : `日报读取失败（HTTP ${response.status}）。`)
@@ -56,9 +70,17 @@ export function createDailyReportSearch(filters: DailyReportFilters, page: numbe
 }
 
 export function readDailyReports(filters: DailyReportFilters, page: number, pageSize: number, signal?: AbortSignal): Promise<DailyReportPage> {
-  return request(`/api/daily-reports?${createDailyReportSearch(filters, page, pageSize)}`, signal)
+  return request(`/api/daily-reports?${createDailyReportSearch(filters, page, pageSize)}`, signal ? { signal } : {})
 }
 
 export function readDailyReport(id: string, signal?: AbortSignal): Promise<DailyReport> {
-  return request<{ report: DailyReport }>(`/api/daily-reports/${encodeURIComponent(id)}`, signal).then((result) => result.report)
+  return request<{ report: DailyReport }>(`/api/daily-reports/${encodeURIComponent(id)}`, signal ? { signal } : {}).then((result) => result.report)
+}
+
+export function readDailyReportSyncState(signal?: AbortSignal): Promise<DailyReportSyncState> {
+  return request('/api/daily-reports/sync', signal ? { signal } : {})
+}
+
+export function startDailyReportSync(): Promise<{ readonly accepted: boolean; readonly state: DailyReportSyncState }> {
+  return request('/api/daily-reports/sync', { method: 'POST' })
 }

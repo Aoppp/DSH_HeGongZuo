@@ -22,7 +22,9 @@ PrivateTmp=true
 ProtectSystem=strict
 # 新账号初始化会更新当前服务账号的 Corepack 元数据；API 以此完成运行空间安装。
 ProtectHome=false
-ReadWritePaths=__PROJECT_DIR__/.runtime
+StateDirectory=hegongzuo-wecom
+StateDirectoryMode=0700
+ReadWritePaths=__PROJECT_DIR__/.runtime /var/lib/hegongzuo-wecom
 
 [Install]
 WantedBy=multi-user.target

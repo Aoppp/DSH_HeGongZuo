@@ -1,0 +1,10 @@
+[Unit]
+Description=监听企业微信日报手动同步请求
+After=hegongzuo-api.service
+
+[Path]
+PathExists=/var/lib/hegongzuo-wecom/manual-sync.request
+Unit=hegongzuo-work-daily-sync.service
+
+[Install]
+WantedBy=multi-user.target

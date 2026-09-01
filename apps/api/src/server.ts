@@ -22,6 +22,7 @@ import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/m
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
 import { DailyReportRepository } from './modules/employee/work-reports/daily-report-repository.js'
 import { DailyReportService, DailyReportValidationError } from './modules/employee/work-reports/daily-report-service.js'
+import { WorkDailyManualSync, WorkDailyManualSyncError } from './modules/employee/work-reports/work-daily-manual-sync.js'
 import { MeetingRepository } from './modules/meetings/meeting-repository.js'
 import { MeetingUploadCredentials } from './modules/meetings/meeting-upload-credentials.js'
 import { MeetingValidationError, parseMeetingInput } from './modules/meetings/meeting-input.js'
@@ -42,6 +43,7 @@ const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
 const dailyReports = new DailyReportService(new DailyReportRepository(database))
+const workDailyManualSync = new WorkDailyManualSync(database, process.env.WECOM_WORK_DAILY_SYNC_REQUEST_PATH ?? '')
 
 
 function cookieToken(cookieHeader: string | undefined): string | null {
@@ -483,6 +485,22 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/daily-reports/sync' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    sendJson(response, 200, await workDailyManualSync.state())
+    return
+  }
+
+  if (url.pathname === '/api/daily-reports/sync' && request.method === 'POST') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    const result = await workDailyManualSync.trigger()
+    if (result.accepted) await platformManagement.record(currentUser.id, currentUser.displayName, '手动同步日报', '日报', 'wecom')
+    sendJson(response, 202, result)
+    return
+  }
+
   const reportId = dailyReportId(url.pathname)
   if (reportId && request.method === 'GET') {
     requirePermission(currentUser, 'employee-reports')
@@ -616,9 +634,11 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof DailyReportValidationError || error instanceof MeetingValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
+    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof DailyReportValidationError || error instanceof WorkDailyManualSyncError || error instanceof MeetingValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
       const status = error instanceof LoginRateLimitError
         ? 429
+        : error instanceof WorkDailyManualSyncError
+          ? 503
         : error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError
           ? error.status
           : 400

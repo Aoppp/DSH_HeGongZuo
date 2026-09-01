@@ -11,6 +11,7 @@ const requiredTemplates = [
   'deploy/systemd/hegongzuo-health.timer.template',
   'deploy/systemd/hegongzuo-work-daily-sync.service.template',
   'deploy/systemd/hegongzuo-work-daily-sync.timer.template',
+  'deploy/systemd/hegongzuo-work-daily-sync.path.template',
   'deploy/systemd/hegongzuo-alert@.service.template',
   'deploy/systemd/hegongzuo-agent-sync.service.template',
   'deploy/systemd/hegongzuo-agent-sync.path.template',
@@ -19,7 +20,7 @@ const requiredTemplates = [
   'deploy/systemd/hegongzuo-sync-agent-units.sh.template',
   'deploy/systemd/journald.conf.d/hegongzuo.conf.template',
 ]
-const requiredApiSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOFILE=', 'OnFailure=', 'ProtectHome=false']
+const requiredApiSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOFILE=', 'OnFailure=', 'ProtectHome=false', 'StateDirectory=hegongzuo-wecom', 'ReadWritePaths=__PROJECT_DIR__/.runtime /var/lib/hegongzuo-wecom']
 const requiredAgentSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOFILE=', 'OnFailure=', 'run-agent-runtime.mjs', 'BindReadOnlyPaths=/home/__DEPLOY_USER__/.cache/node/corepack']
 
 for (const relativePath of requiredTemplates) await access(path.join(root, relativePath))
@@ -35,4 +36,6 @@ if (!agentSyncScriptTemplate.includes('IDLE_TIMEOUT_SECONDS=1800') || !agentSync
 if (agentSyncScriptTemplate.includes('enable --now')) throw new Error('账号运行时同步模板仍会常驻启动全部实例。')
 const workDailySyncTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-work-daily-sync.service.template'), 'utf8')
 if (!workDailySyncTemplate.includes('sync-cli.js sync') || !workDailySyncTemplate.includes('HOME=/var/lib/hegongzuo-wecom')) throw new Error('企业微信日报同步服务模板配置不完整。')
+const workDailySyncPathTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-work-daily-sync.path.template'), 'utf8')
+if (!workDailySyncPathTemplate.includes('manual-sync.request') || !workDailySyncTemplate.includes('ExecStartPre=/usr/bin/rm -f /var/lib/hegongzuo-wecom/manual-sync.request')) throw new Error('企业微信日报手动同步触发配置不完整。')
 console.log('生产 systemd 模板检查通过。')

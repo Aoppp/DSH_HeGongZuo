@@ -107,7 +107,9 @@ Nginx 只代理 `/api/` 到 127.0.0.1:4174。员工查询的 HTTP 与 WebSocket 
 
 ## 企业微信工作日报同步
 
-工作日报从企业微信智能表格同步。在 `.env` 中设置 `WECOM_WORK_DAILY_DOC_ID`、`WECOM_WORK_DAILY_SHEET_ID` 和 `WECOM_CLI_PATH`；这些配置不是访问凭证，真实凭证仍由 `wecom-cli` 加密保存。
+工作日报从企业微信智能表格同步。在 `.env` 中设置 `WECOM_WORK_DAILY_DOC_ID`、`WECOM_WORK_DAILY_SHEET_ID`、`WECOM_CLI_PATH` 和 `WECOM_WORK_DAILY_SYNC_REQUEST_PATH=/var/lib/hegongzuo-wecom/manual-sync.request`；这些配置不是访问凭证，真实凭证仍由 `wecom-cli` 加密保存。
+
+每天 22:00 由 `hegongzuo-work-daily-sync.timer` 自动执行；网页手动同步由 `hegongzuo-work-daily-sync.path` 监听触发标记，并交给同一个受限的同步服务执行。定时与手动任务共用数据库并发锁，不会重复并发同步。
 
 首次导入历史 NDJSON 和手动同步：
 

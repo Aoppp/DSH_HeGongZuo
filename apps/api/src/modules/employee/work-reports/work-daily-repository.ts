@@ -13,6 +13,32 @@ export interface WorkDailySyncStats {
   readonly failed: number
 }
 
+export interface WorkDailySyncRun {
+  readonly id: number
+  readonly source: WorkDailySyncSource
+  readonly status: 'running' | WorkDailySyncStatus
+  readonly startedAt: string
+  readonly finishedAt: string | null
+  readonly stats: WorkDailySyncStats
+}
+
+interface WorkDailySyncRunRow {
+  readonly id: string
+  readonly source: WorkDailySyncSource
+  readonly status: 'running' | WorkDailySyncStatus
+  readonly started_at: string | Date
+  readonly finished_at: string | Date | null
+  readonly pulled_count: number
+  readonly inserted_count: number
+  readonly updated_count: number
+  readonly unchanged_count: number
+  readonly failed_count: number
+}
+
+function timestamp(value: string | Date): string {
+  return (value instanceof Date ? value : new Date(value)).toISOString()
+}
+
 export class WorkDailyRepository {
   constructor(private readonly pool: Pool) {}
 
@@ -27,6 +53,19 @@ export class WorkDailyRepository {
     await this.pool.query(`UPDATE employee_work_daily_sync_runs
       SET status=$2, finished_at=now(), pulled_count=$3, inserted_count=$4, updated_count=$5, unchanged_count=$6, failed_count=$7, error_message=$8
       WHERE id=$1`, [id, status, stats.pulled, stats.inserted, stats.updated, stats.unchanged, stats.failed, errorMessage?.slice(0, 8_000) ?? null])
+  }
+
+  async latestRun(): Promise<WorkDailySyncRun | null> {
+    const result = await this.pool.query<WorkDailySyncRunRow>(`SELECT id::text, source, status, started_at, finished_at,
+      pulled_count, inserted_count, updated_count, unchanged_count, failed_count
+      FROM employee_work_daily_sync_runs ORDER BY id DESC LIMIT 1`)
+    const row = result.rows[0]
+    if (!row) return null
+    return {
+      id: Number(row.id), source: row.source, status: row.status, startedAt: timestamp(row.started_at),
+      finishedAt: row.finished_at ? timestamp(row.finished_at) : null,
+      stats: { pulled: row.pulled_count, inserted: row.inserted_count, updated: row.updated_count, unchanged: row.unchanged_count, failed: row.failed_count },
+    }
   }
 
   async upsert(report: WorkDailyReport): Promise<'inserted' | 'updated' | 'unchanged'> {

@@ -1,8 +1,9 @@
-import { ExternalLink, LoaderCircle, Paperclip, Search, X } from 'lucide-react'
+import { ExternalLink, LoaderCircle, Paperclip, RefreshCw, Search, X } from 'lucide-react'
 import type { FormEvent } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
 import type { DailyReport } from './daily-reports-api'
+import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
 import './daily-reports.css'
 
@@ -50,11 +51,12 @@ function DetailContent({ report }: { readonly report: DailyReport }) {
 
 export function EmployeeReportsModule(_props: ModuleProps) {
   const management = useDailyReports()
+  const sync = useDailyReportSync(management.retry)
   function submit(event: FormEvent) { event.preventDefault(); management.applyFilters() }
   const pages = Math.max(1, management.totalPages)
 
   return <div className="daily-reports module-page">
-    <header className="daily-reports__heading"><div><h1>日报管理</h1><p>查询企业微信已同步的员工日报</p></div><span>共 {management.total} 条</span></header>
+    <header className="daily-reports__heading"><div><h1>日报管理</h1><p>查询企业微信已同步的员工日报</p></div><div className="daily-reports__sync"><span>{sync.error || sync.message}</span><button type="button" disabled={sync.busy} onClick={() => void sync.start()}>{sync.busy ? <LoaderCircle className="daily-reports__spinner" size={15} /> : <RefreshCw size={15} />}{sync.busy ? '同步中' : '同步数据'}</button><small>共 {management.total} 条</small></div></header>
 
     <form className="daily-reports__filters" onSubmit={submit}>
       <div className="daily-reports__date-range"><label><span>开始日期</span><input type="date" value={management.draftFilters.startDate} max={management.draftFilters.endDate || undefined} onChange={(event) => management.setDraftFilters((current) => ({ ...current, startDate: event.target.value }))} /></label><i>至</i><label><span>结束日期</span><input type="date" value={management.draftFilters.endDate} min={management.draftFilters.startDate || undefined} onChange={(event) => management.setDraftFilters((current) => ({ ...current, endDate: event.target.value }))} /></label></div>

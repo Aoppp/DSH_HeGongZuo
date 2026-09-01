@@ -11,6 +11,7 @@ Group=__DEPLOY_USER__
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=__PROJECT_DIR__/.env
 Environment=HOME=/var/lib/hegongzuo-wecom
+ExecStartPre=/usr/bin/rm -f /var/lib/hegongzuo-wecom/manual-sync.request
 ExecStart=/usr/bin/node apps/api/dist/modules/employee/work-reports/sync-cli.js sync
 StateDirectory=hegongzuo-wecom
 StateDirectoryMode=0700
