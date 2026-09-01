@@ -20,6 +20,8 @@ import { PlatformManagementError, PlatformManagementService } from './modules/pl
 import { ManagementCockpitService } from './modules/management/management-cockpit.js'
 import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/mock-work-records-source.js'
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
+import { DailyReportRepository } from './modules/employee/work-reports/daily-report-repository.js'
+import { DailyReportService, DailyReportValidationError } from './modules/employee/work-reports/daily-report-service.js'
 import { MeetingRepository } from './modules/meetings/meeting-repository.js'
 import { MeetingUploadCredentials } from './modules/meetings/meeting-upload-credentials.js'
 import { MeetingValidationError, parseMeetingInput } from './modules/meetings/meeting-input.js'
@@ -39,6 +41,7 @@ const managementCockpit = new ManagementCockpitService(repository, accounts, pla
 const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
+const dailyReports = new DailyReportService(new DailyReportRepository(database))
 
 
 function cookieToken(cookieHeader: string | undefined): string | null {
@@ -126,6 +129,12 @@ function platformModuleId(pathname: string): string | null {
 
 function meetingRecordId(pathname: string): string | null {
   return pathname.match(/^\/api\/meeting-records\/([0-9]{5,})$/)?.[1] ?? null
+}
+
+function dailyReportId(pathname: string): string | null {
+  const match = pathname.match(/^\/api\/daily-reports\/([^/]+)$/)
+  if (!match?.[1]) return null
+  try { return decodeURIComponent(match[1]) } catch { throw new DailyReportValidationError('日报编号无效。') }
 }
 
 function bearerToken(request: IncomingMessage): string | null {
@@ -467,6 +476,23 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/daily-reports' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    sendJson(response, 200, await dailyReports.list(url.searchParams))
+    return
+  }
+
+  const reportId = dailyReportId(url.pathname)
+  if (reportId && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    const report = await dailyReports.get(reportId)
+    if (!report) throw new HttpError(404, '日报不存在。')
+    sendJson(response, 200, { report })
+    return
+  }
+
   const meetingId = meetingRecordId(url.pathname)
   if (meetingId && request.method === 'GET') {
     requirePermission(currentUser, 'meeting-records')
@@ -590,7 +616,7 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof MeetingValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
+    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof DailyReportValidationError || error instanceof MeetingValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
       const status = error instanceof LoginRateLimitError
         ? 429
         : error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError
