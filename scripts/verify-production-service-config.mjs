@@ -9,6 +9,8 @@ const requiredTemplates = [
   agentTemplatePath,
   'deploy/systemd/hegongzuo-health.service.template',
   'deploy/systemd/hegongzuo-health.timer.template',
+  'deploy/systemd/hegongzuo-work-daily-sync.service.template',
+  'deploy/systemd/hegongzuo-work-daily-sync.timer.template',
   'deploy/systemd/hegongzuo-alert@.service.template',
   'deploy/systemd/hegongzuo-agent-sync.service.template',
   'deploy/systemd/hegongzuo-agent-sync.path.template',
@@ -31,4 +33,6 @@ if (!agentSyncPathTemplate.includes('agent-restart-request') || !agentSyncScript
 if (!agentSyncPathTemplate.includes('agent-activation-request') || !agentSyncScriptTemplate.includes('agent-activation-request')) throw new Error('账号运行时同步模板缺少按需启动机制。')
 if (!agentSyncScriptTemplate.includes('IDLE_TIMEOUT_SECONDS=1800') || !agentSyncScriptTemplate.includes('systemctl stop')) throw new Error('账号运行时同步模板缺少空闲回收机制。')
 if (agentSyncScriptTemplate.includes('enable --now')) throw new Error('账号运行时同步模板仍会常驻启动全部实例。')
+const workDailySyncTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-work-daily-sync.service.template'), 'utf8')
+if (!workDailySyncTemplate.includes('sync-cli.js sync') || !workDailySyncTemplate.includes('XDG_CONFIG_HOME=/var/lib/hegongzuo-wecom')) throw new Error('企业微信日报同步服务模板配置不完整。')
 console.log('生产 systemd 模板检查通过。')

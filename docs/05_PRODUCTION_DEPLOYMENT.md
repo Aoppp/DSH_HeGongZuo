@@ -105,7 +105,28 @@ sudo systemctl enable --now nginx
 
 Nginx 只代理 `/api/` 到 127.0.0.1:4174。员工查询的 HTTP 与 WebSocket 请求会由平台 API 校验登录会话后转发至当前账号对应的本机服务；不要添加任何将 `/dsh/`、3180 起端口或 PostgreSQL 直接公开的 Nginx 规则。
 
-## 企业微信原生日报同步准备
+## 企业微信工作日报同步
+
+工作日报从企业微信智能表格同步。在 `.env` 中设置 `WECOM_WORK_DAILY_DOC_ID`、`WECOM_WORK_DAILY_SHEET_ID` 和 `WECOM_CLI_PATH`；这些配置不是访问凭证，真实凭证仍由 `wecom-cli` 加密保存。
+
+首次导入历史 NDJSON 和手动同步：
+
+```bash
+sudo corepack pnpm work-reports:import-history -- /root/work_daily_records.ndjson
+sudo corepack pnpm work-reports:sync
+```
+
+复制 `deploy/systemd/hegongzuo-work-daily-sync.service.template` 和 `deploy/systemd/hegongzuo-work-daily-sync.timer.template` 到 `/etc/systemd/system/`，替换模板变量，并将已授权的 `wecom-cli` 加密配置交给专用的 `/var/lib/hegongzuo-wecom` 目录后启用：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now hegongzuo-work-daily-sync.timer
+systemctl list-timers hegongzuo-work-daily-sync.timer
+```
+
+定时任务每 5 分钟用游标扫描智能表格，通过 `record_id` 和内容哈希仅新增或更新变化记录。运行结果保存在 `employee_work_daily_sync_runs`，服务日志可用 `journalctl -u hegongzuo-work-daily-sync.service` 查看。
+
+## 企业微信回调配置
 
 员工管理模块的企业微信回调地址为 `https://hgzuo.com/api/integrations/wecom/callback`。在企业微信自建应用的“接收消息”中配置该地址，以完成企业可信 IP 的前置校验；该回调仅校验企业微信请求并确认接收，不保存聊天消息或日报内容。
 

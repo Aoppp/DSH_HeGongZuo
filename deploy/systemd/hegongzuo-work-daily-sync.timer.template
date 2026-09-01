@@ -1,0 +1,12 @@
+[Unit]
+Description=定时同步企业微信工作日报
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30
+Persistent=true
+Unit=hegongzuo-work-daily-sync.service
+
+[Install]
+WantedBy=timers.target
