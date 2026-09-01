@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import { apiLogin } from '../app/auth-client'
 import type { AuthenticatedUser } from '../app/types'
 import { BrandMark } from './BrandMark'
+import { SiteFiling } from './SiteFiling'
 
 interface AccountLoginProps {
   readonly onAuthenticated: (user: AuthenticatedUser) => void
@@ -66,6 +67,7 @@ export function AccountLogin({ onAuthenticated }: AccountLoginProps) {
         </form>
         <p className="access-card__notice">登录状态保持 7 天。账号问题请联系平台管理员。</p>
       </section>
+      <SiteFiling />
     </main>
   )
 }

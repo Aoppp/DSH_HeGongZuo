@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { apiLogout, apiMe } from './auth-client'
 import { AccountLogin } from '../components/AccountLogin'
 import { Sidebar } from '../components/Sidebar'
+import { SiteFiling } from '../components/SiteFiling'
 import { Topbar } from '../components/Topbar'
 import { getModule, getVisibleModules, platformModules } from './module-registry'
 import { accessibleModuleForPath, defaultModuleIdForUser } from './module-routes'
@@ -95,6 +96,7 @@ export default function App() {
         <main className="platform-content">
           <ActiveComponent user={currentUser} onNavigate={navigate} onUserProfileUpdated={updateCurrentUserProfile} onModuleSettingsUpdated={setDisabledModuleIds} />
         </main>
+        <SiteFiling />
       </div>
     </div>
   )
