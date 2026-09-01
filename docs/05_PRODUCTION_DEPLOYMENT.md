@@ -116,7 +116,7 @@ sudo corepack pnpm work-reports:import-history -- /root/work_daily_records.ndjso
 sudo corepack pnpm work-reports:sync
 ```
 
-复制 `deploy/systemd/hegongzuo-work-daily-sync.service.template` 和 `deploy/systemd/hegongzuo-work-daily-sync.timer.template` 到 `/etc/systemd/system/`，替换模板变量，并将已授权的 `wecom-cli` 加密配置交给专用的 `/var/lib/hegongzuo-wecom` 目录后启用：
+复制 `deploy/systemd/hegongzuo-work-daily-sync.service.template` 和 `deploy/systemd/hegongzuo-work-daily-sync.timer.template` 到 `/etc/systemd/system/`，替换模板变量，并将已授权的 `wecom-cli` 加密配置交给专用的 `/var/lib/hegongzuo-wecom/.config/wecom` 目录后启用：
 
 ```bash
 sudo systemctl daemon-reload

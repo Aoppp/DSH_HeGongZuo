@@ -10,7 +10,7 @@ User=__DEPLOY_USER__
 Group=__DEPLOY_USER__
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=__PROJECT_DIR__/.env
-Environment=XDG_CONFIG_HOME=/var/lib/hegongzuo-wecom
+Environment=HOME=/var/lib/hegongzuo-wecom
 ExecStart=/usr/bin/node apps/api/dist/modules/employee/work-reports/sync-cli.js sync
 StateDirectory=hegongzuo-wecom
 StateDirectoryMode=0700
