@@ -41,20 +41,6 @@ export interface EmployeeReportProfile {
   readonly commonWork: readonly string[]
 }
 
-export interface DepartmentReportSummary {
-  readonly department: string
-  readonly startDate: string
-  readonly endDate: string
-  readonly completed: readonly { employee: string; text: string; date: string }[]
-  readonly plans: readonly { employee: string; text: string; date: string }[]
-  readonly issues: readonly { employee: string; text: string; date: string }[]
-  readonly missingEmployees: readonly string[]
-  readonly delayedEmployees: readonly string[]
-  readonly expectedSubmissions: number
-  readonly submittedSubmissions: number
-  readonly completionRate: number
-}
-
 export interface QualityFinding {
   readonly type: 'duplicate' | 'future_report_date' | 'missing_identity' | 'empty_content' | 'unmatched_employee'
   readonly recordId: string
@@ -62,18 +48,6 @@ export interface QualityFinding {
   readonly employee: string
   readonly department: string | null
   readonly detail: string
-}
-
-export interface ReportSummaryRecord {
-  readonly id: number
-  readonly periodType: 'week' | 'month'
-  readonly startDate: string
-  readonly endDate: string
-  readonly department: string | null
-  readonly content: Record<string, unknown>
-  readonly status: 'draft' | 'confirmed'
-  readonly createdAt: string
-  readonly confirmedAt: string | null
 }
 
 interface DashboardRow {
@@ -85,26 +59,9 @@ interface DashboardRow {
   readonly delayed: boolean
 }
 
-interface ReportSummaryRow {
-  readonly id: string | number
-  readonly period_type: 'week' | 'month'
-  readonly start_date: string | Date
-  readonly end_date: string | Date
-  readonly department_name: string | null
-  readonly content: Record<string, unknown> | null
-  readonly status: 'draft' | 'confirmed'
-  readonly created_at: string | Date
-  readonly confirmed_at: string | Date | null
-}
-
 function dateText(value: string | Date): string {
   if (typeof value === 'string') return value.slice(0, 10)
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(value)
-}
-
-function timestamp(value: string | Date | null): string | null {
-  if (value === null) return null
-  return (value instanceof Date ? value : new Date(value)).toISOString()
 }
 
 function expectedEmployeesSql(dateParameter: string): string {
@@ -224,58 +181,6 @@ export class DailyReportAnalyticsRepository {
     })
   }
 
-  async departmentSummary(department: string, startDate: string, endDate: string): Promise<DepartmentReportSummary> {
-    const reports = await this.pool.query<{
-      employee: string; date: string | Date; today_summary: string | null; tomorrow_plan: string | null; other_items: string | null; delayed: boolean
-    }>(`SELECT employee.display_name AS employee, report.report_date::text AS date, report.today_summary,
-        report.tomorrow_plan, report.other_items,
-        (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > report.report_date AS delayed
-      FROM employee_work_daily_reports AS report
-      JOIN employees AS employee ON employee.wecom_user_id = report.author_user_id
-      WHERE (employee.department_name = $1 OR employee.department_level2 = $1)
-        AND report.report_date BETWEEN $2::date AND $3::date
-      ORDER BY report.report_date DESC, employee.display_name`, [department, startDate, endDate])
-    const missing = await this.pool.query<{ display_name: string }>(`SELECT DISTINCT employee.display_name
-      FROM generate_series($2::date, $3::date, interval '1 day') AS work_day(date)
-      JOIN employees AS employee ON employee.hire_date <= work_day.date::date
-        AND (employee.departure_date IS NULL OR employee.departure_date >= work_day.date::date)
-        AND employee.status <> 'on_leave'
-        AND (employee.status <> 'inactive' OR employee.departure_date >= work_day.date::date)
-      WHERE extract(isodow FROM work_day.date::date) <= 5
-        AND (employee.department_name = $1 OR employee.department_level2 = $1)
-        AND NOT EXISTS (
-          SELECT 1 FROM employee_work_daily_reports AS report
-          WHERE report.author_user_id = employee.wecom_user_id AND report.report_date = work_day.date::date
-        ) ORDER BY employee.display_name`, [department, startDate, endDate])
-    const progress = await this.pool.query<{ expected: string; submitted: string }>(`WITH expected AS (
-        SELECT work_day.date::date AS date, employee.wecom_user_id
-        FROM generate_series($2::date, $3::date, interval '1 day') AS work_day(date)
-        JOIN employees AS employee ON employee.hire_date <= work_day.date::date
-          AND (employee.departure_date IS NULL OR employee.departure_date >= work_day.date::date)
-          AND employee.status <> 'on_leave'
-          AND (employee.status <> 'inactive' OR employee.departure_date >= work_day.date::date)
-        WHERE extract(isodow FROM work_day.date::date) <= 5
-          AND (employee.department_name = $1 OR employee.department_level2 = $1)
-      ) SELECT count(*)::text AS expected,
-        count(*) FILTER (WHERE EXISTS (
-          SELECT 1 FROM employee_work_daily_reports AS report
-          WHERE report.author_user_id = expected.wecom_user_id AND report.report_date = expected.date
-        ))::text AS submitted FROM expected`, [department, startDate, endDate])
-    const expectedSubmissions = Number(progress.rows[0]?.expected ?? 0)
-    const submittedSubmissions = Number(progress.rows[0]?.submitted ?? 0)
-    const item = (employee: string, text: string | null, value: string | Date) => ({ employee, text: text?.trim() ?? '', date: dateText(value) })
-    return {
-      department, startDate, endDate,
-      completed: reports.rows.filter((row) => row.today_summary?.trim()).map((row) => item(row.employee, row.today_summary, row.date)),
-      plans: reports.rows.filter((row) => row.tomorrow_plan?.trim()).map((row) => item(row.employee, row.tomorrow_plan, row.date)),
-      issues: reports.rows.filter((row) => row.other_items?.trim()).map((row) => item(row.employee, row.other_items, row.date)),
-      missingEmployees: missing.rows.map((row) => row.display_name),
-      delayedEmployees: [...new Set(reports.rows.filter((row) => row.delayed).map((row) => row.employee))],
-      expectedSubmissions, submittedSubmissions,
-      completionRate: expectedSubmissions ? Math.round(submittedSubmissions / expectedSubmissions * 100) : 0,
-    }
-  }
-
   async quality(startDate: string, endDate: string): Promise<readonly QualityFinding[]> {
     const result = await this.pool.query<{
       type: QualityFinding['type']; record_id: string; date: string | Date; employee: string; department: string | null; detail: string
@@ -303,40 +208,4 @@ export class DailyReportAnalyticsRepository {
     return result.rows.map((row) => ({ type: row.type, recordId: row.record_id, date: dateText(row.date), employee: row.employee, department: row.department, detail: row.detail }))
   }
 
-  async createSummary(periodType: 'week' | 'month', startDate: string, endDate: string, department: string | null, actorId: string): Promise<ReportSummaryRecord> {
-    const departments = department ? [department] : (await this.pool.query<{ department_name: string }>(
-      'SELECT DISTINCT department_name FROM employees ORDER BY department_name',
-    )).rows.map((row) => row.department_name)
-    const sections = await Promise.all(departments.map((name) => this.departmentSummary(name, startDate, endDate)))
-    const content = { title: periodType === 'week' ? '周报汇总' : '月报汇总', sections }
-    const result = await this.pool.query<ReportSummaryRow>(`INSERT INTO employee_work_report_summaries
-      (period_type, start_date, end_date, department_name, content, created_by)
-      VALUES ($1,$2,$3,$4,$5::jsonb,$6)
-      RETURNING id, period_type, start_date::text, end_date::text, department_name, content, status, created_at, confirmed_at`,
-    [periodType, startDate, endDate, department, JSON.stringify(content), actorId])
-    const created = result.rows[0]
-    if (!created) throw new Error('日报汇总创建后未返回记录。')
-    return this.mapSummary(created)
-  }
-
-  async listSummaries(): Promise<readonly ReportSummaryRecord[]> {
-    const result = await this.pool.query<ReportSummaryRow>(`SELECT id, period_type, start_date::text, end_date::text, department_name,
-      content, status, created_at, confirmed_at FROM employee_work_report_summaries ORDER BY id DESC LIMIT 50`)
-    return result.rows.map((row) => this.mapSummary(row))
-  }
-
-  async confirmSummary(id: number, actorId: string): Promise<ReportSummaryRecord | null> {
-    const result = await this.pool.query<ReportSummaryRow>(`UPDATE employee_work_report_summaries
-      SET status='confirmed', confirmed_by=$2, confirmed_at=now()
-      WHERE id=$1 RETURNING id, period_type, start_date::text, end_date::text, department_name, content, status, created_at, confirmed_at`, [id, actorId])
-    return result.rows[0] ? this.mapSummary(result.rows[0]) : null
-  }
-
-  private mapSummary(row: ReportSummaryRow): ReportSummaryRecord {
-    return {
-      id: Number(row.id), periodType: row.period_type, startDate: dateText(row.start_date), endDate: dateText(row.end_date),
-      department: row.department_name, content: row.content ?? {}, status: row.status,
-      createdAt: timestamp(row.created_at) ?? '', confirmedAt: timestamp(row.confirmed_at),
-    }
-  }
 }

@@ -142,10 +142,6 @@ function dailyReportId(pathname: string): string | null {
   try { return decodeURIComponent(match[1]) } catch { throw new DailyReportValidationError('日报编号无效。') }
 }
 
-function dailyReportSummaryConfirmId(pathname: string): string | null {
-  return pathname.match(/^\/api\/daily-report-analytics\/summaries\/(\d+)\/confirm$/)?.[1] ?? null
-}
-
 function bearerToken(request: IncomingMessage): string | null {
   const header = request.headers.authorization
   return header?.startsWith('Bearer ') ? header.slice(7).trim() || null : null
@@ -496,26 +492,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePermission(currentUser, 'employee-reports')
     await platformManagement.assertModuleEnabled('employee-reports')
     sendJson(response, 200, { data: await dailyReportAnalytics.read(url.searchParams) })
-    return
-  }
-
-  if (url.pathname === '/api/daily-report-analytics/summaries' && request.method === 'POST') {
-    requirePermission(currentUser, 'employee-reports')
-    await platformManagement.assertModuleEnabled('employee-reports')
-    const summary = await dailyReportAnalytics.createSummary(await readJson(request), currentUser.id)
-    await platformManagement.record(currentUser.id, currentUser.displayName, '生成日报汇总', '日报', 'summary')
-    sendJson(response, 201, { summary })
-    return
-  }
-
-  const summaryConfirmId = dailyReportSummaryConfirmId(url.pathname)
-  if (summaryConfirmId && request.method === 'POST') {
-    requirePermission(currentUser, 'employee-reports')
-    await platformManagement.assertModuleEnabled('employee-reports')
-    const summary = await dailyReportAnalytics.confirmSummary(summaryConfirmId, currentUser.id)
-    if (!summary) throw new HttpError(404, '汇总记录不存在。')
-    await platformManagement.record(currentUser.id, currentUser.displayName, '确认日报汇总', '日报', summaryConfirmId)
-    sendJson(response, 200, { summary })
     return
   }
 

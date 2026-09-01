@@ -1,4 +1,4 @@
-import type { DepartmentReportSummary, SubmissionDashboard } from './report-analytics-api'
+import type { SubmissionDashboard } from './report-analytics-api'
 
 async function save(name: string, columns: readonly string[], rows: readonly (readonly (string | number)[])[]): Promise<void> {
   const ExcelJS = await import('exceljs')
@@ -17,15 +17,4 @@ export function exportMissing(dashboard: SubmissionDashboard): Promise<void> {
 }
 export function exportDelayed(dashboard: SubmissionDashboard): Promise<void> {
   return save(`延后提交名单-${dashboard.date}`, ['姓名', '一级部门', '二级部门', '日报份数'], dashboard.employees.filter((item) => item.state === 'delayed').map((item) => [item.name, item.department, item.departmentLevel2 ?? '', item.reportCount]))
-}
-export function exportDepartment(summary: DepartmentReportSummary): Promise<void> {
-  const rows = [
-    ['部门工作进度', '', '', `${summary.submittedSubmissions}/${summary.expectedSubmissions}，完成率 ${summary.completionRate}%`],
-    ...summary.completed.map((item) => ['已完成事项', item.employee, item.date, item.text]),
-    ...summary.plans.map((item) => ['下一步计划', item.employee, item.date, item.text]),
-    ...summary.issues.map((item) => ['遇到的问题', item.employee, item.date, item.text]),
-    ...summary.missingEmployees.map((employee) => ['未提交人员', employee, '', '']),
-    ...summary.delayedEmployees.map((employee) => ['延后提交人员', employee, '', '']),
-  ]
-  return save(`部门汇总-${summary.department}-${summary.startDate}-${summary.endDate}`, ['类别', '员工', '日期', '内容'], rows)
 }

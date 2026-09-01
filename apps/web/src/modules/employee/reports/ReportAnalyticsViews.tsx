@@ -1,16 +1,14 @@
-import { Check, Download, LoaderCircle, X } from 'lucide-react'
+import { Download, LoaderCircle, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { readDailyReports, type DailyReport } from './daily-reports-api'
-import { exportDelayed, exportDepartment, exportMissing } from './export-report-analytics'
+import { exportDelayed, exportMissing } from './export-report-analytics'
 import {
-  confirmGeneratedSummary, createGeneratedSummary, readDepartmentReportSummary, readEmployeeReportProfiles,
-  readGeneratedSummaries, readReportCalendar, readReportQuality, readSubmissionDashboard,
-  type CalendarDay, type DepartmentReportSummary, type EmployeeReportProfile, type QualityFinding,
-  type ReportSummaryRecord, type SubmissionDashboard, type SubmissionEmployee,
+  readEmployeeReportProfiles, readReportCalendar, readReportQuality, readSubmissionDashboard,
+  type CalendarDay, type EmployeeReportProfile, type QualityFinding, type SubmissionDashboard, type SubmissionEmployee,
 } from './report-analytics-api'
 
-export type AnalyticsView = 'dashboard' | 'calendar' | 'employees' | 'department' | 'summaries' | 'quality'
+export type AnalyticsView = 'dashboard' | 'calendar' | 'employees' | 'quality'
 
 function Loading() { return <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={20} />正在读取统计数据…</div> }
 function ErrorState({ message }: { readonly message: string }) { return <div className="daily-reports__error"><span>{message}</span></div> }
@@ -46,23 +44,6 @@ export function EmployeeArchiveView({ startDate, endDate, revision }: { readonly
   async function open(profile: EmployeeReportProfile) { setSelected(profile); setHistoryLoading(true); setHistory([]); try { const result = await readDailyReports({ startDate, endDate, department: '', employee: profile.id, keyword: '' }, 1, 100); setHistory(result.reports) } finally { setHistoryLoading(false) } }
   if (error) return <ErrorState message={error} />; if (!profiles) return <Loading />
   return <><section className="report-card"><header><h2>员工日报档案</h2><span>{startDate} 至 {endDate}</span></header><div className="report-profile-grid">{profiles.map((profile) => <button key={profile.id} onClick={() => void open(profile)}><div><strong>{profile.name}</strong><span>{profile.department}{profile.departmentLevel2 ? ` / ${profile.departmentLevel2}` : ''}</span></div><dl><div><dt>提交天数</dt><dd>{profile.submittedDays}</dd></div><div><dt>连续提交</dt><dd>{profile.currentStreak} 天</dd></div><div><dt>延后</dt><dd>{profile.delayedCount} 次</dd></div></dl></button>)}</div></section>{selected && <div className="report-dialog" role="dialog" aria-modal="true"><button className="report-dialog__backdrop" onClick={() => setSelected(null)} aria-label="关闭" /><section className="report-dialog__wide"><header><div><strong>{selected.name}的日报档案</strong><span>{startDate} 至 {endDate}</span></div><button onClick={() => setSelected(null)} aria-label="关闭"><X size={18} /></button></header><main><h3>常用工作内容</h3>{selected.commonWork.length ? <ul>{selected.commonWork.map((text) => <li key={text}>{text}</li>)}</ul> : <p>暂无可归纳内容</p>}<h3>历史日报</h3>{historyLoading ? <Loading /> : <div className="report-history">{history.map((report) => <article key={report.record_id}><strong>{report.report_date}</strong><p>{report.today_summary || '未填写工作总结'}</p><span>{new Date(report.submit_time).toLocaleString('zh-CN')}</span></article>)}</div>}</main></section></div>}</>
-}
-
-export function DepartmentSummaryView({ department, startDate, endDate, revision }: { readonly department: string; readonly startDate: string; readonly endDate: string; readonly revision: number }) {
-  const [data, setData] = useState<DepartmentReportSummary | null>(null), [error, setError] = useState('')
-  useEffect(() => { if (!department) return; setData(null); setError(''); void readDepartmentReportSummary(department, startDate, endDate).then(setData).catch((reason) => setError(reason instanceof Error ? reason.message : '部门汇总读取失败。')) }, [department, startDate, endDate, revision])
-  if (!department) return <div className="daily-reports__empty">请选择部门</div>; if (error) return <ErrorState message={error} />; if (!data) return <Loading />
-  const sections = [['已完成事项', data.completed], ['下一步计划', data.plans], ['遇到的问题', data.issues]] as const
-  return <><div className="report-dashboard__actions"><span>部门工作进度：{data.submittedSubmissions}/{data.expectedSubmissions}，完成率 {data.completionRate}%</span><button onClick={() => void exportDepartment(data)}><Download size={15} />导出部门汇总</button></div><div className="report-summary-grid">{sections.map(([title, items]) => <section className="report-card" key={title}><header><h2>{title}</h2><span>{items.length} 条</span></header><div className="report-summary-items">{items.length ? items.map((item, index) => <article key={`${item.employee}-${item.date}-${index}`}><strong>{item.employee}</strong><span>{item.date}</span><p>{item.text}</p></article>) : <p>暂无内容</p>}</div></section>)}<section className="report-card"><header><h2>提交情况</h2></header><div className="report-name-list"><div><strong>未提交人员</strong><p>{data.missingEmployees.join('、') || '无'}</p></div><div><strong>延后提交人员</strong><p>{data.delayedEmployees.join('、') || '无'}</p></div></div></section></div></>
-}
-
-export function GeneratedSummariesView({ department, startDate, endDate }: { readonly department: string; readonly startDate: string; readonly endDate: string }) {
-  const [records, setRecords] = useState<readonly ReportSummaryRecord[] | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [periodType, setPeriodType] = useState<'week' | 'month'>('week'), [selected, setSelected] = useState<ReportSummaryRecord | null>(null)
-  const load = () => void readGeneratedSummaries().then(setRecords).catch((reason) => setError(reason instanceof Error ? reason.message : '汇总记录读取失败。'))
-  useEffect(load, [])
-  async function generate() { setBusy(true); setError(''); try { await createGeneratedSummary({ periodType, startDate, endDate, department }); load() } catch (reason) { setError(reason instanceof Error ? reason.message : '生成失败。') } finally { setBusy(false) } }
-  async function confirm(record: ReportSummaryRecord) { setBusy(true); try { const next = await confirmGeneratedSummary(record.id); setSelected(next); load() } catch (reason) { setError(reason instanceof Error ? reason.message : '确认失败。') } finally { setBusy(false) } }
-  return <><div className="report-generate"><label>汇总类型<select value={periodType} onChange={(event) => setPeriodType(event.target.value as 'week' | 'month')}><option value="week">周报</option><option value="month">月报</option></select></label><button disabled={busy} onClick={() => void generate()}>{busy && <LoaderCircle className="daily-reports__spinner" size={15} />}生成汇总草稿</button><span>生成内容仅用于工作汇总，确认前不会作为正式记录。</span></div>{error && <ErrorState message={error} />}{!records ? <Loading /> : <section className="report-card"><header><h2>已生成汇总</h2><span>最近 50 条</span></header><div className="report-generated-list">{records.map((record) => <article key={record.id}><button onClick={() => setSelected(record)}><strong>{record.periodType === 'week' ? '周报' : '月报'}・{record.department || '全部部门'}</strong><span>{record.startDate} 至 {record.endDate}</span></button><em className={record.status === 'confirmed' ? 'confirmed' : ''}>{record.status === 'confirmed' ? '已确认' : '待确认'}</em></article>)}</div></section>}{selected && <div className="report-dialog" role="dialog" aria-modal="true"><button className="report-dialog__backdrop" onClick={() => setSelected(null)} aria-label="关闭" /><section className="report-dialog__wide"><header><strong>{selected.content.title || '工作汇总'}</strong><button onClick={() => setSelected(null)}><X size={18} /></button></header><main>{selected.content.sections?.map((section) => <div className="report-generated-section" key={section.department}><h3>{section.department}</h3><p><b>部门进度：</b>{section.submittedSubmissions}/{section.expectedSubmissions}，完成率 {section.completionRate}%</p><p><b>已完成：</b>{section.completed.map((item) => `${item.employee}：${item.text}`).join('；') || '无'}</p><p><b>下一步：</b>{section.plans.map((item) => `${item.employee}：${item.text}`).join('；') || '无'}</p><p><b>未解决事项：</b>{section.issues.map((item) => `${item.employee}：${item.text}`).join('；') || '无'}</p><p><b>未提交：</b>{section.missingEmployees.join('、') || '无'}</p></div>)}{selected.status === 'draft' && <button className="report-confirm" disabled={busy} onClick={() => void confirm(selected)}><Check size={15} />确认汇总</button>}</main></section></div>}</>
 }
 
 const qualityNames: Record<QualityFinding['type'], string> = { duplicate: '重复日报', future_report_date: '日期异常', missing_identity: '人员或部门缺失', empty_content: '内容为空', unmatched_employee: '档案未关联' }

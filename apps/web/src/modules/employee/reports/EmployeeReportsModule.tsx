@@ -1,12 +1,11 @@
 import { ExternalLink, LoaderCircle, Paperclip, RefreshCw, Search, X } from 'lucide-react'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
 import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
-import { readEmployeeReportProfiles } from './report-analytics-api'
-import { CalendarView, DashboardView, DepartmentSummaryView, EmployeeArchiveView, GeneratedSummariesView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
+import { CalendarView, DashboardView, EmployeeArchiveView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
 import './daily-reports.css'
 
 function date(value: string): string {
@@ -82,10 +81,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   const [month, setMonth] = useState(today.slice(0, 7))
   const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`)
   const [endDate, setEndDate] = useState(today)
-  const [departmentName, setDepartmentName] = useState('')
-  const [departments, setDepartments] = useState<readonly string[]>([])
   const [analyticsRevision, setAnalyticsRevision] = useState(0)
-  useEffect(() => { void readEmployeeReportProfiles(`${today.slice(0, 7)}-01`, today).then((result) => { const names = [...new Set(result.map((item) => item.department))].sort(); setDepartments(names); setDepartmentName((value) => value || names[0] || '') }).catch(() => undefined) }, [today])
   function submit(event: FormEvent) { event.preventDefault(); management.applyFilters() }
   const pages = Math.max(1, management.totalPages)
   function openDate(dateValue: string) {
@@ -101,7 +97,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   function useCurrentMonth() { setStartDate(`${today.slice(0, 7)}-01`); setEndDate(today) }
   const views: readonly { id: AnalyticsView | 'list'; label: string }[] = [
     { id: 'dashboard', label: '提交看板' }, { id: 'calendar', label: '日历' }, { id: 'list', label: '日报列表' },
-    { id: 'employees', label: '员工档案' }, { id: 'department', label: '部门汇总' }, { id: 'summaries', label: '周月汇总' }, { id: 'quality', label: '数据检查' },
+    { id: 'employees', label: '员工档案' }, { id: 'quality', label: '数据检查' },
   ]
 
   return <div className="daily-reports module-page">
@@ -112,16 +108,13 @@ export function EmployeeReportsModule(_props: ModuleProps) {
     {view !== 'list' && <div className="report-scope">
       {view === 'dashboard' && <label>统计日期<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} /></label>}
       {view === 'calendar' && <label>月份<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
-      {['employees','department','summaries','quality'].includes(view) && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
+      {['employees','quality'].includes(view) && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
       {view === 'employees' && <div className="report-scope__presets"><button type="button" onClick={useCurrentWeek}>本周</button><button type="button" onClick={useCurrentMonth}>本月</button></div>}
-      {['department','summaries'].includes(view) && <label>部门<select value={departmentName} onChange={(event) => setDepartmentName(event.target.value)}>{view === 'summaries' && <option value="">全部部门</option>}{departments.map((department) => <option key={department}>{department}</option>)}</select></label>}
     </div>}
 
     {view === 'dashboard' && <DashboardView date={reportDate} revision={analyticsRevision} />}
     {view === 'calendar' && <CalendarView month={month} onSelectDate={openDate} revision={analyticsRevision} />}
     {view === 'employees' && <EmployeeArchiveView startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
-    {view === 'department' && <DepartmentSummaryView department={departmentName} startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
-    {view === 'summaries' && <GeneratedSummariesView department={departmentName} startDate={startDate} endDate={endDate} />}
     {view === 'quality' && <QualityView startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
 
     {view === 'list' && <><form className="daily-reports__filters" onSubmit={submit}>

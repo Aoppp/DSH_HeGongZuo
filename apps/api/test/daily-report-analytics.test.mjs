@@ -34,20 +34,3 @@ test('统计服务校验视图所需日期与月份参数', async () => {
   assert.deepEqual(await service.read(new URLSearchParams({ view: 'calendar', month: '2026-09' })), { month: '2026-09' })
   await assert.rejects(() => service.read(new URLSearchParams({ view: 'calendar', month: '2026-13' })), /month/)
 })
-
-test('周月汇总必须先创建草稿，再由当前账号确认', async () => {
-  const calls = []
-  const repository = {
-    createSummary: async (...args) => { calls.push(['create', ...args]); return { id: 1, status: 'draft' } },
-    confirmSummary: async (...args) => { calls.push(['confirm', ...args]); return { id: 1, status: 'confirmed' } },
-  }
-  const service = new DailyReportAnalyticsService(repository)
-  const draft = await service.createSummary({ periodType: 'week', startDate: '2026-09-01', endDate: '2026-09-05', department: '研发中心' }, 'account-1')
-  const confirmed = await service.confirmSummary('1', 'account-2')
-  assert.equal(draft.status, 'draft')
-  assert.equal(confirmed.status, 'confirmed')
-  assert.deepEqual(calls, [
-    ['create', 'week', '2026-09-01', '2026-09-05', '研发中心', 'account-1'],
-    ['confirm', 1, 'account-2'],
-  ])
-})
