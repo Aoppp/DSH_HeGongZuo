@@ -2,9 +2,8 @@
 Description=定时同步企业微信工作日报
 
 [Timer]
-OnBootSec=2min
-OnUnitActiveSec=5min
-RandomizedDelaySec=30
+OnCalendar=*-*-* 22:00:00
+AccuracySec=1s
 Persistent=true
 Unit=hegongzuo-work-daily-sync.service
 

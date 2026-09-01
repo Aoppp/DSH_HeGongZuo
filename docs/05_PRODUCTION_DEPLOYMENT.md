@@ -124,7 +124,7 @@ sudo systemctl enable --now hegongzuo-work-daily-sync.timer
 systemctl list-timers hegongzuo-work-daily-sync.timer
 ```
 
-定时任务每 5 分钟用游标扫描智能表格，通过 `record_id` 和内容哈希仅新增或更新变化记录。运行结果保存在 `employee_work_daily_sync_runs`，服务日志可用 `journalctl -u hegongzuo-work-daily-sync.service` 查看。
+定时任务每天服务器当地时间 22:00 用游标扫描智能表格，通过 `record_id`、更新时间和内容哈希仅写入新增或发生变化的记录，未变日报不重复写入。运行结果保存在 `employee_work_daily_sync_runs`，服务日志可用 `journalctl -u hegongzuo-work-daily-sync.service` 查看。
 
 ## 企业微信回调配置
 
