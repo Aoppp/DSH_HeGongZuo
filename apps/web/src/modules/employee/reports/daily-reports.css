@@ -28,6 +28,7 @@
 .daily-reports__summary { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: #344054; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-line; }
 .daily-reports__view { height: 32px; padding: 0 10px; }
 .daily-reports__delayed { display: block; width: fit-content; margin-top: 5px; border-radius: 999px; padding: 2px 7px; background: #fff3dc; color: #976000; font-size: 11px; font-style: normal; white-space: nowrap; }
+.daily-reports__unmatched { display: block; width: fit-content; margin-top: 5px; border-radius: 999px; padding: 2px 7px; background: #f2f4f7; color: #667085; font-size: 11px; font-style: normal; white-space: nowrap; }
 .daily-reports__empty { display: flex; min-height: 180px; align-items: center; justify-content: center; gap: 8px; color: #7a8699; font-size: 13px; }
 .daily-reports__spinner { animation: daily-report-spin .85s linear infinite; }
 .daily-reports__error { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid #efc6c2; border-radius: 9px; background: #fff3f2; color: #a33f39; font-size: 13px; }

@@ -50,6 +50,7 @@ test('同步统计区分新增、更新、未变和失败', async () => {
   const repository = {
     startRun: async () => 9,
     upsert: async () => outcomes.shift() ?? 'unchanged',
+    linkUniqueReporters: async () => 2,
     finishRun: async (...args) => { finished.push(args) },
   }
   async function *pages() { yield { records: [rawRecord, { ...rawRecord, record_id: 'record-002' }, { ...rawRecord, record_id: 'record-003' }, {}], hasMore: false, nextCursor: null, total: 4 } }

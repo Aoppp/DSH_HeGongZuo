@@ -9,8 +9,9 @@ export interface DailyReportAttachment {
 
 export interface DailyReport {
   readonly record_id: string
-  readonly employee: { readonly user_id: string | null; readonly name: string }
-  readonly department: { readonly id: string | null; readonly name: string | null }
+  readonly employee: { readonly user_id: string | null; readonly employee_id: string | null; readonly name: string; readonly matched: boolean }
+  readonly department: { readonly name: string | null; readonly level2: string | null }
+  readonly source_department: { readonly id: string | null; readonly name: string | null }
   readonly report_date: string
   readonly submit_time: string
   readonly today_summary: string | null

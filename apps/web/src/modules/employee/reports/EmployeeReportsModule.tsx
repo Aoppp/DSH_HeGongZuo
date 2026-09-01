@@ -34,6 +34,16 @@ function delayed(report: DailyReport): boolean {
   return localSubmissionDate(report.submit_time) > report.report_date
 }
 
+function department(report: DailyReport): string {
+  const values = [report.department.name, report.department.level2].filter((value, index, all): value is string => Boolean(value) && all.indexOf(value) === index)
+  return values.join(' / ') || '未记录'
+}
+
+function sourceDepartmentDiffers(report: DailyReport): boolean {
+  const source = report.source_department.name?.trim()
+  return Boolean(source && source !== report.department.name?.trim() && source !== report.department.level2?.trim())
+}
+
 function attachmentUrl(value: string): string | null {
   try {
     const url = new URL(value)
@@ -45,7 +55,9 @@ function DetailContent({ report }: { readonly report: DailyReport }) {
   return <>
     <dl className="daily-report-detail__meta">
       <div><dt>填写人</dt><dd>{report.employee.name}</dd></div>
-      <div><dt>部门</dt><dd>{report.department.name || '未记录'}</dd></div>
+      <div><dt>当前部门</dt><dd>{department(report)}</dd></div>
+      {sourceDepartmentDiffers(report) && <div><dt>提交时部门</dt><dd>{report.source_department.name}</dd></div>}
+      {!report.employee.matched && <div><dt>档案关联</dt><dd><em className="daily-reports__unmatched">未关联员工档案</em></dd></div>}
       <div><dt>汇报日期</dt><dd>{date(report.report_date)}</dd></div>
       <div><dt>填写时间</dt><dd>{time(report.submit_time)}{delayed(report) && <em className="daily-reports__delayed">延后提交</em>}</dd></div>
     </dl>
@@ -80,7 +92,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
 
     <section className="daily-reports__panel">
       <div className="daily-reports__table-wrap"><table><thead><tr><th>汇报日期</th><th>填写人</th><th>所在部门</th><th>今日工作总结</th><th>明日工作计划</th><th>提交时间</th><th aria-label="操作" /></tr></thead>
-        <tbody>{!management.loading && !management.error && management.reports.map((report) => <tr key={report.record_id}><td><strong>{date(report.report_date)}</strong></td><td>{report.employee.name}</td><td>{report.department.name || '未记录'}</td><td><p className="daily-reports__summary">{content(report.today_summary)}</p></td><td><p className="daily-reports__summary">{content(report.tomorrow_plan)}</p></td><td>{time(report.submit_time)}{delayed(report) && <em className="daily-reports__delayed">延后提交</em>}</td><td><button type="button" className="daily-reports__view" onClick={() => void management.openDetail(report.record_id)}>查看</button></td></tr>)}</tbody></table></div>
+        <tbody>{!management.loading && !management.error && management.reports.map((report) => <tr key={report.record_id}><td><strong>{date(report.report_date)}</strong></td><td>{report.employee.name}{!report.employee.matched && <em className="daily-reports__unmatched">未关联</em>}</td><td>{department(report)}</td><td><p className="daily-reports__summary">{content(report.today_summary)}</p></td><td><p className="daily-reports__summary">{content(report.tomorrow_plan)}</p></td><td>{time(report.submit_time)}{delayed(report) && <em className="daily-reports__delayed">延后提交</em>}</td><td><button type="button" className="daily-reports__view" onClick={() => void management.openDetail(report.record_id)}>查看</button></td></tr>)}</tbody></table></div>
       {management.loading && <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={21} />正在加载日报…</div>}
       {!management.loading && !management.error && management.loaded && management.reports.length === 0 && <div className="daily-reports__empty">{management.hasFilters ? '没有符合筛选条件的日报' : '暂无日报记录'}</div>}
     </section>

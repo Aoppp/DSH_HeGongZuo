@@ -100,4 +100,29 @@ export class WorkDailyRepository {
     ])
     return result.rows[0]?.outcome ?? 'unchanged'
   }
+
+  async linkUniqueReporters(): Promise<number> {
+    const result = await this.pool.query(`WITH unique_reporters AS (
+        SELECT author_name, min(author_user_id) AS user_id
+        FROM employee_work_daily_reports
+        WHERE author_user_id IS NOT NULL AND btrim(author_user_id) <> ''
+        GROUP BY author_name
+        HAVING count(DISTINCT author_user_id) = 1
+      ), unique_employees AS (
+        SELECT display_name, min(id) AS employee_id
+        FROM employees
+        GROUP BY display_name
+        HAVING count(*) = 1
+      )
+      UPDATE employees AS employee
+      SET wecom_user_id = reporter.user_id, updated_at = now()
+      FROM unique_reporters AS reporter
+      JOIN unique_employees AS matched ON matched.display_name = reporter.author_name
+      WHERE employee.id = matched.employee_id
+        AND employee.wecom_user_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM employees AS occupied WHERE occupied.wecom_user_id = reporter.user_id
+        )`)
+    return result.rowCount ?? 0
+  }
 }

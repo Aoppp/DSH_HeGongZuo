@@ -32,6 +32,7 @@ export async function synchronizeWorkDailyPages(
         }
       }
     }
+    await repository.linkUniqueReporters()
     const status = stats.failed > 0 ? 'partial' : 'succeeded'
     await repository.finishRun(runId, status, stats, errors.length ? errors.join('\n') : null)
     return { runId, status, ...stats, errors }

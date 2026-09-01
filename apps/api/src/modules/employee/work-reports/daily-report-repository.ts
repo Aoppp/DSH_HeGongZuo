@@ -6,9 +6,15 @@ export interface DailyReport {
   readonly record_id: string
   readonly employee: {
     readonly user_id: string | null
+    readonly employee_id: string | null
     readonly name: string
+    readonly matched: boolean
   }
   readonly department: {
+    readonly name: string | null
+    readonly level2: string | null
+  }
+  readonly source_department: {
     readonly id: string | null
     readonly name: string | null
   }
@@ -43,8 +49,12 @@ interface DailyReportRow {
   readonly record_id: string
   readonly author_user_id: string | null
   readonly author_name: string
-  readonly department_id: string | null
-  readonly department_name: string | null
+  readonly employee_id: string | null
+  readonly employee_name: string | null
+  readonly employee_department_name: string | null
+  readonly employee_department_level2: string | null
+  readonly source_department_id: string | null
+  readonly source_department_name: string | null
   readonly report_date: string | Date
   readonly submitted_at: string | Date
   readonly today_summary: string | null
@@ -54,8 +64,16 @@ interface DailyReportRow {
   readonly wecom_updated_at: string | Date
 }
 
-const selectedColumns = `record_id, author_user_id, author_name, department_id, department_name,
-  report_date::text AS report_date, submitted_at, today_summary, tomorrow_plan, other_items, attachments, wecom_updated_at`
+const selectedColumns = `report.record_id, report.author_user_id, report.author_name,
+  employee.id AS employee_id, employee.display_name AS employee_name,
+  employee.department_name AS employee_department_name,
+  employee.department_level2 AS employee_department_level2,
+  report.department_id AS source_department_id, report.department_name AS source_department_name,
+  report.report_date::text AS report_date, report.submitted_at, report.today_summary,
+  report.tomorrow_plan, report.other_items, report.attachments, report.wecom_updated_at`
+
+const joinedReports = `employee_work_daily_reports AS report
+  LEFT JOIN employees AS employee ON employee.wecom_user_id = report.author_user_id`
 
 function isoTimestamp(value: string | Date): string {
   const date = value instanceof Date ? value : new Date(value)
@@ -75,8 +93,17 @@ function normalizedAttachments(value: unknown): readonly WorkDailyAttachment[] {
 function mapRow(row: DailyReportRow): DailyReport {
   return {
     record_id: row.record_id,
-    employee: { user_id: row.author_user_id, name: row.author_name },
-    department: { id: row.department_id, name: row.department_name },
+    employee: {
+      user_id: row.author_user_id,
+      employee_id: row.employee_id,
+      name: row.employee_name ?? row.author_name,
+      matched: row.employee_id !== null,
+    },
+    department: {
+      name: row.employee_department_name ?? row.source_department_name,
+      level2: row.employee_department_level2,
+    },
+    source_department: { id: row.source_department_id, name: row.source_department_name },
     report_date: calendarDate(row.report_date),
     submit_time: isoTimestamp(row.submitted_at),
     today_summary: row.today_summary,
@@ -97,17 +124,19 @@ function whereClause(filters: DailyReportFilters): { readonly sql: string; reado
 
   if (filters.employee) {
     const parameter = value(filters.employee)
-    conditions.push(`(author_user_id = ${parameter} OR lower(author_name) = lower(${parameter}))`)
+    conditions.push(`(report.author_user_id = ${parameter} OR lower(report.author_name) = lower(${parameter})
+      OR employee.id = ${parameter} OR lower(employee.display_name) = lower(${parameter}))`)
   }
   if (filters.department) {
     const parameter = value(filters.department)
-    conditions.push(`(department_id = ${parameter} OR lower(department_name) = lower(${parameter}))`)
+    conditions.push(`(report.department_id = ${parameter} OR lower(report.department_name) = lower(${parameter})
+      OR lower(employee.department_name) = lower(${parameter}) OR lower(employee.department_level2) = lower(${parameter}))`)
   }
-  if (filters.startDate) conditions.push(`report_date >= ${value(filters.startDate)}::date`)
-  if (filters.endDate) conditions.push(`report_date <= ${value(filters.endDate)}::date`)
+  if (filters.startDate) conditions.push(`report.report_date >= ${value(filters.startDate)}::date`)
+  if (filters.endDate) conditions.push(`report.report_date <= ${value(filters.endDate)}::date`)
   if (filters.keyword) {
     const parameter = value(`%${filters.keyword}%`)
-    conditions.push(`(today_summary ILIKE ${parameter} OR tomorrow_plan ILIKE ${parameter} OR other_items ILIKE ${parameter})`)
+    conditions.push(`(report.today_summary ILIKE ${parameter} OR report.tomorrow_plan ILIKE ${parameter} OR report.other_items ILIKE ${parameter})`)
   }
   return { sql: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '', values }
 }
@@ -118,14 +147,14 @@ export class DailyReportRepository {
   async list(filters: DailyReportFilters): Promise<DailyReportPage> {
     const query = whereClause(filters)
     const countResult = await this.pool.query<{ total: string }>(
-      `SELECT count(*)::text AS total FROM employee_work_daily_reports ${query.sql}`,
+      `SELECT count(*)::text AS total FROM ${joinedReports} ${query.sql}`,
       query.values,
     )
     const total = Number(countResult.rows[0]?.total ?? 0)
     const values = [...query.values, filters.pageSize, (filters.page - 1) * filters.pageSize]
     const rows = await this.pool.query<DailyReportRow>(`SELECT ${selectedColumns}
-      FROM employee_work_daily_reports ${query.sql}
-      ORDER BY report_date DESC, submitted_at DESC, record_id
+      FROM ${joinedReports} ${query.sql}
+      ORDER BY report.report_date DESC, report.submitted_at DESC, report.record_id
       LIMIT $${values.length - 1} OFFSET $${values.length}`, values)
     return {
       reports: rows.rows.map(mapRow),
@@ -138,7 +167,7 @@ export class DailyReportRepository {
 
   async get(recordId: string): Promise<DailyReport | null> {
     const result = await this.pool.query<DailyReportRow>(`SELECT ${selectedColumns}
-      FROM employee_work_daily_reports WHERE record_id = $1`, [recordId])
+      FROM ${joinedReports} WHERE report.record_id = $1`, [recordId])
     return result.rows[0] ? mapRow(result.rows[0]) : null
   }
 }
