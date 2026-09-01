@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import { parseWeComSmartSheetPage, parseWeComWorkDailyRecord } from '../dist/modules/employee/work-reports/work-daily-record.js'
 import { synchronizeWorkDailyPages } from '../dist/modules/employee/work-reports/work-daily-sync.js'
+import { parseWeComCliOutput } from '../dist/modules/employee/work-reports/wecom-smartsheet-client.js'
 
 const rawRecord = {
   create_time: '2026-08-08 19:09:07', creator_name: '张三', record_id: 'record-001', update_time: '2026-08-08 19:41:49',
@@ -36,6 +37,11 @@ test('智能表格分页响应保留游标与记录', () => {
     records: [rawRecord], hasMore: true, nextCursor: 'cursor-2', total: 1078,
   })
   assert.throws(() => parseWeComSmartSheetPage({ errcode: 40001, errmsg: '读取失败' }), /读取失败/)
+})
+
+test('同步客户端兼容 wecom-cli 多行缩进 JSON', () => {
+  const output = JSON.stringify({ errcode: 0, records: [rawRecord], has_more: false, total: 1 }, null, 2)
+  assert.equal(parseWeComCliOutput(output).records.length, 1)
 })
 
 test('同步统计区分新增、更新、未变和失败', async () => {

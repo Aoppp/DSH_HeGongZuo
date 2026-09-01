@@ -12,6 +12,15 @@ export interface WeComWorkDailySourceOptions {
   readonly pageSize?: number
 }
 
+export function parseWeComCliOutput(stdout: string): WeComSmartSheetPage {
+  try {
+    return parseWeComSmartSheetPage(JSON.parse(stdout.trim()))
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error('wecom-cli 返回了无效 JSON。')
+    throw error
+  }
+}
+
 export class WeComWorkDailySource {
   private readonly executable: string
   private readonly pageSize: number
@@ -27,14 +36,7 @@ export class WeComWorkDailySource {
     const args = ['smartsheet', 'records', 'list', '--docid', this.options.docId, '--sheet-id', this.options.sheetId, '--limit', String(this.pageSize)]
     if (cursor) args.push('--cursor', cursor)
     const { stdout } = await executeFile(this.executable, args, { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, timeout: 120_000 })
-    const responses = stdout.split('\n').map((line) => line.trim()).filter(Boolean)
-    if (responses.length !== 1) throw new Error(`wecom-cli 返回了 ${responses.length} 个响应，预期为 1。`)
-    try {
-      return parseWeComSmartSheetPage(JSON.parse(responses[0]!))
-    } catch (error) {
-      if (error instanceof SyntaxError) throw new Error('wecom-cli 返回了无效 JSON。')
-      throw error
-    }
+    return parseWeComCliOutput(stdout)
   }
 
   async *pages(): AsyncGenerator<WeComSmartSheetPage> {
