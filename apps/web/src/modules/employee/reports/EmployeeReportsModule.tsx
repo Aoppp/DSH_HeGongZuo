@@ -24,6 +24,16 @@ function content(value: string | null): string {
   return value?.trim() || '—'
 }
 
+function localSubmissionDate(value: string): string {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(parsed)
+}
+
+function delayed(report: DailyReport): boolean {
+  return localSubmissionDate(report.submit_time) > report.report_date
+}
+
 function attachmentUrl(value: string): string | null {
   try {
     const url = new URL(value)
@@ -37,7 +47,7 @@ function DetailContent({ report }: { readonly report: DailyReport }) {
       <div><dt>填写人</dt><dd>{report.employee.name}</dd></div>
       <div><dt>部门</dt><dd>{report.department.name || '未记录'}</dd></div>
       <div><dt>汇报日期</dt><dd>{date(report.report_date)}</dd></div>
-      <div><dt>填写时间</dt><dd>{time(report.submit_time)}</dd></div>
+      <div><dt>填写时间</dt><dd>{time(report.submit_time)}{delayed(report) && <em className="daily-reports__delayed">延后提交</em>}</dd></div>
     </dl>
     <div className="daily-report-detail__content"><h3>今日工作总结</h3><p>{content(report.today_summary)}</p></div>
     <div className="daily-report-detail__content"><h3>明日工作计划</h3><p>{content(report.tomorrow_plan)}</p></div>
@@ -70,7 +80,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
 
     <section className="daily-reports__panel">
       <div className="daily-reports__table-wrap"><table><thead><tr><th>汇报日期</th><th>填写人</th><th>所在部门</th><th>今日工作总结</th><th>明日工作计划</th><th>提交时间</th><th aria-label="操作" /></tr></thead>
-        <tbody>{!management.loading && !management.error && management.reports.map((report) => <tr key={report.record_id}><td><strong>{date(report.report_date)}</strong></td><td>{report.employee.name}</td><td>{report.department.name || '未记录'}</td><td><p className="daily-reports__summary">{content(report.today_summary)}</p></td><td><p className="daily-reports__summary">{content(report.tomorrow_plan)}</p></td><td>{time(report.submit_time)}</td><td><button type="button" className="daily-reports__view" onClick={() => void management.openDetail(report.record_id)}>查看</button></td></tr>)}</tbody></table></div>
+        <tbody>{!management.loading && !management.error && management.reports.map((report) => <tr key={report.record_id}><td><strong>{date(report.report_date)}</strong></td><td>{report.employee.name}</td><td>{report.department.name || '未记录'}</td><td><p className="daily-reports__summary">{content(report.today_summary)}</p></td><td><p className="daily-reports__summary">{content(report.tomorrow_plan)}</p></td><td>{time(report.submit_time)}{delayed(report) && <em className="daily-reports__delayed">延后提交</em>}</td><td><button type="button" className="daily-reports__view" onClick={() => void management.openDetail(report.record_id)}>查看</button></td></tr>)}</tbody></table></div>
       {management.loading && <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={21} />正在加载日报…</div>}
       {!management.loading && !management.error && management.loaded && management.reports.length === 0 && <div className="daily-reports__empty">{management.hasFilters ? '没有符合筛选条件的日报' : '暂无日报记录'}</div>}
     </section>

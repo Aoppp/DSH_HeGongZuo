@@ -64,13 +64,14 @@ test('单条详情返回统一字段且不暴露原始同步数据', async () =>
   const pool = {
     query: async () => ({ rows: [{
       record_id: 'record-001', author_user_id: 'zhangsan', author_name: '张三', department_id: 'd1', department_name: '研发部',
-      report_date: '2026-08-08', submitted_at: new Date('2026-08-08T02:00:00Z'), today_summary: '完成联调', tomorrow_plan: '测试', other_items: null,
+      report_date: new Date('2026-08-07T16:00:00Z'), submitted_at: new Date('2026-08-08T02:00:00Z'), today_summary: '完成联调', tomorrow_plan: '测试', other_items: null,
       attachments: [{ name: 'a.pdf', url: 'https://example.test/a.pdf' }], wecom_updated_at: new Date('2026-08-08T03:00:00Z'),
     }] }),
   }
   const report = await new DailyReportRepository(pool).get('record-001')
   assert.equal(report.record_id, 'record-001')
   assert.deepEqual(report.employee, { user_id: 'zhangsan', name: '张三' })
+  assert.equal(report.report_date, '2026-08-08')
   assert.equal(report.other, null)
   assert.equal(report.update_time, '2026-08-08T03:00:00.000Z')
   assert.equal('raw_values' in report, false)

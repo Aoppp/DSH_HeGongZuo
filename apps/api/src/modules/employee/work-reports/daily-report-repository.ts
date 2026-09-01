@@ -55,7 +55,7 @@ interface DailyReportRow {
 }
 
 const selectedColumns = `record_id, author_user_id, author_name, department_id, department_name,
-  report_date, submitted_at, today_summary, tomorrow_plan, other_items, attachments, wecom_updated_at`
+  report_date::text AS report_date, submitted_at, today_summary, tomorrow_plan, other_items, attachments, wecom_updated_at`
 
 function isoTimestamp(value: string | Date): string {
   const date = value instanceof Date ? value : new Date(value)
@@ -64,7 +64,7 @@ function isoTimestamp(value: string | Date): string {
 }
 
 function calendarDate(value: string | Date): string {
-  if (value instanceof Date) return value.toISOString().slice(0, 10)
+  if (value instanceof Date) return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(value)
   return value.slice(0, 10)
 }
 
