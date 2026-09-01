@@ -70,6 +70,9 @@ export function useDailyReports() {
   }, [])
 
   const retry = useCallback(() => setRevision((value) => value + 1), [])
+  const showReports = useCallback((nextFilters: DailyReportFilters) => {
+    setDraftFilters(nextFilters); setFilters(nextFilters); setPage(1); setRevision((value) => value + 1)
+  }, [])
   const hasFilters = Object.values(filters).some(Boolean)
 
   const [detail, setDetail] = useState<DailyReport | null>(null)
@@ -115,7 +118,7 @@ export function useDailyReports() {
   return {
     draftFilters, setDraftFilters, filters, reports, page, setPage, pageSize,
     setPageSize: (value: number) => { setPageSize(value); setPage(1) },
-    total, totalPages, loading, loaded, error, retry, hasFilters, applyFilters, resetFilters,
+    total, totalPages, loading, loaded, error, retry, hasFilters, applyFilters, resetFilters, showReports,
     detail, detailOpen, detailLoading, detailError, openDetail, retryDetail, closeDetail,
   }
 }

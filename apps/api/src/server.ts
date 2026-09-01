@@ -22,6 +22,8 @@ import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/m
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
 import { DailyReportRepository } from './modules/employee/work-reports/daily-report-repository.js'
 import { DailyReportService, DailyReportValidationError } from './modules/employee/work-reports/daily-report-service.js'
+import { DailyReportAnalyticsRepository } from './modules/employee/work-reports/daily-report-analytics-repository.js'
+import { DailyReportAnalyticsService, DailyReportAnalyticsValidationError } from './modules/employee/work-reports/daily-report-analytics-service.js'
 import { WorkDailyManualSync, WorkDailyManualSyncError } from './modules/employee/work-reports/work-daily-manual-sync.js'
 import { MeetingRepository } from './modules/meetings/meeting-repository.js'
 import { MeetingUploadCredentials } from './modules/meetings/meeting-upload-credentials.js'
@@ -43,6 +45,7 @@ const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
 const dailyReports = new DailyReportService(new DailyReportRepository(database))
+const dailyReportAnalytics = new DailyReportAnalyticsService(new DailyReportAnalyticsRepository(database))
 const workDailyManualSync = new WorkDailyManualSync(database, process.env.WECOM_WORK_DAILY_SYNC_REQUEST_PATH ?? '')
 
 
@@ -137,6 +140,10 @@ function dailyReportId(pathname: string): string | null {
   const match = pathname.match(/^\/api\/daily-reports\/([^/]+)$/)
   if (!match?.[1]) return null
   try { return decodeURIComponent(match[1]) } catch { throw new DailyReportValidationError('日报编号无效。') }
+}
+
+function dailyReportSummaryConfirmId(pathname: string): string | null {
+  return pathname.match(/^\/api\/daily-report-analytics\/summaries\/(\d+)\/confirm$/)?.[1] ?? null
 }
 
 function bearerToken(request: IncomingMessage): string | null {
@@ -485,6 +492,33 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/daily-report-analytics' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    sendJson(response, 200, { data: await dailyReportAnalytics.read(url.searchParams) })
+    return
+  }
+
+  if (url.pathname === '/api/daily-report-analytics/summaries' && request.method === 'POST') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    const summary = await dailyReportAnalytics.createSummary(await readJson(request), currentUser.id)
+    await platformManagement.record(currentUser.id, currentUser.displayName, '生成日报汇总', '日报', 'summary')
+    sendJson(response, 201, { summary })
+    return
+  }
+
+  const summaryConfirmId = dailyReportSummaryConfirmId(url.pathname)
+  if (summaryConfirmId && request.method === 'POST') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    const summary = await dailyReportAnalytics.confirmSummary(summaryConfirmId, currentUser.id)
+    if (!summary) throw new HttpError(404, '汇总记录不存在。')
+    await platformManagement.record(currentUser.id, currentUser.displayName, '确认日报汇总', '日报', summaryConfirmId)
+    sendJson(response, 200, { summary })
+    return
+  }
+
   if (url.pathname === '/api/daily-reports/sync' && request.method === 'GET') {
     requirePermission(currentUser, 'employee-reports')
     await platformManagement.assertModuleEnabled('employee-reports')
@@ -634,7 +668,7 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof DailyReportValidationError || error instanceof WorkDailyManualSyncError || error instanceof MeetingValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
+    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof DailyReportValidationError || error instanceof DailyReportAnalyticsValidationError || error instanceof WorkDailyManualSyncError || error instanceof MeetingValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
       const status = error instanceof LoginRateLimitError
         ? 429
         : error instanceof WorkDailyManualSyncError

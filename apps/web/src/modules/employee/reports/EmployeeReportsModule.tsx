@@ -1,10 +1,12 @@
 import { ExternalLink, LoaderCircle, Paperclip, RefreshCw, Search, X } from 'lucide-react'
-import type { FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
 import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
+import { readEmployeeReportProfiles } from './report-analytics-api'
+import { CalendarView, DashboardView, DepartmentSummaryView, EmployeeArchiveView, GeneratedSummariesView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
 import './daily-reports.css'
 
 function date(value: string): string {
@@ -74,13 +76,55 @@ function DetailContent({ report }: { readonly report: DailyReport }) {
 export function EmployeeReportsModule(_props: ModuleProps) {
   const management = useDailyReports()
   const sync = useDailyReportSync(management.retry)
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+  const [view, setView] = useState<AnalyticsView | 'list'>('dashboard')
+  const [reportDate, setReportDate] = useState(today)
+  const [month, setMonth] = useState(today.slice(0, 7))
+  const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`)
+  const [endDate, setEndDate] = useState(today)
+  const [departmentName, setDepartmentName] = useState('')
+  const [departments, setDepartments] = useState<readonly string[]>([])
+  const [analyticsRevision, setAnalyticsRevision] = useState(0)
+  useEffect(() => { void readEmployeeReportProfiles(`${today.slice(0, 7)}-01`, today).then((result) => { const names = [...new Set(result.map((item) => item.department))].sort(); setDepartments(names); setDepartmentName((value) => value || names[0] || '') }).catch(() => undefined) }, [today])
   function submit(event: FormEvent) { event.preventDefault(); management.applyFilters() }
   const pages = Math.max(1, management.totalPages)
+  function openDate(dateValue: string) {
+    management.showReports({ startDate: dateValue, endDate: dateValue, department: '', employee: '', keyword: '' })
+    setView('list')
+  }
+  function useCurrentWeek() {
+    const current = new Date(`${today}T00:00:00`)
+    const offset = current.getDay() === 0 ? 6 : current.getDay() - 1
+    current.setDate(current.getDate() - offset)
+    setStartDate(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(current)); setEndDate(today)
+  }
+  function useCurrentMonth() { setStartDate(`${today.slice(0, 7)}-01`); setEndDate(today) }
+  const views: readonly { id: AnalyticsView | 'list'; label: string }[] = [
+    { id: 'dashboard', label: '提交看板' }, { id: 'calendar', label: '日历' }, { id: 'list', label: '日报列表' },
+    { id: 'employees', label: '员工档案' }, { id: 'department', label: '部门汇总' }, { id: 'summaries', label: '周月汇总' }, { id: 'quality', label: '数据检查' },
+  ]
 
   return <div className="daily-reports module-page">
-    <header className="daily-reports__heading"><div><h1>日报管理</h1><p>查询企业微信已同步的员工日报</p></div><div className="daily-reports__sync"><span>{sync.error || sync.message}</span><button type="button" disabled={sync.busy} onClick={() => void sync.start()}>{sync.busy ? <LoaderCircle className="daily-reports__spinner" size={15} /> : <RefreshCw size={15} />}{sync.busy ? '同步中' : '同步数据'}</button><small>共 {management.total} 条</small></div></header>
+    <header className="daily-reports__heading"><div><h1>日报管理</h1><p>查看提交情况、工作汇总与数据质量</p></div><div className="daily-reports__sync"><span>{sync.error || sync.message}</span><button type="button" disabled={sync.busy} onClick={() => void sync.start().then(() => setAnalyticsRevision((value) => value + 1))}>{sync.busy ? <LoaderCircle className="daily-reports__spinner" size={15} /> : <RefreshCw size={15} />}{sync.busy ? '同步中' : '同步数据'}</button>{view === 'list' && <small>共 {management.total} 条</small>}</div></header>
 
-    <form className="daily-reports__filters" onSubmit={submit}>
+    <nav className="report-tabs" aria-label="日报功能">{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => setView(item.id)}>{item.label}</button>)}</nav>
+
+    {view !== 'list' && <div className="report-scope">
+      {view === 'dashboard' && <label>统计日期<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} /></label>}
+      {view === 'calendar' && <label>月份<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
+      {['employees','department','summaries','quality'].includes(view) && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
+      {view === 'employees' && <div className="report-scope__presets"><button type="button" onClick={useCurrentWeek}>本周</button><button type="button" onClick={useCurrentMonth}>本月</button></div>}
+      {['department','summaries'].includes(view) && <label>部门<select value={departmentName} onChange={(event) => setDepartmentName(event.target.value)}>{view === 'summaries' && <option value="">全部部门</option>}{departments.map((department) => <option key={department}>{department}</option>)}</select></label>}
+    </div>}
+
+    {view === 'dashboard' && <DashboardView date={reportDate} revision={analyticsRevision} />}
+    {view === 'calendar' && <CalendarView month={month} onSelectDate={openDate} revision={analyticsRevision} />}
+    {view === 'employees' && <EmployeeArchiveView startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
+    {view === 'department' && <DepartmentSummaryView department={departmentName} startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
+    {view === 'summaries' && <GeneratedSummariesView department={departmentName} startDate={startDate} endDate={endDate} />}
+    {view === 'quality' && <QualityView startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
+
+    {view === 'list' && <><form className="daily-reports__filters" onSubmit={submit}>
       <div className="daily-reports__date-range"><label><span>开始日期</span><input type="date" value={management.draftFilters.startDate} max={management.draftFilters.endDate || undefined} onChange={(event) => management.setDraftFilters((current) => ({ ...current, startDate: event.target.value }))} /></label><i>至</i><label><span>结束日期</span><input type="date" value={management.draftFilters.endDate} min={management.draftFilters.startDate || undefined} onChange={(event) => management.setDraftFilters((current) => ({ ...current, endDate: event.target.value }))} /></label></div>
       <label><span>部门</span><input maxLength={240} value={management.draftFilters.department} placeholder="部门名称" onChange={(event) => management.setDraftFilters((current) => ({ ...current, department: event.target.value }))} /></label>
       <label><span>员工</span><input maxLength={160} value={management.draftFilters.employee} placeholder="姓名" onChange={(event) => management.setDraftFilters((current) => ({ ...current, employee: event.target.value }))} /></label>
@@ -99,6 +143,6 @@ export function EmployeeReportsModule(_props: ModuleProps) {
 
     {!management.loading && !management.error && management.total > 0 && <nav className="daily-reports__pagination" aria-label="日报分页"><span>共 {management.total} 条・第 {management.page} / {pages} 页</span><label>每页<select value={management.pageSize} onChange={(event) => management.setPageSize(Number(event.target.value))}><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option></select>条</label><div><button type="button" disabled={management.page <= 1} onClick={() => management.setPage((value) => value - 1)}>上一页</button><button type="button" disabled={management.page >= pages} onClick={() => management.setPage((value) => value + 1)}>下一页</button></div></nav>}
 
-    {management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : '正在读取'}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={21} />正在加载详情…</div> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}
+    {management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : '正在读取'}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={21} />正在加载详情…</div> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}</>}
   </div>
 }
