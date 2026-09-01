@@ -1,31 +1,80 @@
-import { AlertTriangle, CalendarDays, CheckCircle2, FileText, LoaderCircle, RefreshCw, Users } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { ExternalLink, LoaderCircle, Paperclip, Search, X } from 'lucide-react'
+import type { FormEvent } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
-import { clock, localDate } from '../work-records/work-records-format'
-import { readEmployeeReports, type EmployeeReportsSnapshot } from '../work-records/work-records-api'
-import '../work-records/employee-work-records.css'
+import type { DailyReport } from './daily-reports-api'
+import { useDailyReports } from './use-daily-reports'
+import './daily-reports.css'
+
+function date(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value)
+  return match ? `${match[1]}/${match[2]}/${match[3]}` : value
+}
+
+function time(value: string): string {
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(parsed)
+}
+
+function content(value: string | null): string {
+  return value?.trim() || '—'
+}
+
+function attachmentUrl(value: string): string | null {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : null
+  } catch { return null }
+}
+
+function DetailContent({ report }: { readonly report: DailyReport }) {
+  return <>
+    <dl className="daily-report-detail__meta">
+      <div><dt>填写人</dt><dd>{report.employee.name}</dd></div>
+      <div><dt>部门</dt><dd>{report.department.name || '未记录'}</dd></div>
+      <div><dt>汇报日期</dt><dd>{date(report.report_date)}</dd></div>
+      <div><dt>填写时间</dt><dd>{time(report.submit_time)}</dd></div>
+    </dl>
+    <div className="daily-report-detail__content"><h3>今日工作总结</h3><p>{content(report.today_summary)}</p></div>
+    <div className="daily-report-detail__content"><h3>明日工作计划</h3><p>{content(report.tomorrow_plan)}</p></div>
+    <div className="daily-report-detail__content"><h3>其他事项</h3><p>{content(report.other)}</p></div>
+    <div className="daily-report-detail__attachments"><h3>附件</h3>{report.attachments.length === 0 ? <p>无附件</p> : <ul>{report.attachments.map((attachment, index) => {
+      const url = attachmentUrl(attachment.url)
+      return <li key={`${attachment.name}-${index}`}><Paperclip size={15} /><span>{attachment.name || `附件 ${index + 1}`}</span>{url && <a href={url} target="_blank" rel="noreferrer">查看<ExternalLink size={13} /></a>}</li>
+    })}</ul>}</div>
+  </>
+}
 
 export function EmployeeReportsModule(_props: ModuleProps) {
-  const [date, setDate] = useState(localDate)
-  const [snapshot, setSnapshot] = useState<EmployeeReportsSnapshot | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const load = useCallback(async (nextDate: string, signal?: AbortSignal) => {
-    setLoading(true); setError(null)
-    try { setSnapshot(await readEmployeeReports(nextDate, signal)) }
-    catch (reason) { if (!(reason instanceof DOMException && reason.name === 'AbortError')) setError(reason instanceof Error ? reason.message : '工作汇报暂时无法读取。') }
-    finally { if (!signal?.aborted) setLoading(false) }
-  }, [])
-  useEffect(() => { const controller = new AbortController(); void load(date, controller.signal); return () => controller.abort() }, [date, load])
+  const management = useDailyReports()
+  function submit(event: FormEvent) { event.preventDefault(); management.applyFilters() }
+  const pages = Math.max(1, management.totalPages)
 
-  return <div className="employee-work-records module-page">
-    <header className="work-records-heading"><div><h1>工作汇报</h1><p>查看员工日报内容与提交情况</p></div><div className="work-records-heading__actions">{snapshot?.connectionStatus === 'demo' && <span className="work-records-demo">演示数据</span>}<label><CalendarDays size={15} /><input aria-label="查询日期" type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label><button type="button" onClick={() => void load(date)} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={15} />刷新</button></div></header>
-    <div className="work-records-connection"><span><i />{snapshot?.connectionStatus === 'connected' ? '企业微信汇报已连接' : '企业微信汇报尚未连接，当前展示演示数据'}</span><small>正式接入后将自动显示企业微信中的实际汇报内容。</small></div>
-    {error && <div className="work-records-error"><AlertTriangle size={16} />{error}<button type="button" onClick={() => void load(date)}>重新加载</button></div>}
-    {loading && !snapshot ? <div className="work-records-loading"><LoaderCircle className="spin" size={22} />正在加载工作汇报…</div> : snapshot && <>
-      <section className="work-records-metrics work-records-metrics--compact"><article><i><FileText size={18} /></i><span>应交日报<strong>{snapshot.reports.expected}</strong><small>人</small></span></article><article><i><CheckCircle2 size={18} /></i><span>已提交<strong>{snapshot.reports.submitted}</strong><small>人</small></span></article><article className={snapshot.reports.missing ? 'is-warning' : ''}><i><Users size={18} /></i><span>未提交<strong>{snapshot.reports.missing}</strong><small>人</small></span></article></section>
-      <section className="work-records-panel"><div className="work-records-section-title"><h2>日报记录</h2><span>{snapshot.reports.records.length} 条</span></div><div className="work-report-list">{snapshot.reports.records.length === 0 ? <p className="work-records-empty">当日暂无汇报记录</p> : snapshot.reports.records.map((report) => <article key={report.id}><header><div><strong>{report.employeeName}</strong><span>{report.departmentName}</span></div><p>{report.templateName}<time>{clock(report.submittedAt)} 提交</time></p></header><dl>{report.fields.map((field, index) => <div key={`${field.label}-${index}`}><dt>{field.label}</dt><dd>{field.value}</dd></div>)}</dl></article>)}</div></section>
-    </>}
+  return <div className="daily-reports module-page">
+    <header className="daily-reports__heading"><div><h1>日报管理</h1><p>查询企业微信已同步的员工日报</p></div><span>共 {management.total} 条</span></header>
+
+    <form className="daily-reports__filters" onSubmit={submit}>
+      <div className="daily-reports__date-range"><label><span>开始日期</span><input type="date" value={management.draftFilters.startDate} max={management.draftFilters.endDate || undefined} onChange={(event) => management.setDraftFilters((current) => ({ ...current, startDate: event.target.value }))} /></label><i>至</i><label><span>结束日期</span><input type="date" value={management.draftFilters.endDate} min={management.draftFilters.startDate || undefined} onChange={(event) => management.setDraftFilters((current) => ({ ...current, endDate: event.target.value }))} /></label></div>
+      <label><span>部门</span><input maxLength={240} value={management.draftFilters.department} placeholder="部门名称" onChange={(event) => management.setDraftFilters((current) => ({ ...current, department: event.target.value }))} /></label>
+      <label><span>员工</span><input maxLength={160} value={management.draftFilters.employee} placeholder="姓名" onChange={(event) => management.setDraftFilters((current) => ({ ...current, employee: event.target.value }))} /></label>
+      <label className="daily-reports__keyword"><span>关键词</span><input maxLength={200} value={management.draftFilters.keyword} placeholder="搜索工作总结、明日计划或其他事项" onChange={(event) => management.setDraftFilters((current) => ({ ...current, keyword: event.target.value }))} /></label>
+      <div className="daily-reports__filter-actions"><button type="submit" className="daily-reports__search"><Search size={15} />查询</button><button type="button" onClick={management.resetFilters}>重置</button></div>
+    </form>
+
+    {management.error && <div className="daily-reports__error"><span>{management.error}</span><button type="button" onClick={management.retry}>重新加载</button></div>}
+
+    <section className="daily-reports__panel">
+      <div className="daily-reports__table-wrap"><table><thead><tr><th>汇报日期</th><th>填写人</th><th>所在部门</th><th>今日工作总结</th><th>明日工作计划</th><th>提交时间</th><th aria-label="操作" /></tr></thead>
+        <tbody>{!management.loading && !management.error && management.reports.map((report) => <tr key={report.record_id}><td><strong>{date(report.report_date)}</strong></td><td>{report.employee.name}</td><td>{report.department.name || '未记录'}</td><td><p className="daily-reports__summary">{content(report.today_summary)}</p></td><td><p className="daily-reports__summary">{content(report.tomorrow_plan)}</p></td><td>{time(report.submit_time)}</td><td><button type="button" className="daily-reports__view" onClick={() => void management.openDetail(report.record_id)}>查看</button></td></tr>)}</tbody></table></div>
+      {management.loading && <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={21} />正在加载日报…</div>}
+      {!management.loading && !management.error && management.loaded && management.reports.length === 0 && <div className="daily-reports__empty">{management.hasFilters ? '没有符合筛选条件的日报' : '暂无日报记录'}</div>}
+    </section>
+
+    {!management.loading && !management.error && management.total > 0 && <nav className="daily-reports__pagination" aria-label="日报分页"><span>共 {management.total} 条・第 {management.page} / {pages} 页</span><label>每页<select value={management.pageSize} onChange={(event) => management.setPageSize(Number(event.target.value))}><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option></select>条</label><div><button type="button" disabled={management.page <= 1} onClick={() => management.setPage((value) => value - 1)}>上一页</button><button type="button" disabled={management.page >= pages} onClick={() => management.setPage((value) => value + 1)}>下一页</button></div></nav>}
+
+    {management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : '正在读取'}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={21} />正在加载详情…</div> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}
   </div>
 }

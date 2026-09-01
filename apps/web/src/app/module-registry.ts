@@ -73,9 +73,9 @@ export const platformModules: readonly PlatformModule[] = [
   },
   {
     id: 'employee-reports',
-    path: '/employee/reports',
-    label: '工作汇报',
-    description: '查看员工日报与提交情况',
+    path: '/employee/daily-reports',
+    label: '日报管理',
+    description: '查询企业微信已同步的员工日报',
     icon: ClipboardList,
     requiredPermission: 'employee-reports',
     group: 'employee-management',

@@ -359,7 +359,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       { id: 'employee-data', label: '档案维护', group: '员工管理' },
       { id: 'employee-query', label: '数据查询', group: '员工管理' },
       { id: 'employee-attendance', label: '考勤管理', group: '员工管理' },
-      { id: 'employee-reports', label: '工作汇报', group: '员工管理' },
+      { id: 'employee-reports', label: '日报管理', group: '员工管理' },
       { id: 'meeting-records', label: '查看全部会议记录', group: '会议管理' },
       { id: 'finance-management', label: '待开发', group: '财务管理' },
       { id: 'project-management', label: '待开发', group: '项目管理' },

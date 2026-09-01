@@ -78,7 +78,7 @@ export function ManagementCockpitModule({ user, onNavigate }: ModuleProps) {
     { id: 'employee-data', label: '员工档案', detail: '查看和维护员工信息', icon: FileSpreadsheet, permission: 'employee-data' },
     { id: 'employee-agent', label: '员工查询', detail: '查询人员与组织信息', icon: Search, permission: 'employee-query' },
     { id: 'employee-attendance', label: '考勤管理', detail: '查看打卡与异常情况', icon: CalendarCheck, permission: 'employee-attendance' },
-    { id: 'employee-reports', label: '工作汇报', detail: '查看日报提交情况', icon: FileSpreadsheet, permission: 'employee-reports' },
+    { id: 'employee-reports', label: '日报管理', detail: '查询已同步的员工日报', icon: FileSpreadsheet, permission: 'employee-reports' },
     { id: 'work-assistant', label: '工作文件', detail: '处理个人工作区文件', icon: Clock3, permission: null },
     { id: 'developer-console', label: '平台管理', detail: '账号、权限与服务状态', icon: Settings, permission: 'platform-administration' },
   ].filter((action) => !action.permission || user.permissions.includes(action.permission)) as readonly { id: ModuleId; label: string; detail: string; icon: typeof Users }[]

@@ -21,7 +21,7 @@ const moduleLabels: Record<ManagedModuleId, string> = {
   'employee-data': '员工数据',
   'employee-agent': '员工查询',
   'employee-attendance': '考勤管理',
-  'employee-reports': '工作汇报',
+  'employee-reports': '日报管理',
   'meeting-records': '会议管理',
   'finance-management': '财务管理',
   'project-management': '项目管理',
