@@ -1,6 +1,6 @@
-import { LoaderCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { SkeletonList } from '../../../components/Skeleton'
 import { readEmployeeReportHistory, type EmployeeReportHistoryPage } from './employee-report-history-api'
 import './employee-report-history.css'
 
@@ -31,7 +31,7 @@ export function EmployeeReportHistory({ employeeId }: { readonly employeeId: str
 
   return <section className="employee-report-history">
     <h3>历史日报</h3>
-    {loading ? <div className="employee-report-history__state"><LoaderCircle className="employee-report-history__spinner" size={17} />正在加载…</div>
+    {loading ? <SkeletonList count={5} />
       : error ? <div className="employee-report-history__state is-error">{error}</div>
         : history && !history.linked ? <div className="employee-report-history__state">该员工暂未关联企业微信账号</div>
           : history && history.reports.length ? <>

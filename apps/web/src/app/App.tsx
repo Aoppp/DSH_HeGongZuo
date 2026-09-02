@@ -5,6 +5,7 @@ import { AccountLogin } from '../components/AccountLogin'
 import { Sidebar } from '../components/Sidebar'
 import { SiteFiling } from '../components/SiteFiling'
 import { Topbar } from '../components/Topbar'
+import { Skeleton, SkeletonCards } from '../components/Skeleton'
 import { getModule, getVisibleModules, platformModules } from './module-registry'
 import { accessibleModuleForPath, defaultModuleIdForUser } from './module-routes'
 import type { AuthenticatedUser, ModuleId } from './types'
@@ -46,7 +47,7 @@ export default function App() {
   }, [user, visibleModules])
 
   if (restoring) {
-    return <div className="platform-boot">正在加载平台…</div>
+    return <div className="skeleton-page" role="status" aria-label="正在加载平台"><div className="skeleton-page__heading"><Skeleton height={28} width={190} /><Skeleton shape="text" width={280} /></div><SkeletonCards count={4} /></div>
   }
 
   if (!user) {

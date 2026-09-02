@@ -1,8 +1,9 @@
 // 管理 / 驾驶舱模块入口。
-import { Activity, Bell, CalendarCheck, ChevronRight, CircleUserRound, Clock3, FileSpreadsheet, LoaderCircle, RefreshCw, Search, Settings, UserMinus, Users } from 'lucide-react'
+import { Activity, Bell, CalendarCheck, ChevronRight, CircleUserRound, Clock3, FileSpreadsheet, RefreshCw, Search, Settings, UserMinus, Users } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { ModuleId, ModuleProps } from '../../../app/types'
+import { Skeleton, SkeletonCards, SkeletonList } from '../../../components/Skeleton'
 import { readCockpitSnapshot, type CockpitSnapshot } from './cockpit-api'
 import './management-cockpit.css'
 
@@ -53,7 +54,7 @@ export function ManagementCockpitModule({ user, onNavigate }: ModuleProps) {
   }, [snapshot])
 
   if (loading && !snapshot) {
-    return <div className="management-cockpit module-page"><div className="cockpit-loading"><LoaderCircle className="spin" size={22} /> 正在汇总管理数据…</div></div>
+    return <div className="management-cockpit module-page"><div className="skeleton-page"><div className="skeleton-page__heading"><Skeleton height={28} width={190} /><Skeleton shape="text" width={250} /></div><SkeletonCards count={6} /><SkeletonList count={5} /></div></div>
   }
 
   if (!snapshot) {

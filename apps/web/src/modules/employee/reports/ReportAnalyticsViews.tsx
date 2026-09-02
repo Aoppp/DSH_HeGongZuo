@@ -1,6 +1,7 @@
-import { Download, LoaderCircle, Search, X } from 'lucide-react'
+import { Download, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
+import { SkeletonCards, SkeletonList } from '../../../components/Skeleton'
 import { readDailyReports, type DailyReport } from './daily-reports-api'
 import { exportDelayed, exportMissing } from './export-report-analytics'
 import {
@@ -10,7 +11,7 @@ import {
 
 export type AnalyticsView = 'dashboard' | 'calendar' | 'employees' | 'quality'
 
-function Loading() { return <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={20} />正在读取统计数据…</div> }
+function Loading() { return <div className="daily-reports__skeleton"><SkeletonCards count={4} /><SkeletonList count={5} /></div> }
 function ErrorState({ message }: { readonly message: string }) { return <div className="daily-reports__error"><span>{message}</span></div> }
 function stateName(state: SubmissionEmployee['state']) { return state === 'missing' ? '未提交' : state === 'delayed' ? '延后提交' : '已提交' }
 

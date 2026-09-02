@@ -2,6 +2,7 @@ import { Activity, Blocks, Check, ChevronDown, Copy, Database, Download, History
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ModuleId } from '../../../app/types'
+import { SkeletonCards, SkeletonList } from '../../../components/Skeleton'
 import { createMeetingUploadCredential, deleteMeetingUploadCredential, readAuditLogs, readMeetingUploadCredentials, readPlatformStatus, setPlatformModuleEnabled, type AuditLog, type MeetingUploadCredential, type PlatformStatus } from './platform-api'
 
 interface PlatformManagementProps {
@@ -129,7 +130,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
           <button className="employee-data__secondary" type="button" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={15} /> 刷新</button>
         </header>
         {error && <div className="account-admin__error"><span>{error}</span><button type="button" onClick={() => void load()}>重新加载</button></div>}
-        {loading && !status ? <div className="account-admin__empty">正在读取平台状态…</div> : status && (
+        {loading && !status ? <SkeletonCards count={3} /> : status && (
           <div className="platform-management__health">
             <article><span><Activity size={19} /></span><div><small>平台 API</small><strong>运行正常</strong></div></article>
             <article><span><Database size={19} /></span><div><small>数据服务</small><strong>{status.database === 'available' ? '连接正常' : '不可用'}</strong></div></article>
@@ -161,7 +162,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
 
       {status && <section className="platform-management panel-card">
         <header className="platform-management__header"><div><h2>操作记录</h2><p>审计记录长期保留，按需加载。</p></div><div className="platform-management__audit-actions"><a className="employee-data__secondary platform-management__audit-export" href="/api/platform/audit-logs/export"><Download size={15} />导出全部 CSV</a><button className="employee-data__secondary platform-management__audit-toggle" type="button" onClick={toggleAudit} aria-expanded={auditOpen}><History size={15} />{auditOpen ? '收起记录' : '查看记录'}<ChevronDown className={auditOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></div></header>
-        {auditOpen && (auditLoading && auditLogs.length === 0 ? <div className="account-admin__empty">正在加载操作记录…</div> : auditLogs.length === 0 ? <div className="account-admin__empty">暂无平台管理操作记录。</div> : <><div className="platform-management__audit">
+        {auditOpen && (auditLoading && auditLogs.length === 0 ? <SkeletonList count={5} /> : auditLogs.length === 0 ? <div className="account-admin__empty">暂无平台管理操作记录。</div> : <><div className="platform-management__audit">
           {auditLogs.map((log) => <article key={log.id}><div><strong>{log.action}</strong><small>{log.targetType} · {log.targetId}{auditFields(log.detail) ? ` · 修改：${auditFields(log.detail)}` : ''}</small></div><span>{log.actorName ?? '已删除账号'} · {formatTime(log.createdAt)}</span></article>)}
         </div>{auditCursor && <button className="employee-data__secondary platform-management__audit-more" type="button" disabled={auditLoading} onClick={() => void loadAuditLogs(auditCursor, true)}>{auditLoading ? <LoaderCircle className="spin" size={15} /> : '加载更多记录'}</button>}</>)}
       </section>}

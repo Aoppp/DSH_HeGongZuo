@@ -2,6 +2,7 @@
 import { KeyRound, LoaderCircle, Pencil, Plus, Trash2, UserCog, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { AuthenticatedUser } from '../../../app/types'
+import { SkeletonTable } from '../../../components/Skeleton'
 import {
   createAccount,
   deleteAccount,
@@ -240,7 +241,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
             })}
           </tbody>
         </table>
-        {loading && <div className="account-admin__empty">正在加载账号…</div>}
+        {loading && <SkeletonTable columns={7} rows={6} header={false} />}
       </div>
 
       {permissionPreview && <div className={`account-admin__permission-tooltip${permissionPreview.above ? ' account-admin__permission-tooltip--above' : ''}`} role="tooltip" style={{ left: permissionPreview.left, top: permissionPreview.top }}><strong>{permissionPreview.accountName}的权限</strong><div>{permissionPreview.labels.map((label) => <span key={label}>{label}</span>)}</div></div>}

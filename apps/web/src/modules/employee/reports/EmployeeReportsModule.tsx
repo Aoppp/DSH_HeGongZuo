@@ -2,6 +2,7 @@ import { ExternalLink, LoaderCircle, Paperclip, RefreshCw, Search, X } from 'luc
 import { useState, type FormEvent } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
+import { SkeletonDetail, SkeletonTable } from '../../../components/Skeleton'
 import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
@@ -123,12 +124,12 @@ export function EmployeeReportsModule(_props: ModuleProps) {
     <section className="daily-reports__panel">
       <div className="daily-reports__table-wrap"><table><thead><tr><th>汇报日期</th><th>填写人</th><th>所在部门</th><th>今日工作总结</th><th>明日工作计划</th><th>提交时间</th><th aria-label="操作" /></tr></thead>
         <tbody>{!management.loading && !management.error && management.reports.map((report) => <tr key={report.record_id}><td><strong>{date(report.report_date)}</strong></td><td>{report.employee.name}{!report.employee.matched && <em className="daily-reports__unmatched">未关联</em>}</td><td>{department(report)}</td><td><p className="daily-reports__summary">{content(report.today_summary)}</p></td><td><p className="daily-reports__summary">{content(report.tomorrow_plan)}</p></td><td>{time(report.submit_time)}{delayed(report) && <em className="daily-reports__delayed">延后提交</em>}</td><td><button type="button" className="daily-reports__view" onClick={() => void management.openDetail(report.record_id)}>查看</button></td></tr>)}</tbody></table></div>
-      {management.loading && <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={21} />正在加载日报…</div>}
+      {management.loading && <SkeletonTable columns={7} rows={management.pageSize > 10 ? 8 : management.pageSize} header={false} />}
       {!management.loading && !management.error && management.loaded && management.reports.length === 0 && <div className="daily-reports__empty">{management.hasFilters ? '没有符合筛选条件的日报' : '暂无日报记录'}</div>}
     </section>
 
     {!management.loading && !management.error && management.total > 0 && <nav className="daily-reports__pagination" aria-label="日报分页"><span>共 {management.total} 条・第 {management.page} / {pages} 页</span><label>每页<select value={management.pageSize} onChange={(event) => management.setPageSize(Number(event.target.value))}><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option></select>条</label><div><button type="button" disabled={management.page <= 1} onClick={() => management.setPage((value) => value - 1)}>上一页</button><button type="button" disabled={management.page >= pages} onClick={() => management.setPage((value) => value + 1)}>下一页</button></div></nav>}
 
-    {management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : '正在读取'}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <div className="daily-reports__empty"><LoaderCircle className="daily-reports__spinner" size={21} />正在加载详情…</div> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}</>}
+    {management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : ''}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <SkeletonDetail /> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}</>}
   </div>
 }

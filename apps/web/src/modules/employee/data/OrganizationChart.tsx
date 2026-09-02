@@ -2,6 +2,7 @@
 import { ArrowLeft, ChevronDown, ChevronRight, Download } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { Skeleton, SkeletonCards } from '../../../components/Skeleton'
 import { readEmployeesForExport, type EmployeeRecord } from './employee-data'
 import { buildOrganizationChart, exportOrganizationChartToPdf, type OrganizationDepartment, type OrganizationUnit } from './organization-chart'
 import './organization-chart.css'
@@ -63,7 +64,7 @@ export function OrganizationChart({ onBack }: OrganizationChartProps) {
         <div><button className="employee-data__secondary" type="button" onClick={onBack}><ArrowLeft size={15} /> 返回员工信息</button><button className="employee-data__primary" type="button" onClick={() => exportOrganizationChartToPdf(departments)}><Download size={15} /> 导出 PDF</button></div>
       </header>
       <div className="organization-chart__canvas" aria-label="组织架构图">
-        {loading ? <p className="organization-chart__empty">正在加载组织架构…</p> : error ? <div className="organization-chart__empty"><p>{error}</p><button className="employee-data__secondary" type="button" onClick={() => void loadOrganization()}>重新加载</button></div> : departments.length > 0 ? <div className="organization-chart__tree"><article className="organization-chart__root"><strong>组织架构</strong><span>{departments.length} 个部门 · {employeeCount} 名员工</span></article><ul className="organization-chart__children organization-chart__children--root">{departments.map((department) => <DepartmentBranch key={department.name} department={department} />)}</ul></div> : <p className="organization-chart__empty">暂无在职员工组织信息。</p>}
+        {loading ? <div className="skeleton-page" role="status" aria-label="正在加载组织架构"><Skeleton height={62} width={220} /><SkeletonCards count={4} /></div> : error ? <div className="organization-chart__empty"><p>{error}</p><button className="employee-data__secondary" type="button" onClick={() => void loadOrganization()}>重新加载</button></div> : departments.length > 0 ? <div className="organization-chart__tree"><article className="organization-chart__root"><strong>组织架构</strong><span>{departments.length} 个部门 · {employeeCount} 名员工</span></article><ul className="organization-chart__children organization-chart__children--root">{departments.map((department) => <DepartmentBranch key={department.name} department={department} />)}</ul></div> : <p className="organization-chart__empty">暂无在职员工组织信息。</p>}
       </div>
     </section>
   )
