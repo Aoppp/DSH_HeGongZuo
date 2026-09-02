@@ -6,6 +6,7 @@ import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
 import { CalendarView, DashboardView, EmployeeArchiveView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
+import { shanghaiCalendarDate, shiftCalendarDate } from './report-dates'
 import './daily-reports.css'
 
 function date(value: string): string {
@@ -75,9 +76,9 @@ function DetailContent({ report }: { readonly report: DailyReport }) {
 export function EmployeeReportsModule(_props: ModuleProps) {
   const management = useDailyReports()
   const sync = useDailyReportSync(management.retry)
-  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+  const today = shanghaiCalendarDate()
   const [view, setView] = useState<AnalyticsView | 'list'>('dashboard')
-  const [reportDate, setReportDate] = useState(today)
+  const [reportDate, setReportDate] = useState(() => shiftCalendarDate(today, -1))
   const [month, setMonth] = useState(today.slice(0, 7))
   const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`)
   const [endDate, setEndDate] = useState(today)
@@ -99,7 +100,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
     <nav className="report-tabs" aria-label="日报功能">{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => setView(item.id)}>{item.label}</button>)}</nav>
 
     {['dashboard','calendar','quality'].includes(view) && <div className="report-scope">
-      {view === 'dashboard' && <label>统计日期<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} /></label>}
+      {view === 'dashboard' && <><label>统计日期<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} /></label><div className="report-scope__presets"><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, -1))}>前一天</button><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, 1))}>下一天</button></div></>}
       {view === 'calendar' && <label>月份<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
       {view === 'quality' && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
     </div>}

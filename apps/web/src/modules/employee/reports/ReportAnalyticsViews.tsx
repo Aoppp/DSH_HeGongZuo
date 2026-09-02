@@ -1,4 +1,4 @@
-import { Download, LoaderCircle, X } from 'lucide-react'
+import { Download, LoaderCircle, Search, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 import { readDailyReports, type DailyReport } from './daily-reports-api'
@@ -39,7 +39,7 @@ export function CalendarView({ month, onSelectDate, revision }: { readonly month
 }
 
 export function EmployeeArchiveView({ revision }: { readonly revision: number }) {
-  const [profiles, setProfiles] = useState<readonly EmployeeReportProfile[] | null>(null), [error, setError] = useState(''), [selected, setSelected] = useState<EmployeeReportProfile | null>(null), [history, setHistory] = useState<readonly DailyReport[]>([]), [historyLoading, setHistoryLoading] = useState(false)
+  const [profiles, setProfiles] = useState<readonly EmployeeReportProfile[] | null>(null), [error, setError] = useState(''), [query, setQuery] = useState(''), [selected, setSelected] = useState<EmployeeReportProfile | null>(null), [history, setHistory] = useState<readonly DailyReport[]>([]), [historyLoading, setHistoryLoading] = useState(false)
   useEffect(() => { setProfiles(null); setError(''); void readEmployeeReportProfiles().then(setProfiles).catch((reason) => setError(reason instanceof Error ? reason.message : '员工日报档案读取失败。')) }, [revision])
   async function open(profile: EmployeeReportProfile) {
     setSelected(profile); setHistoryLoading(true); setHistory([])
@@ -51,8 +51,12 @@ export function EmployeeArchiveView({ revision }: { readonly revision: number })
       setHistory(reports)
     } finally { setHistoryLoading(false) }
   }
+  const visibleProfiles = useMemo(() => {
+    const keyword = query.trim().toLocaleLowerCase('zh-CN')
+    return keyword ? profiles?.filter((profile) => profile.name.toLocaleLowerCase('zh-CN').includes(keyword)) ?? [] : profiles ?? []
+  }, [profiles, query])
   if (error) return <ErrorState message={error} />; if (!profiles) return <Loading />
-  return <><section className="report-card"><header><h2>员工日报档案</h2><span>全部历史日报</span></header><div className="report-profile-grid">{profiles.map((profile) => <button key={profile.id} onClick={() => void open(profile)}><div><strong>{profile.name}</strong><span>{profile.department}{profile.departmentLevel2 ? ` / ${profile.departmentLevel2}` : ''}</span></div><dl><div><dt>提交天数</dt><dd>{profile.submittedDays}</dd></div><div><dt>连续提交</dt><dd>{profile.currentStreak} 天</dd></div><div><dt>延后</dt><dd>{profile.delayedCount} 次</dd></div></dl></button>)}</div></section>{selected && <div className="report-dialog" role="dialog" aria-modal="true"><button className="report-dialog__backdrop" onClick={() => setSelected(null)} aria-label="关闭" /><section className="report-dialog__wide"><header><div><strong>{selected.name}的日报档案</strong><span>全部历史日报</span></div><button onClick={() => setSelected(null)} aria-label="关闭"><X size={18} /></button></header><main><h3>常用工作内容</h3>{selected.commonWork.length ? <ul>{selected.commonWork.map((text) => <li key={text}>{text}</li>)}</ul> : <p>暂无可归纳内容</p>}<h3>历史日报</h3>{historyLoading ? <Loading /> : <div className="report-history">{history.map((report) => <article key={report.record_id}><strong>{report.report_date}</strong><p>{report.today_summary || '未填写工作总结'}</p><span>{new Date(report.submit_time).toLocaleString('zh-CN')}</span></article>)}</div>}</main></section></div>}</>
+  return <><section className="report-card"><header><div><h2>员工日报档案</h2><span>全部历史日报</span></div><label className="report-profile-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="按姓名搜索" /></label></header>{visibleProfiles.length ? <div className="report-profile-grid">{visibleProfiles.map((profile) => <button key={profile.id} onClick={() => void open(profile)}><div><strong>{profile.name}</strong><span>{profile.department}{profile.departmentLevel2 ? ` / ${profile.departmentLevel2}` : ''}</span></div><dl><div><dt>提交天数</dt><dd>{profile.submittedDays}</dd></div><div><dt>连续提交</dt><dd>{profile.currentStreak} 天</dd></div><div><dt>延后</dt><dd>{profile.delayedCount} 次</dd></div></dl></button>)}</div> : <div className="daily-reports__empty">没有找到匹配的员工</div>}</section>{selected && <div className="report-dialog" role="dialog" aria-modal="true"><button className="report-dialog__backdrop" onClick={() => setSelected(null)} aria-label="关闭" /><section className="report-dialog__wide"><header><div><strong>{selected.name}的日报档案</strong><span>全部历史日报</span></div><button onClick={() => setSelected(null)} aria-label="关闭"><X size={18} /></button></header><main><h3>常用工作内容</h3>{selected.commonWork.length ? <ul>{selected.commonWork.map((text) => <li key={text}>{text}</li>)}</ul> : <p>暂无可归纳内容</p>}<h3>历史日报</h3>{historyLoading ? <Loading /> : <div className="report-history">{history.map((report) => <article key={report.record_id}><strong>{report.report_date}</strong><p>{report.today_summary || '未填写工作总结'}</p><span>{new Date(report.submit_time).toLocaleString('zh-CN')}</span></article>)}</div>}</main></section></div>}</>
 }
 
 const qualityNames: Record<QualityFinding['type'], string> = { duplicate: '重复日报', future_report_date: '日期异常', missing_identity: '人员或部门缺失', empty_content: '内容为空', unmatched_employee: '档案未关联' }
