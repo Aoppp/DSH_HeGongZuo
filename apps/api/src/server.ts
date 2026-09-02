@@ -122,11 +122,6 @@ function accountResetPasswordId(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
-function accountStatusId(pathname: string): string | null {
-  const match = pathname.match(/^\/api\/accounts\/([^/]+)\/status$/)
-  return match?.[1] ? decodeURIComponent(match[1]) : null
-}
-
 function accountRetryId(pathname: string): string | null {
   const match = pathname.match(/^\/api\/accounts\/([^/]+)\/retry-initialization$/)
   return match?.[1] ? decodeURIComponent(match[1]) : null
@@ -447,20 +442,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (!await accounts.resetPassword(resetPasswordId)) throw new HttpError(404, '账号不存在。')
     await platformManagement.record(currentUser.id, currentUser.displayName, '重置账号密码', '账号', resetPasswordId)
     sendJson(response, 200, { ok: true })
-    return
-  }
-
-  const statusId = accountStatusId(url.pathname)
-  if (statusId && request.method === 'POST') {
-    requirePlatformAdministration(currentUser)
-    if (statusId === currentUser.id) throw new HttpError(400, '不能停用自己的账号。')
-    const body = await readJson(request)
-    const record = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>
-    const status = typeof record.status === 'string' ? record.status : ''
-    const updated = await accounts.setStatus(statusId, status)
-    if (!updated) throw new HttpError(404, '账号不存在。')
-    await platformManagement.record(currentUser.id, currentUser.displayName, status === 'disabled' ? '停用账号' : '启用账号', '账号', updated.id, { displayName: updated.displayName })
-    sendJson(response, 200, { account: updated })
     return
   }
 

@@ -9,7 +9,6 @@ import {
   readPermissionCatalog,
   resetAccountPassword,
   retryAccountInitialization,
-  setAccountStatus,
   updateAccount,
   type AccountRecord,
   type AccountPermissionId,
@@ -147,19 +146,6 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
     }
   }
 
-  async function toggleStatus(account: AccountRecord) {
-    const nextStatus = account.status === 'active' ? 'disabled' : 'active'
-    const label = nextStatus === 'disabled' ? '停用' : '启用'
-    if (nextStatus === 'disabled' && !window.confirm(`确认停用账号「${account.displayName}」吗？停用后该账号无法登录。`)) return
-    try {
-      const updated = await setAccountStatus(account.id, nextStatus)
-      setAccounts((current) => current.map((item) => item.id === updated.id ? updated : item))
-    } catch (statusError) {
-      setError(statusError instanceof Error ? statusError.message : String(statusError))
-      if (label === '启用') void loadAccounts()
-    }
-  }
-
   async function retryInitialization(account: AccountRecord) {
     try {
       const updated = await retryAccountInitialization(account.id)
@@ -220,7 +206,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           <span><UserCog size={19} /></span>
           <div>
             <h2>账号管理</h2>
-            <p>新增、停用、重置密码与分配账号功能权限。</p>
+            <p>新增、编辑、删除账号与分配功能权限。</p>
           </div>
         </div>
         <button className="employee-data__primary" type="button" onClick={openCreate}><Plus size={16} /> 新增账号</button>
@@ -246,8 +232,6 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                 <td>
                   <div className="account-admin__row-actions">
                     <button type="button" title="编辑账号" onClick={() => openEdit(account)}><Pencil size={14} /></button>
-                    <button type="button" title="重置为默认密码" onClick={() => void resetPassword(account)}><KeyRound size={14} /></button>
-                    <button type="button" title={account.status === 'active' ? '停用账号' : '启用账号'} onClick={() => void toggleStatus(account)} disabled={account.id === user.id}>{account.status === 'active' ? '停用' : '启用'}</button>
                     {account.status === 'initialization_failed' && <button type="button" title="重新初始化" onClick={() => void retryInitialization(account)}>重试初始化</button>}
                     <button type="button" className="developer-console__danger-action" title="删除账号" onClick={() => void removeAccount(account)} disabled={account.id === user.id}><Trash2 size={14} />删除</button>
                   </div>
@@ -277,6 +261,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                   <label>账号名<input value={draft.accountId} onChange={(event) => setDraft({ ...draft, accountId: event.target.value })} placeholder="姓名拼音，如：zhangsan" /></label>
                   <label>职位<input value={draft.position} onChange={(event) => setDraft({ ...draft, position: event.target.value })} placeholder="如：研发工程师、财务经理" /></label>
                 </div>
+                {editorMode === 'edit' && draft.id && <div className="account-admin__reset-password"><div><strong>登录密码</strong><span>将该账号恢复为系统默认密码</span></div><button type="button" onClick={() => { const account = accounts.find((item) => item.id === draft.id); if (account) void resetPassword(account) }}><KeyRound size={14} />重置密码</button></div>}
               </div>
               <div className="account-admin__form-section">
                 <div className="account-admin__form-heading"><strong>功能权限</strong><span>开通后显示对应管理入口</span></div>

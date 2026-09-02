@@ -114,13 +114,6 @@ export async function resetAccountPassword(id: string): Promise<void> {
   })
 }
 
-export async function setAccountStatus(id: string, status: AccountStatus): Promise<AccountRecord> {
-  return (await accountsRequest<AccountResponse>(`/api/accounts/${encodeURIComponent(id)}/status`, {
-    method: 'POST',
-    body: JSON.stringify({ status }),
-  })).account
-}
-
 export async function retryAccountInitialization(id: string): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>(`/api/accounts/${encodeURIComponent(id)}/retry-initialization`, { method: 'POST' })).account
 }

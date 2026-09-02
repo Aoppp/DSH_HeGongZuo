@@ -751,6 +751,9 @@
 
 .account-admin__form-heading strong { font-size: 13px; }
 .account-admin__form-heading span { color: var(--ink-400); font-size: 11px; }
+.account-admin__reset-password { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--line); border-radius: 9px; padding: 12px; background: #f8fbfa; }
+.account-admin__reset-password > div { display: grid; gap: 3px; }.account-admin__reset-password strong { color: var(--ink-700); font-size: 12px; }.account-admin__reset-password span { color: var(--ink-400); font-size: 11px; }
+.account-admin__reset-password button { display: inline-flex; min-height: 32px; align-items: center; gap: 5px; flex: 0 0 auto; border: 1px solid var(--line); border-radius: 7px; padding: 0 10px; color: var(--ink-600); background: #fff; font-size: 11px; cursor: pointer; }.account-admin__reset-password button:hover { border-color: var(--jade-700); color: var(--jade-700); background: var(--jade-100); }
 
 @media (max-width: 720px) {
   .account-admin__header {
@@ -762,6 +765,9 @@
     width: 100%;
     justify-content: center;
   }
+
+  .account-admin__reset-password { align-items: stretch; flex-direction: column; }
+  .account-admin__reset-password button { justify-content: center; }
 }
 .platform-management__credential { display: grid; gap: 12px; padding: 16px; }
 .platform-management__credential small,.platform-management__credential span { color: var(--ink-500); font-size: 12px; }
