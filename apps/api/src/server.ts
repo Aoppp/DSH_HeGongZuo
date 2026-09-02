@@ -94,6 +94,11 @@ function departureEmployeeId(pathname: string): string | null {
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
+function employeeReportHistoryId(pathname: string): string | null {
+  const match = pathname.match(/^\/api\/employees\/([^/]+)\/daily-reports$/)
+  return match?.[1] ? decodeURIComponent(match[1]) : null
+}
+
 function departureInput(value: unknown): { departureDate: string; departureReason: string } {
   if (!value || typeof value !== 'object') throw new HttpError(400, '请填写离职信息。')
   const record = value as Record<string, unknown>
@@ -485,6 +490,16 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePermission(currentUser, 'employee-reports')
     await platformManagement.assertModuleEnabled('employee-reports')
     sendJson(response, 200, await dailyReports.list(url.searchParams))
+    return
+  }
+
+  const historyEmployeeId = employeeReportHistoryId(url.pathname)
+  if (historyEmployeeId && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
+    const history = await dailyReports.employeeHistory(historyEmployeeId, url.searchParams)
+    if (!history) throw new HttpError(404, '员工不存在。')
+    sendJson(response, 200, history)
     return
   }
 

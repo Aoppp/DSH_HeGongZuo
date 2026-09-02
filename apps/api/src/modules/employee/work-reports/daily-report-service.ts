@@ -1,10 +1,11 @@
 import { isCalendarDate } from '../work-records/work-records-source.js'
 
-import type { DailyReport, DailyReportFilters, DailyReportPage } from './daily-report-repository.js'
+import type { DailyReport, DailyReportFilters, DailyReportPage, EmployeeReportHistoryPage } from './daily-report-repository.js'
 
 export interface DailyReportStore {
   list(filters: DailyReportFilters): Promise<DailyReportPage>
   get(recordId: string): Promise<DailyReport | null>
+  employeeHistory(employeeId: string, page: number, pageSize: number): Promise<EmployeeReportHistoryPage | null>
 }
 
 export class DailyReportValidationError extends Error {}
@@ -57,5 +58,15 @@ export class DailyReportService {
     const id = recordId.trim()
     if (!id || id.length > 160) throw new DailyReportValidationError('日报编号无效。')
     return this.store.get(id)
+  }
+
+  employeeHistory(employeeId: string, parameters: URLSearchParams): Promise<EmployeeReportHistoryPage | null> {
+    const id = employeeId.trim()
+    if (!id || id.length > 80) throw new DailyReportValidationError('员工编号无效。')
+    return this.store.employeeHistory(
+      id,
+      positiveInteger(parameters, 'page', 1, 1_000_000),
+      positiveInteger(parameters, 'pageSize', 20, 50),
+    )
   }
 }

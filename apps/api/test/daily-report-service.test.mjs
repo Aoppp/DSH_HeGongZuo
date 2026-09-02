@@ -87,8 +87,39 @@ test('日报详情通过服务查询并校验编号', async () => {
   const service = new DailyReportService({
     list: async () => ({ reports: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }),
     get: async (id) => { received = id; return expected },
+    employeeHistory: async () => null,
   })
   assert.equal(await service.get(' record-001 '), expected)
   assert.equal(received, 'record-001')
   assert.throws(() => service.get(' '), /日报编号/)
+})
+
+test('员工历史日报限制分页大小', async () => {
+  let received
+  const service = new DailyReportService({
+    list: async () => ({ reports: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }),
+    get: async () => null,
+    employeeHistory: async (employeeId, page, pageSize) => {
+      received = { employeeId, page, pageSize }
+      return { reports: [], linked: true, total: 0, page, pageSize, totalPages: 0 }
+    },
+  })
+  await service.employeeHistory(' EMP-0001 ', parameters({ page: '2', pageSize: '20' }))
+  assert.deepEqual(received, { employeeId: 'EMP-0001', page: 2, pageSize: 20 })
+  assert.throws(() => service.employeeHistory('EMP-0001', parameters({ pageSize: '51' })), /pageSize/)
+})
+
+test('员工历史日报只返回日期和工作内容', async () => {
+  let calls = 0
+  const pool = {
+    query: async () => {
+      calls += 1
+      if (calls === 1) return { rows: [{ wecom_user_id: 'wecom-001' }] }
+      if (calls === 2) return { rows: [{ total: '1' }] }
+      return { rows: [{ record_id: 'report-1', report_date: '2026-09-02', today_summary: '  完成数据整理  ' }] }
+    },
+  }
+  const history = await new DailyReportRepository(pool).employeeHistory('EMP-0001', 1, 20)
+  assert.deepEqual(history.reports, [{ id: 'report-1', date: '2026-09-02', content: '完成数据整理' }])
+  assert.equal(history.linked, true)
 })

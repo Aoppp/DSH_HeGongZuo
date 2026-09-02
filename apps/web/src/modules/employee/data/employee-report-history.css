@@ -1,0 +1,16 @@
+.employee-report-history { margin-top: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 15px 16px; background: #fff; }
+.employee-report-history h3 { margin: 0 0 11px; color: var(--ink-700); font-size: 12px; }
+.employee-report-history__list { display: grid; gap: 10px; }
+.employee-report-history__list article { display: grid; grid-template-columns: 92px minmax(0,1fr); gap: 13px; border-bottom: 1px solid var(--line); padding: 0 0 10px; }
+.employee-report-history__list article:last-child { border-bottom: 0; padding-bottom: 0; }
+.employee-report-history time { color: var(--ink-500); font-size: 12px; font-weight: 700; }
+.employee-report-history p { margin: 0; color: var(--ink-800); font-size: 12px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.employee-report-history__state { display: flex; min-height: 70px; align-items: center; justify-content: center; gap: 7px; color: var(--ink-400); font-size: 12px; }
+.employee-report-history__state.is-error { color: #b42318; }
+.employee-report-history__spinner { animation: employee-report-history-spin .8s linear infinite; }
+.employee-report-history nav { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; color: var(--ink-400); font-size: 12px; }
+.employee-report-history nav div { display: flex; gap: 7px; }
+.employee-report-history nav button { min-height: 30px; border: 1px solid var(--line); border-radius: 7px; padding: 0 10px; color: var(--ink-600); background: #fff; font-size: 12px; }
+.employee-report-history nav button:disabled { opacity: .45; }
+@keyframes employee-report-history-spin { to { transform: rotate(360deg); } }
+@media(max-width:520px){.employee-report-history__list article{grid-template-columns:1fr;gap:5px;}}

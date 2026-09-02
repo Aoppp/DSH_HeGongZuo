@@ -45,6 +45,21 @@ export interface DailyReportPage {
   readonly totalPages: number
 }
 
+export interface EmployeeReportHistoryItem {
+  readonly id: string
+  readonly date: string
+  readonly content: string
+}
+
+export interface EmployeeReportHistoryPage {
+  readonly reports: readonly EmployeeReportHistoryItem[]
+  readonly linked: boolean
+  readonly total: number
+  readonly page: number
+  readonly pageSize: number
+  readonly totalPages: number
+}
+
 interface DailyReportRow {
   readonly record_id: string
   readonly author_user_id: string | null
@@ -169,5 +184,34 @@ export class DailyReportRepository {
     const result = await this.pool.query<DailyReportRow>(`SELECT ${selectedColumns}
       FROM ${joinedReports} WHERE report.record_id = $1`, [recordId])
     return result.rows[0] ? mapRow(result.rows[0]) : null
+  }
+
+  async employeeHistory(employeeId: string, page: number, pageSize: number): Promise<EmployeeReportHistoryPage | null> {
+    const employee = await this.pool.query<{ wecom_user_id: string | null }>(
+      `SELECT wecom_user_id FROM employees WHERE id = $1`, [employeeId],
+    )
+    if (!employee.rows[0]) return null
+    const userId = employee.rows[0].wecom_user_id?.trim() || null
+    if (!userId) return { reports: [], linked: false, total: 0, page, pageSize, totalPages: 0 }
+    const count = await this.pool.query<{ total: string }>(
+      `SELECT count(*)::text AS total FROM employee_work_daily_reports WHERE author_user_id = $1`, [userId],
+    )
+    const total = Number(count.rows[0]?.total ?? 0)
+    const rows = await this.pool.query<{ record_id: string; report_date: string | Date; today_summary: string | null }>(
+      `SELECT record_id, report_date::text AS report_date, today_summary
+       FROM employee_work_daily_reports
+       WHERE author_user_id = $1
+       ORDER BY report_date DESC, submitted_at DESC, record_id
+       LIMIT $2 OFFSET $3`,
+      [userId, pageSize, (page - 1) * pageSize],
+    )
+    return {
+      reports: rows.rows.map((report) => ({ id: report.record_id, date: calendarDate(report.report_date), content: report.today_summary?.trim() || '未填写工作内容' })),
+      linked: true,
+      total,
+      page,
+      pageSize,
+      totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
+    }
   }
 }
