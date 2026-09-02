@@ -38,7 +38,6 @@ export interface EmployeeReportProfile {
   readonly submittedDays: number
   readonly delayedCount: number
   readonly currentStreak: number
-  readonly commonWork: readonly string[]
 }
 
 export interface QualityFinding {
@@ -146,12 +145,11 @@ export class DailyReportAnalyticsRepository {
   async employeeProfiles(): Promise<readonly EmployeeReportProfile[]> {
     const result = await this.pool.query<{
       id: string; display_name: string; department_name: string; department_level2: string | null
-      submitted_days: string; delayed_count: string; report_dates: unknown; work_items: unknown
+      submitted_days: string; delayed_count: string; report_dates: unknown
     }>(`SELECT employee.id, employee.display_name, employee.department_name, employee.department_level2,
         count(DISTINCT report.report_date)::text AS submitted_days,
         count(DISTINCT report.report_date) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > report.report_date)::text AS delayed_count,
-        coalesce(jsonb_agg(DISTINCT report.report_date::text) FILTER (WHERE report.report_date IS NOT NULL), '[]'::jsonb) AS report_dates,
-        coalesce(jsonb_agg(report.today_summary) FILTER (WHERE nullif(btrim(report.today_summary), '') IS NOT NULL), '[]'::jsonb) AS work_items
+        coalesce(jsonb_agg(DISTINCT report.report_date::text) FILTER (WHERE report.report_date IS NOT NULL), '[]'::jsonb) AS report_dates
       FROM employees AS employee
       LEFT JOIN employee_work_daily_reports AS report ON report.author_user_id = employee.wecom_user_id
       GROUP BY employee.id ORDER BY employee.display_name`)
@@ -166,15 +164,9 @@ export class DailyReportAnalyticsRepository {
           do { cursor.setUTCDate(cursor.getUTCDate() - 1) } while (cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6)
         }
       }
-      const counts = new Map<string, number>()
-      for (const text of Array.isArray(row.work_items) ? row.work_items as unknown[] : []) {
-        if (typeof text !== 'string') continue
-        for (const line of text.split(/\n|；|;/).map((item) => item.trim()).filter((item) => item.length >= 4)) counts.set(line, (counts.get(line) ?? 0) + 1)
-      }
       return {
         id: row.id, name: row.display_name, department: row.department_name, departmentLevel2: row.department_level2,
         submittedDays: Number(row.submitted_days), delayedCount: Number(row.delayed_count), currentStreak: streak,
-        commonWork: [...counts].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([text]) => text),
       }
     })
   }

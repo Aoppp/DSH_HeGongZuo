@@ -10,7 +10,7 @@ export interface SubmissionDashboard {
   readonly departments: readonly { name: string; expected: number; submitted: number; missing: number; delayed: number }[]
 }
 export interface CalendarDay { readonly date: string; readonly expected: number; readonly submitted: number; readonly missing: number; readonly delayed: number; readonly status: 'complete' | 'delayed' | 'missing' | 'empty' }
-export interface EmployeeReportProfile { readonly id: string; readonly name: string; readonly department: string; readonly departmentLevel2: string | null; readonly submittedDays: number; readonly delayedCount: number; readonly currentStreak: number; readonly commonWork: readonly string[] }
+export interface EmployeeReportProfile { readonly id: string; readonly name: string; readonly department: string; readonly departmentLevel2: string | null; readonly submittedDays: number; readonly delayedCount: number; readonly currentStreak: number }
 export interface QualityFinding { readonly type: 'duplicate' | 'future_report_date' | 'missing_identity' | 'empty_content' | 'unmatched_employee'; readonly recordId: string; readonly date: string; readonly employee: string; readonly department: string | null; readonly detail: string }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
