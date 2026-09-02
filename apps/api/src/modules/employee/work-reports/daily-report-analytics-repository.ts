@@ -143,7 +143,7 @@ export class DailyReportAnalyticsRepository {
     })
   }
 
-  async employeeProfiles(startDate: string, endDate: string): Promise<readonly EmployeeReportProfile[]> {
+  async employeeProfiles(): Promise<readonly EmployeeReportProfile[]> {
     const result = await this.pool.query<{
       id: string; display_name: string; department_name: string; department_level2: string | null
       submitted_days: string; delayed_count: string; report_dates: unknown; work_items: unknown
@@ -154,9 +154,7 @@ export class DailyReportAnalyticsRepository {
         coalesce(jsonb_agg(report.today_summary) FILTER (WHERE nullif(btrim(report.today_summary), '') IS NOT NULL), '[]'::jsonb) AS work_items
       FROM employees AS employee
       LEFT JOIN employee_work_daily_reports AS report ON report.author_user_id = employee.wecom_user_id
-        AND report.report_date BETWEEN $1::date AND $2::date
-      WHERE employee.departure_date IS NULL OR employee.departure_date >= $1::date
-      GROUP BY employee.id ORDER BY employee.display_name`, [startDate, endDate])
+      GROUP BY employee.id ORDER BY employee.display_name`)
     return result.rows.map((row) => {
       const dates = Array.isArray(row.report_dates) ? (row.report_dates as string[]).sort().reverse() : []
       const submitted = new Set(dates)

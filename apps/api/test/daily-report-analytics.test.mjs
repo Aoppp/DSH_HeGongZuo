@@ -28,9 +28,10 @@ test('日历以未提交优先，其次标记延后和全部提交', async () =>
 })
 
 test('统计服务校验视图所需日期与月份参数', async () => {
-  const repository = { dashboard: async (date) => ({ date }), calendar: async (month) => ({ month }) }
+  const repository = { dashboard: async (date) => ({ date }), calendar: async (month) => ({ month }), employeeProfiles: async () => ['all'] }
   const service = new DailyReportAnalyticsService(repository)
   assert.deepEqual(await service.read(new URLSearchParams({ view: 'dashboard', date: '2026-09-01' })), { date: '2026-09-01' })
   assert.deepEqual(await service.read(new URLSearchParams({ view: 'calendar', month: '2026-09' })), { month: '2026-09' })
+  assert.deepEqual(await service.read(new URLSearchParams({ view: 'employees' })), ['all'])
   await assert.rejects(() => service.read(new URLSearchParams({ view: 'calendar', month: '2026-13' })), /month/)
 })

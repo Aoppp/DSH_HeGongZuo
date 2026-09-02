@@ -27,5 +27,5 @@ function query(view: string, parameters: Record<string, string>): Promise<unknow
 
 export const readSubmissionDashboard = (date: string) => query('dashboard', { date }) as Promise<SubmissionDashboard>
 export const readReportCalendar = (month: string) => query('calendar', { month }) as Promise<readonly CalendarDay[]>
-export const readEmployeeReportProfiles = (startDate: string, endDate: string) => query('employees', { startDate, endDate }) as Promise<readonly EmployeeReportProfile[]>
+export const readEmployeeReportProfiles = () => query('employees', {}) as Promise<readonly EmployeeReportProfile[]>
 export const readReportQuality = (startDate: string, endDate: string) => query('quality', { startDate, endDate }) as Promise<readonly QualityFinding[]>
