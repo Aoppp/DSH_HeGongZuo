@@ -47,7 +47,16 @@ test('员工日报档案按排班计算延后天数和未交天数', async () =>
   assert.deepEqual(profile, { id: 'EMP-0001', name: '张三', department: '研发部', departmentLevel2: null, submittedDays: 12, delayedDays: 2, missingDays: 3 })
   assert.match(statement, /employee_wecom_schedules/)
   assert.match(statement, /schedule\.schedule_date >= DATE '2026-08-08'/)
-  assert.match(statement, /scheduled_report\.report_date = schedule\.schedule_date/)
+  assert.match(statement, /LEAST\(scheduled_report\.report_date/)
+  assert.match(statement, /employee_daily_report_individual_scope/)
+})
+
+test('异常的未来汇报日期按实际提交日期参与看板统计', async () => {
+  const statements = []
+  const pool = { query: async (sql) => { statements.push(sql); return { rows: [] } } }
+  await new DailyReportAnalyticsRepository(pool).dashboard('2026-08-14')
+  assert.match(statements[0], /LEAST\(report\.report_date/)
+  assert.match(statements[0], /employee_daily_report_individual_scope/)
 })
 
 test('统计服务校验视图所需日期、月份和员工范围参数', async () => {

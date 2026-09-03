@@ -1,5 +1,7 @@
 import type { Pool } from 'pg'
 
+import { effectiveReportDateSql } from './daily-report-date.js'
+
 export type SubmissionState = 'submitted' | 'missing' | 'delayed'
 
 export interface SubmissionEmployee {
@@ -81,10 +83,11 @@ export class DailyReportAnalyticsRepository {
   async dashboard(date: string): Promise<SubmissionDashboard> {
     const result = await this.pool.query<DashboardRow>(`WITH expected AS (${expectedEmployeesSql('$1')}), reports AS (
         SELECT employee.id, count(*)::text AS report_count,
-          bool_or((report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > report.report_date) AS delayed
+          bool_or((report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > ${effectiveReportDateSql()}) AS delayed
         FROM employee_work_daily_reports AS report
         JOIN employees AS employee ON employee.wecom_user_id = report.author_user_id
-        WHERE report.report_date = $1::date
+        WHERE ${effectiveReportDateSql()} = $1::date
+          AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
         GROUP BY employee.id
       )
       SELECT expected.*, coalesce(reports.report_count, '0') AS report_count, coalesce(reports.delayed, false) AS delayed
@@ -132,14 +135,16 @@ export class DailyReportAnalyticsRepository {
           AND (employee.departure_date IS NULL OR employee.departure_date >= days.date)
           AND employee.status <> 'on_leave'
           AND (employee.status <> 'inactive' OR employee.departure_date >= days.date)
+          AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
         GROUP BY days.date
       ), submitted AS (
-        SELECT report.report_date AS date, count(DISTINCT employee.id)::text AS submitted,
-          count(DISTINCT employee.id) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > report.report_date)::text AS delayed
+        SELECT ${effectiveReportDateSql()} AS date, count(DISTINCT employee.id)::text AS submitted,
+          count(DISTINCT employee.id) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > ${effectiveReportDateSql()})::text AS delayed
         FROM employee_work_daily_reports AS report
         JOIN employees AS employee ON employee.wecom_user_id = report.author_user_id
-        WHERE report.report_date >= $1::date AND report.report_date < $1::date + interval '1 month'
-        GROUP BY report.report_date
+        WHERE ${effectiveReportDateSql()} >= $1::date AND ${effectiveReportDateSql()} < $1::date + interval '1 month'
+          AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
+        GROUP BY ${effectiveReportDateSql()}
       )
       SELECT days.date::text AS date, expected.expected, coalesce(submitted.submitted, '0') AS submitted,
         coalesce(submitted.delayed, '0') AS delayed
@@ -156,8 +161,8 @@ export class DailyReportAnalyticsRepository {
       id: string; display_name: string; department_name: string; department_level2: string | null
       submitted_days: string; delayed_days: string; missing_days: string
     }>(`SELECT employee.id, employee.display_name, employee.department_name, employee.department_level2,
-        count(DISTINCT report.report_date)::text AS submitted_days,
-        count(DISTINCT report.report_date) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > report.report_date)::text AS delayed_days,
+        count(DISTINCT ${effectiveReportDateSql()})::text AS submitted_days,
+        count(DISTINCT ${effectiveReportDateSql()}) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > ${effectiveReportDateSql()})::text AS delayed_days,
         (SELECT count(*)::text FROM employee_wecom_schedules AS schedule
           WHERE schedule.employee_id = employee.id AND schedule.schedule_id <> '0'
             AND schedule.schedule_date >= DATE '2026-08-08'
@@ -165,12 +170,13 @@ export class DailyReportAnalyticsRepository {
             AND schedule.schedule_date <= coalesce(employee.departure_date, schedule.schedule_date)
             AND schedule.schedule_date < (now() AT TIME ZONE 'Asia/Shanghai')::date
             AND NOT EXISTS (SELECT 1 FROM employee_work_daily_reports AS scheduled_report
-              WHERE scheduled_report.author_user_id = employee.wecom_user_id AND scheduled_report.report_date = schedule.schedule_date)
+              WHERE scheduled_report.author_user_id = employee.wecom_user_id AND ${effectiveReportDateSql('scheduled_report')} = schedule.schedule_date)
             AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id = employee.id)
         ) AS missing_days
       FROM employees AS employee
       LEFT JOIN employee_work_daily_reports AS report ON report.author_user_id = employee.wecom_user_id
       WHERE ${scope === 'departed' ? "employee.status = 'inactive'" : "employee.status <> 'inactive'"}
+        AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
       GROUP BY employee.id ORDER BY employee.display_name`)
     return result.rows.map((row) => ({
       id: row.id, name: row.display_name, department: row.department_name, departmentLevel2: row.department_level2,

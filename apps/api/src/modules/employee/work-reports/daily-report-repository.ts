@@ -1,6 +1,7 @@
 import type { Pool } from 'pg'
 
 import type { WorkDailyAttachment } from './work-daily-record.js'
+import { effectiveReportDateSql } from './daily-report-date.js'
 
 export interface DailyReport {
   readonly record_id: string
@@ -84,7 +85,7 @@ const selectedColumns = `report.record_id, report.author_user_id, report.author_
   employee.department_name AS employee_department_name,
   employee.department_level2 AS employee_department_level2,
   report.department_id AS source_department_id, report.department_name AS source_department_name,
-  report.report_date::text AS report_date, report.submitted_at, report.today_summary,
+  ${effectiveReportDateSql()}::text AS report_date, report.submitted_at, report.today_summary,
   report.tomorrow_plan, report.other_items, report.attachments, report.wecom_updated_at`
 
 const joinedReports = `employee_work_daily_reports AS report
@@ -130,7 +131,8 @@ function mapRow(row: DailyReportRow): DailyReport {
 }
 
 function whereClause(filters: DailyReportFilters): { readonly sql: string; readonly values: unknown[] } {
-  const conditions: string[] = []
+  const conditions: string[] = [`NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual
+    WHERE individual.employee_id = employee.id OR lower(individual.display_name) = lower(report.author_name))`]
   const values: unknown[] = []
   const value = (item: unknown): string => {
     values.push(item)
@@ -147,8 +149,8 @@ function whereClause(filters: DailyReportFilters): { readonly sql: string; reado
     conditions.push(`(report.department_id = ${parameter} OR lower(report.department_name) = lower(${parameter})
       OR lower(employee.department_name) = lower(${parameter}) OR lower(employee.department_level2) = lower(${parameter}))`)
   }
-  if (filters.startDate) conditions.push(`report.report_date >= ${value(filters.startDate)}::date`)
-  if (filters.endDate) conditions.push(`report.report_date <= ${value(filters.endDate)}::date`)
+  if (filters.startDate) conditions.push(`${effectiveReportDateSql()} >= ${value(filters.startDate)}::date`)
+  if (filters.endDate) conditions.push(`${effectiveReportDateSql()} <= ${value(filters.endDate)}::date`)
   if (filters.keyword) {
     const parameter = value(`%${filters.keyword}%`)
     conditions.push(`(report.today_summary ILIKE ${parameter} OR report.tomorrow_plan ILIKE ${parameter} OR report.other_items ILIKE ${parameter})`)
@@ -169,7 +171,7 @@ export class DailyReportRepository {
     const values = [...query.values, filters.pageSize, (filters.page - 1) * filters.pageSize]
     const rows = await this.pool.query<DailyReportRow>(`SELECT ${selectedColumns}
       FROM ${joinedReports} ${query.sql}
-      ORDER BY report.report_date DESC, report.submitted_at DESC, report.record_id
+      ORDER BY ${effectiveReportDateSql()} DESC, report.submitted_at DESC, report.record_id
       LIMIT $${values.length - 1} OFFSET $${values.length}`, values)
     return {
       reports: rows.rows.map(mapRow),
@@ -198,10 +200,10 @@ export class DailyReportRepository {
     )
     const total = Number(count.rows[0]?.total ?? 0)
     const rows = await this.pool.query<{ record_id: string; report_date: string | Date; today_summary: string | null }>(
-      `SELECT record_id, report_date::text AS report_date, today_summary
+      `SELECT record_id, ${effectiveReportDateSql('employee_work_daily_reports')}::text AS report_date, today_summary
        FROM employee_work_daily_reports
        WHERE author_user_id = $1
-       ORDER BY report_date DESC, submitted_at DESC, record_id
+       ORDER BY ${effectiveReportDateSql('employee_work_daily_reports')} DESC, submitted_at DESC, record_id
        LIMIT $2 OFFSET $3`,
       [userId, pageSize, (page - 1) * pageSize],
     )
