@@ -120,6 +120,14 @@ interface EmployeeResponse {
   readonly employee: EmployeeRecord
 }
 
+export interface WeComDirectorySyncResult {
+  readonly directoryMembers: number
+  readonly candidates: number
+  readonly linked: number
+  readonly unmatched: number
+  readonly ambiguous: number
+}
+
 interface ErrorResponse {
   readonly error?: string
 }
@@ -169,6 +177,10 @@ export async function readEmployeeRecords(options: { readonly query: string; rea
 export async function readEmployeesForExport(options: { readonly query: string; readonly scope: 'employed' | 'departed'; readonly sort: string; readonly ascending: boolean }): Promise<EmployeeRecord[]> {
   const parameters = new URLSearchParams({ query: options.query, scope: options.scope, sort: options.sort, ascending: String(options.ascending) })
   return (await apiRequest<EmployeeListResponse>(`/api/employees/export?${parameters}`)).employees
+}
+
+export function synchronizeWeComDirectory(): Promise<WeComDirectorySyncResult> {
+  return apiRequest<WeComDirectorySyncResult>('/api/employee/wecom-directory/sync', { method: 'POST' })
 }
 
 export async function createEmployeeRecord(employee: EmployeeRecord, resume?: ResumeUploadPayload | null): Promise<EmployeeRecord> {

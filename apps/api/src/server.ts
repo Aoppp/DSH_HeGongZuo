@@ -21,6 +21,9 @@ import { ManagementCockpitService } from './modules/management/management-cockpi
 import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/mock-work-records-source.js'
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
 import { PostgresAttendanceSource } from './modules/employee/attendance/postgres-attendance-source.js'
+import { WeComCheckinClient } from './modules/employee/attendance/wecom-checkin-client.js'
+import { WeComDirectoryRepository } from './modules/employee/attendance/wecom-directory-repository.js'
+import { synchronizeWeComDirectory } from './modules/employee/attendance/wecom-directory-sync.js'
 import { DailyReportRepository } from './modules/employee/work-reports/daily-report-repository.js'
 import { DailyReportService, DailyReportValidationError } from './modules/employee/work-reports/daily-report-service.js'
 import { DailyReportAnalyticsRepository } from './modules/employee/work-reports/daily-report-analytics-repository.js'
@@ -42,6 +45,7 @@ const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
 const platformManagement = new PlatformManagementService(database)
 const employeeWorkRecords = new MockEmployeeWorkRecordsSource()
 const employeeAttendance = new PostgresAttendanceSource(database)
+const wecomDirectory = new WeComDirectoryRepository(database)
 const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
 const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
@@ -265,6 +269,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       const snapshot = await employeeWorkRecords.snapshot(date)
       sendJson(response, 200, { date: snapshot.date, source: snapshot.source, connectionStatus: snapshot.connectionStatus, generatedAt: snapshot.generatedAt, reports: snapshot.reports })
     }
+    return
+  }
+
+  if (url.pathname === '/api/employee/wecom-directory/sync' && request.method === 'POST') {
+    requirePermission(currentUser, 'employee-data')
+    await platformManagement.assertModuleEnabled('employee-data')
+    const result = await synchronizeWeComDirectory(wecomDirectory, new WeComCheckinClient())
+    await platformManagement.record(currentUser.id, currentUser.displayName, '同步企业微信通讯录关联', '员工', 'wecom-directory', { ...result })
+    sendJson(response, 200, result)
     return
   }
 

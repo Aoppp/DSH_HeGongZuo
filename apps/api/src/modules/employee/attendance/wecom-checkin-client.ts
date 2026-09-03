@@ -9,6 +9,12 @@ interface WeComApiResponse {
   readonly access_token?: string
   readonly expires_in?: number
   readonly checkindata?: unknown
+  readonly userlist?: unknown
+}
+
+export interface WeComDirectoryMember {
+  readonly userId: string
+  readonly name: string
 }
 
 export interface WeComCheckinClientOptions {
@@ -61,5 +67,21 @@ export class WeComCheckinClient {
     })
     if (!Array.isArray(body.checkindata)) throw new Error('企业微信打卡接口未返回 checkindata 数组。')
     return body.checkindata.filter((item): item is WeComCheckinValue => !!item && typeof item === 'object')
+  }
+
+  async directoryMembers(): Promise<readonly WeComDirectoryMember[]> {
+    const url = new URL('/cgi-bin/user/list', wecomApi)
+    url.searchParams.set('access_token', await this.accessToken())
+    url.searchParams.set('department_id', '1')
+    url.searchParams.set('fetch_child', '1')
+    const body = await this.response(url.toString())
+    if (!Array.isArray(body.userlist)) throw new Error('企业微信通讯录接口未返回 userlist 数组。')
+    return body.userlist.flatMap((value): readonly WeComDirectoryMember[] => {
+      if (!value || typeof value !== 'object') return []
+      const member = value as Record<string, unknown>
+      const userId = typeof member.userid === 'string' ? member.userid.trim() : ''
+      const name = typeof member.name === 'string' ? member.name.trim() : ''
+      return userId && name ? [{ userId, name }] : []
+    })
   }
 }
