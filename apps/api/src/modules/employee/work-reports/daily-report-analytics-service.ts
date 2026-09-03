@@ -27,6 +27,7 @@ export class DailyReportAnalyticsService {
       return this.repository.calendar(month)
     }
     if (view === 'employees') return this.repository.employeeProfiles()
+    if (view === 'individual') return this.repository.individualReporters()
     if (view === 'quality') { const dates = range(parameters); return this.repository.quality(dates.startDate, dates.endDate) }
     throw new DailyReportAnalyticsValidationError('未知的日报统计视图。')
   }

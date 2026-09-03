@@ -8,9 +8,11 @@ export interface SubmissionDashboard {
   readonly date: string; readonly expected: number; readonly submitted: number; readonly missing: number; readonly delayed: number
   readonly employees: readonly SubmissionEmployee[]
   readonly departments: readonly { name: string; expected: number; submitted: number; missing: number; delayed: number }[]
+  readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' }[]
 }
 export interface CalendarDay { readonly date: string; readonly expected: number; readonly submitted: number; readonly missing: number; readonly delayed: number; readonly status: 'complete' | 'delayed' | 'missing' | 'empty' }
 export interface EmployeeReportProfile { readonly id: string; readonly name: string; readonly department: string; readonly departmentLevel2: string | null; readonly submittedDays: number; readonly delayedCount: number; readonly currentStreak: number }
+export interface IndividualReporter { readonly name: string; readonly linked: boolean }
 export interface QualityFinding { readonly type: 'duplicate' | 'future_report_date' | 'missing_identity' | 'empty_content' | 'unmatched_employee'; readonly recordId: string; readonly date: string; readonly employee: string; readonly department: string | null; readonly detail: string }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -28,4 +30,5 @@ function query(view: string, parameters: Record<string, string>): Promise<unknow
 export const readSubmissionDashboard = (date: string) => query('dashboard', { date }) as Promise<SubmissionDashboard>
 export const readReportCalendar = (month: string) => query('calendar', { month }) as Promise<readonly CalendarDay[]>
 export const readEmployeeReportProfiles = () => query('employees', {}) as Promise<readonly EmployeeReportProfile[]>
+export const readIndividualReporters = () => query('individual', {}) as Promise<readonly IndividualReporter[]>
 export const readReportQuality = (startDate: string, endDate: string) => query('quality', { startDate, endDate }) as Promise<readonly QualityFinding[]>

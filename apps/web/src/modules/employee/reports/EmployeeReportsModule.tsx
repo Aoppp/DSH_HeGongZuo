@@ -6,7 +6,7 @@ import { SkeletonDetail, SkeletonTable } from '../../../components/Skeleton'
 import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
-import { CalendarView, DashboardView, EmployeeArchiveView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
+import { CalendarView, DashboardView, EmployeeArchiveView, IndividualReportersView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
 import { shanghaiCalendarDate, shiftCalendarDate } from './report-dates'
 import './daily-reports.css'
 
@@ -92,7 +92,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   }
   const views: readonly { id: AnalyticsView | 'list'; label: string }[] = [
     { id: 'dashboard', label: '提交看板' }, { id: 'calendar', label: '日历' }, { id: 'list', label: '日报列表' },
-    { id: 'employees', label: '员工档案' }, { id: 'quality', label: '数据检查' },
+    { id: 'employees', label: '员工档案' }, { id: 'individual', label: '单独汇报' }, { id: 'quality', label: '数据检查' },
   ]
 
   return <div className="daily-reports module-page">
@@ -109,6 +109,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
     {view === 'dashboard' && <DashboardView date={reportDate} revision={analyticsRevision} />}
     {view === 'calendar' && <CalendarView month={month} onSelectDate={openDate} revision={analyticsRevision} />}
     {view === 'employees' && <EmployeeArchiveView revision={analyticsRevision} />}
+    {view === 'individual' && <IndividualReportersView revision={analyticsRevision} />}
     {view === 'quality' && <QualityView startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
 
     {view === 'list' && <><form className="daily-reports__filters" onSubmit={submit}>

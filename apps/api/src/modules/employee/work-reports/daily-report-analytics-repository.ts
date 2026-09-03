@@ -19,6 +19,7 @@ export interface SubmissionDashboard {
   readonly delayed: number
   readonly employees: readonly SubmissionEmployee[]
   readonly departments: readonly { name: string; expected: number; submitted: number; missing: number; delayed: number }[]
+  readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' }[]
 }
 
 export interface CalendarDay {
@@ -39,6 +40,7 @@ export interface EmployeeReportProfile {
   readonly delayedCount: number
   readonly currentStreak: number
 }
+export interface IndividualReporter { readonly name: string; readonly linked: boolean }
 
 export interface QualityFinding {
   readonly type: 'duplicate' | 'future_report_date' | 'missing_identity' | 'empty_content' | 'unmatched_employee'
@@ -69,6 +71,7 @@ function expectedEmployeesSql(dateParameter: string): string {
     WHERE employee.hire_date <= ${dateParameter}::date
       AND (departure_date IS NULL OR departure_date >= ${dateParameter}::date)
       AND employee.status <> 'on_leave'
+      AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
       AND (employee.status <> 'inactive' OR departure_date >= ${dateParameter}::date)`
 }
 
@@ -96,6 +99,12 @@ export class DailyReportAnalyticsRepository {
     })
     const groups = new Map<string, SubmissionEmployee[]>()
     for (const employee of employees) groups.set(employee.department, [...(groups.get(employee.department) ?? []), employee])
+    const excludedResult = await this.pool.query<{ display_name: string; reason: '请假' | '未排班' | '单独汇报' }>(`SELECT employee.display_name, '请假'::text AS reason FROM employees employee WHERE employee.status='on_leave'
+      UNION ALL SELECT employee.display_name, '未排班'::text FROM employees employee WHERE employee.status <> 'inactive' AND employee.status <> 'on_leave'
+        AND NOT EXISTS (SELECT 1 FROM employee_wecom_schedules schedule WHERE schedule.employee_id=employee.id AND schedule.schedule_date=$1::date)
+        AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope individual WHERE individual.employee_id=employee.id)
+      UNION ALL SELECT individual.display_name, '单独汇报'::text FROM employee_daily_report_individual_scope individual
+      ORDER BY reason, display_name`, [date])
     return {
       date, expected: employees.length, submitted: employees.filter((item) => item.state !== 'missing').length,
       missing: employees.filter((item) => item.state === 'missing').length,
@@ -106,6 +115,7 @@ export class DailyReportAnalyticsRepository {
         missing: items.filter((item) => item.state === 'missing').length,
         delayed: items.filter((item) => item.state === 'delayed').length,
       })),
+      excluded: excludedResult.rows.filter((row) => row.reason === '请假' || row.reason === '未排班' || row.reason === '单独汇报').map((row) => ({ name: row.display_name, reason: row.reason })),
     }
   }
 
@@ -169,6 +179,11 @@ export class DailyReportAnalyticsRepository {
         submittedDays: Number(row.submitted_days), delayedCount: Number(row.delayed_count), currentStreak: streak,
       }
     })
+  }
+
+  async individualReporters(): Promise<readonly IndividualReporter[]> {
+    const result = await this.pool.query<{ display_name: string; employee_id: string | null }>('SELECT display_name, employee_id FROM employee_daily_report_individual_scope ORDER BY display_name')
+    return result.rows.map((row) => ({ name: row.display_name, linked: row.employee_id !== null }))
   }
 
   async quality(startDate: string, endDate: string): Promise<readonly QualityFinding[]> {

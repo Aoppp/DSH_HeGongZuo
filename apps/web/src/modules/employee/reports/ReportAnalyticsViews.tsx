@@ -5,11 +5,11 @@ import { SkeletonCards, SkeletonList } from '../../../components/Skeleton'
 import { readDailyReports, type DailyReport } from './daily-reports-api'
 import { exportDelayed, exportMissing } from './export-report-analytics'
 import {
-  readEmployeeReportProfiles, readReportCalendar, readReportQuality, readSubmissionDashboard,
-  type CalendarDay, type EmployeeReportProfile, type QualityFinding, type SubmissionDashboard, type SubmissionEmployee,
+  readEmployeeReportProfiles, readIndividualReporters, readReportCalendar, readReportQuality, readSubmissionDashboard,
+  type CalendarDay, type EmployeeReportProfile, type IndividualReporter, type QualityFinding, type SubmissionDashboard, type SubmissionEmployee,
 } from './report-analytics-api'
 
-export type AnalyticsView = 'dashboard' | 'calendar' | 'employees' | 'quality'
+export type AnalyticsView = 'dashboard' | 'calendar' | 'employees' | 'individual' | 'quality'
 
 function Loading() { return <div className="daily-reports__skeleton"><SkeletonCards count={4} /><SkeletonList count={5} /></div> }
 function ErrorState({ message }: { readonly message: string }) { return <div className="daily-reports__error"><span>{message}</span></div> }
@@ -28,7 +28,7 @@ export function DashboardView({ date, revision }: { readonly date: string; reado
     ['当日应提交', data.expected, data.employees], ['已提交', data.submitted, data.employees.filter((item) => item.state !== 'missing')],
     ['未提交', data.missing, data.employees.filter((item) => item.state === 'missing')], ['延后提交', data.delayed, data.employees.filter((item) => item.state === 'delayed')],
   ] as const
-  return <><div className="report-dashboard__cards">{cards.map(([label, value, employees]) => <button key={label} onClick={() => setSelected({ title: `${label}人员`, employees })}><span>{label}</span><strong>{value}</strong><small>点击查看人员</small></button>)}</div><div className="report-dashboard__actions"><button onClick={() => void exportMissing(data)}><Download size={15} />导出未提交名单</button><button onClick={() => void exportDelayed(data)}><Download size={15} />导出延后提交名单</button></div><section className="report-card"><header><h2>部门完成情况</h2><span>{data.date}</span></header><div className="report-departments">{data.departments.map((department) => { const rate = department.expected ? Math.round(department.submitted / department.expected * 100) : 0; return <button key={department.name} onClick={() => setSelected({ title: `${department.name}提交情况`, employees: data.employees.filter((item) => item.department === department.name) })}><div><strong>{department.name}</strong><span>{department.submitted}/{department.expected} 人</span></div><i><b style={{ width: `${rate}%` }} /></i><small>完成 {rate}%・未提交 {department.missing}・延后 {department.delayed}</small></button> })}</div></section>{selected && <EmployeeDialog {...selected} onClose={() => setSelected(null)} />}</>
+  return <><div className="report-dashboard__cards">{cards.map(([label, value, employees]) => <button key={label} onClick={() => setSelected({ title: `${label}人员`, employees })}><span>{label}</span><strong>{value}</strong><small>点击查看人员</small></button>)}<button onClick={() => setSelected({ title: '请假、未排班及单独汇报人员', employees: data.excluded.map((item, index) => ({ id: `excluded-${index}`, name: item.name, department: item.reason, departmentLevel2: null, state: 'submitted' as const, reportCount: 0 })) })}><span>请假、未排班</span><strong>{data.excluded.filter((item) => item.reason !== '单独汇报').length}</strong><small>点击查看说明</small></button></div><div className="report-dashboard__actions"><button onClick={() => void exportMissing(data)}><Download size={15} />导出未提交名单</button><button onClick={() => void exportDelayed(data)}><Download size={15} />导出延后提交名单</button></div><section className="report-card"><header><h2>部门完成情况</h2><span>{data.date}</span></header><div className="report-departments">{data.departments.map((department) => { const rate = department.expected ? Math.round(department.submitted / department.expected * 100) : 0; return <button key={department.name} onClick={() => setSelected({ title: `${department.name}提交情况`, employees: data.employees.filter((item) => item.department === department.name) })}><div><strong>{department.name}</strong><span>{department.submitted}/{department.expected} 人</span></div><i><b style={{ width: `${rate}%` }} /></i><small>完成 {rate}%・未提交 {department.missing}・延后 {department.delayed}</small></button> })}</div></section>{selected && <EmployeeDialog {...selected} onClose={() => setSelected(null)} />}</>
 }
 
 export function CalendarView({ month, onSelectDate, revision }: { readonly month: string; readonly onSelectDate: (date: string) => void; readonly revision: number }) {
@@ -58,6 +58,13 @@ export function EmployeeArchiveView({ revision }: { readonly revision: number })
   }, [profiles, query])
   if (error) return <ErrorState message={error} />; if (!profiles) return <Loading />
   return <><section className="report-card"><header><div><h2>员工日报档案</h2><span>全部历史日报</span></div><label className="report-profile-search"><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="按姓名搜索" /></label></header>{visibleProfiles.length ? <div className="report-profile-grid">{visibleProfiles.map((profile) => <button key={profile.id} onClick={() => void open(profile)}><div><strong>{profile.name}</strong><span>{profile.department}{profile.departmentLevel2 ? ` / ${profile.departmentLevel2}` : ''}</span></div><dl><div><dt>提交天数</dt><dd>{profile.submittedDays}</dd></div><div><dt>连续提交</dt><dd>{profile.currentStreak} 天</dd></div><div><dt>延后</dt><dd>{profile.delayedCount} 次</dd></div></dl></button>)}</div> : <div className="daily-reports__empty">没有找到匹配的员工</div>}</section>{selected && <div className="report-dialog" role="dialog" aria-modal="true"><button className="report-dialog__backdrop" onClick={() => setSelected(null)} aria-label="关闭" /><section className="report-dialog__wide"><header><div><strong>{selected.name}的日报档案</strong><span>全部历史日报</span></div><button onClick={() => setSelected(null)} aria-label="关闭"><X size={18} /></button></header><main><h3>历史日报</h3>{historyLoading ? <Loading /> : <div className="report-history">{history.map((report) => <article key={report.record_id}><strong>{report.report_date}</strong><p>{report.today_summary || '未填写工作总结'}</p><span>{new Date(report.submit_time).toLocaleString('zh-CN')}</span></article>)}</div>}</main></section></div>}</>
+}
+
+export function IndividualReportersView({ revision }: { readonly revision: number }) {
+  const [reporters, setReporters] = useState<readonly IndividualReporter[] | null>(null)
+  useEffect(() => { setReporters(null); void readIndividualReporters().then(setReporters).catch(() => setReporters([])) }, [revision])
+  if (!reporters) return <Loading />
+  return <section className="report-card"><header><div><h2>单独汇报</h2><span>以下人员不纳入每日应提交统计</span></div></header><div className="report-profile-grid">{reporters.map((reporter) => <article key={reporter.name}><strong>{reporter.name}</strong><span>{reporter.linked ? '员工档案已关联' : '暂未建立员工档案'}</span></article>)}</div></section>
 }
 
 const qualityNames: Record<QualityFinding['type'], string> = { duplicate: '重复日报', future_report_date: '日期异常', missing_identity: '人员或部门缺失', empty_content: '内容为空', unmatched_employee: '档案未关联' }
