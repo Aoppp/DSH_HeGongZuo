@@ -92,7 +92,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   }
   const views: readonly { id: AnalyticsView | 'list'; label: string }[] = [
     { id: 'dashboard', label: '提交看板' }, { id: 'calendar', label: '日历' }, { id: 'list', label: '日报列表' },
-    { id: 'employees', label: '员工档案' }, { id: 'individual', label: '单独汇报' }, { id: 'quality', label: '数据检查' },
+    { id: 'employees', label: '员工档案' }, { id: 'quality', label: '数据检查' }, { id: 'individual', label: '单独汇报' },
   ]
 
   return <div className="daily-reports module-page">
