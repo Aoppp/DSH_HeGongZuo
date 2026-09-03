@@ -19,6 +19,7 @@ export interface CheckinSyncStats {
   readonly skipped: number
   readonly failed: number
 }
+export interface WeComScheduleRecord { readonly employeeId: string; readonly userId: string; readonly date: string; readonly scheduleId: string; readonly scheduleName: string | null; readonly groupId: string | null; readonly groupName: string | null; readonly rawData: Record<string, unknown>; readonly contentHash: string }
 
 export class WeComCheckinRepository {
   constructor(private readonly pool: Pool) {}
@@ -86,5 +87,12 @@ export class WeComCheckinRepository {
       JSON.stringify(record.rawData), record.contentHash,
     ])
     return result.rows[0]?.outcome ?? 'unchanged'
+  }
+
+  async upsertSchedule(record: WeComScheduleRecord): Promise<void> {
+    await this.pool.query(`INSERT INTO employee_wecom_schedules (employee_id,wecom_user_id,schedule_date,schedule_id,schedule_name,group_id,group_name,raw_data,content_hash)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
+      ON CONFLICT (employee_id,schedule_date) DO UPDATE SET wecom_user_id=EXCLUDED.wecom_user_id,schedule_id=EXCLUDED.schedule_id,schedule_name=EXCLUDED.schedule_name,group_id=EXCLUDED.group_id,group_name=EXCLUDED.group_name,raw_data=EXCLUDED.raw_data,content_hash=EXCLUDED.content_hash,updated_at=now()
+      WHERE employee_wecom_schedules.content_hash IS DISTINCT FROM EXCLUDED.content_hash`, [record.employeeId, record.userId, record.date, record.scheduleId, record.scheduleName, record.groupId, record.groupName, JSON.stringify(record.rawData), record.contentHash])
   }
 }

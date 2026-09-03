@@ -10,6 +10,7 @@ interface WeComApiResponse {
   readonly expires_in?: number
   readonly checkindata?: unknown
   readonly userlist?: unknown
+  readonly schedule_list?: unknown
 }
 
 export interface WeComDirectoryMember {
@@ -83,5 +84,14 @@ export class WeComCheckinClient {
       const name = typeof member.name === 'string' ? member.name.trim() : ''
       return userId && name ? [{ userId, name }] : []
     })
+  }
+
+  async schedules(userIds: readonly string[], startTime: number, endTime: number): Promise<readonly Record<string, unknown>[]> {
+    if (!userIds.length) return []
+    const url = new URL('/cgi-bin/checkin/getcheckinschedulist', wecomApi)
+    url.searchParams.set('access_token', await this.accessToken())
+    const body = await this.response(url.toString(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ starttime: startTime, endtime: endTime, useridlist: userIds }) })
+    if (!Array.isArray(body.schedule_list)) throw new Error('企业微信未返回员工排班信息。')
+    return body.schedule_list.filter((value): value is Record<string, unknown> => !!value && typeof value === 'object')
   }
 }

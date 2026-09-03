@@ -2,6 +2,7 @@ import { database } from '../../../database.js'
 import { WeComCheckinClient } from './wecom-checkin-client.js'
 import { WeComCheckinRepository } from './wecom-checkin-repository.js'
 import { incrementalCheckinInput, synchronizeWeComCheckins } from './wecom-checkin-sync.js'
+import { synchronizeWeComSchedules } from './wecom-schedule-sync.js'
 
 const lockId = '2026090302'
 
@@ -27,8 +28,11 @@ async function main(): Promise<void> {
     const input = command === 'sync'
       ? await incrementalCheckinInput(repository)
       : { source: 'history' as const, startDate: date(option('--start-date'), '--start-date'), endDate: date(option('--end-date'), '--end-date'), ...(employeeUserId ? { employeeUserId } : {}), advanceCheckpoint: false }
-    const result = await synchronizeWeComCheckins(repository, new WeComCheckinClient(), input)
+    const client = new WeComCheckinClient()
+    const result = await synchronizeWeComCheckins(repository, client, input)
+    const scheduleResult = await synchronizeWeComSchedules(repository, client, input)
     console.log(`打卡同步完成：run=${result.runId}，员工=${result.employees}，拉取=${result.pulled}，新增=${result.inserted}，更新=${result.updated}，未变=${result.unchanged}，跳过=${result.skipped}，失败=${result.failed}，checkpoint=${result.checkpointAfter ?? '未推进'}`)
+    console.log(`排班同步完成：员工=${scheduleResult.employees}，排班=${scheduleResult.schedules}`)
     if (result.status !== 'succeeded') process.exitCode = 1
   } finally {
     await lockClient.query('SELECT pg_advisory_unlock($1::bigint)', [lockId]).catch(() => undefined)

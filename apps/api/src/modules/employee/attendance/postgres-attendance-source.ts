@@ -3,12 +3,12 @@ import type { Pool } from 'pg'
 import type { AttendanceCheckinDetail, AttendanceRecord, AttendanceStatus } from '../work-records/work-records-source.js'
 
 interface CheckinRow {
-  readonly id: string
+  readonly id: string | null
   readonly employee_id: string
   readonly display_name: string
   readonly department_name: string
-  readonly checkin_time: string | Date
-  readonly checkin_type: string
+  readonly checkin_time: string | Date | null
+  readonly checkin_type: string | null
   readonly exception_type: string | null
   readonly location_title: string | null
   readonly standard_checkin_time: string | Date | null
@@ -54,38 +54,41 @@ export class PostgresAttendanceSource {
   constructor(private readonly pool: Pool) {}
 
   async snapshot(date: string): Promise<PostgresAttendanceSnapshot> {
-    const result = await this.pool.query<CheckinRow>(`SELECT checkin.id::text, checkin.employee_id, employee.display_name,
+    const result = await this.pool.query<CheckinRow>(`SELECT checkin.id::text, employee.id AS employee_id, employee.display_name,
       employee.department_name, checkin.checkin_time, checkin.checkin_type, checkin.exception_type,
       checkin.location_title, checkin.standard_checkin_time
-      FROM employee_wecom_checkins AS checkin JOIN employees AS employee ON employee.id=checkin.employee_id
-      WHERE checkin.checkin_time >= ($1::date::timestamp AT TIME ZONE 'Asia/Shanghai')
+      FROM employee_wecom_schedules AS schedule JOIN employees AS employee ON employee.id=schedule.employee_id
+      LEFT JOIN employee_wecom_checkins AS checkin ON checkin.employee_id=employee.id
+        AND checkin.checkin_time >= ($1::date::timestamp AT TIME ZONE 'Asia/Shanghai')
         AND checkin.checkin_time < (($1::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
-      ORDER BY employee.display_name, checkin.checkin_time, checkin.id`, [date])
+      WHERE schedule.schedule_date=$1::date AND schedule.schedule_id <> '0' AND employee.status <> 'inactive'
+      ORDER BY employee.display_name, checkin.checkin_time NULLS LAST, checkin.id`, [date])
     const grouped = new Map<string, GroupedRecord>()
     for (const row of result.rows) {
-      const checkinType = type(row.checkin_type)
-      if (!checkinType) continue
+      const checkinType = row.checkin_type ? type(row.checkin_type) : null
       const nextStatus = status(row.exception_type)
       const current = grouped.get(row.employee_id)
-      const checkinTime = iso(row.checkin_time)
+      const checkinTime = row.checkin_time ? iso(row.checkin_time) : null
       const standardTime = time(row.standard_checkin_time)
-      const detail: AttendanceCheckinDetail = { type: row.checkin_type, time: checkinTime, standardTime, status: nextStatus, exceptionType: row.exception_type, location: row.location_title }
+      const detail: AttendanceCheckinDetail | null = checkinType && checkinTime ? { type: row.checkin_type!, time: checkinTime, standardTime, status: nextStatus, exceptionType: row.exception_type, location: row.location_title } : null
       if (!current) {
         grouped.set(row.employee_id, {
           id: `${row.employee_id}-${date}`, externalUserId: row.employee_id, employeeName: row.display_name, departmentName: row.department_name,
           scheduledStart: checkinType === 'checkin' ? standardTime : '—', scheduledEnd: checkinType === 'checkout' ? standardTime : '—',
           checkInAt: checkinType === 'checkin' ? checkinTime : null, checkOutAt: checkinType === 'checkout' ? checkinTime : null,
-          status: nextStatus, location: row.location_title, checkInLocation: checkinType === 'checkin' ? row.location_title : null,
-          checkOutLocation: checkinType === 'checkout' ? row.location_title : null, details: [detail], severity: severity(nextStatus),
+          status: checkinType ? nextStatus : 'missing', location: row.location_title, checkInLocation: checkinType === 'checkin' ? row.location_title : null,
+          checkOutLocation: checkinType === 'checkout' ? row.location_title : null, details: detail ? [detail] : [], severity: checkinType ? severity(nextStatus) : severity('missing'),
         })
         continue
       }
       const next = { ...current }
+      if (!checkinType) continue
+      if (!checkinTime) continue
       if (checkinType === 'checkin' && (!next.checkInAt || checkinTime < next.checkInAt)) { next.checkInAt = checkinTime; next.scheduledStart = standardTime; next.checkInLocation = row.location_title }
       if (checkinType === 'checkout' && (!next.checkOutAt || checkinTime > next.checkOutAt)) { next.checkOutAt = checkinTime; next.scheduledEnd = standardTime; next.checkOutLocation = row.location_title }
       if (severity(nextStatus) > next.severity) { next.status = nextStatus; next.severity = severity(nextStatus) }
       if (!next.location && row.location_title) next.location = row.location_title
-      next.details.push(detail)
+      if (detail) next.details.push(detail)
       grouped.set(row.employee_id, next)
     }
     const records = [...grouped.values()].map(({ severity: _severity, ...record }) => record)

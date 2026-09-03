@@ -65,12 +65,11 @@ function dateText(value: string | Date): string {
 
 function expectedEmployeesSql(dateParameter: string): string {
   return `SELECT id, display_name, department_name, department_level2
-    FROM employees
-    WHERE hire_date <= ${dateParameter}::date
+    FROM employees AS employee JOIN employee_wecom_schedules AS schedule ON schedule.employee_id=employee.id AND schedule.schedule_date=${dateParameter}::date AND schedule.schedule_id <> '0'
+    WHERE employee.hire_date <= ${dateParameter}::date
       AND (departure_date IS NULL OR departure_date >= ${dateParameter}::date)
-      AND status <> 'on_leave'
-      AND (status <> 'inactive' OR departure_date >= ${dateParameter}::date)
-      AND extract(isodow FROM ${dateParameter}::date) <= 5`
+      AND employee.status <> 'on_leave'
+      AND (employee.status <> 'inactive' OR departure_date >= ${dateParameter}::date)`
 }
 
 export class DailyReportAnalyticsRepository {
@@ -117,12 +116,12 @@ export class DailyReportAnalyticsRepository {
         SELECT generate_series($1::date, ($1::date + interval '1 month - 1 day')::date, interval '1 day')::date AS date
       ), expected AS (
         SELECT days.date, count(employee.id)::text AS expected
-        FROM days LEFT JOIN employees AS employee
-          ON employee.hire_date <= days.date
+        FROM days LEFT JOIN employee_wecom_schedules AS schedule ON schedule.schedule_date=days.date AND schedule.schedule_id <> '0'
+        LEFT JOIN employees AS employee ON employee.id=schedule.employee_id
+          AND employee.hire_date <= days.date
           AND (employee.departure_date IS NULL OR employee.departure_date >= days.date)
           AND employee.status <> 'on_leave'
           AND (employee.status <> 'inactive' OR employee.departure_date >= days.date)
-          AND extract(isodow FROM days.date) <= 5
         GROUP BY days.date
       ), submitted AS (
         SELECT report.report_date AS date, count(DISTINCT employee.id)::text AS submitted,
