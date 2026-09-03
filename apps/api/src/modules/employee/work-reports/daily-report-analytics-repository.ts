@@ -152,6 +152,7 @@ export class DailyReportAnalyticsRepository {
         coalesce(jsonb_agg(DISTINCT report.report_date::text) FILTER (WHERE report.report_date IS NOT NULL), '[]'::jsonb) AS report_dates
       FROM employees AS employee
       LEFT JOIN employee_work_daily_reports AS report ON report.author_user_id = employee.wecom_user_id
+      WHERE employee.status <> 'inactive'
       GROUP BY employee.id ORDER BY employee.display_name`)
     return result.rows.map((row) => {
       const dates = Array.isArray(row.report_dates) ? (row.report_dates as string[]).sort().reverse() : []
