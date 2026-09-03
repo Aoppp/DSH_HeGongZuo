@@ -1,6 +1,6 @@
 import type { Pool } from 'pg'
 
-import type { AttendanceRecord, AttendanceStatus } from '../work-records/work-records-source.js'
+import type { AttendanceCheckinDetail, AttendanceRecord, AttendanceStatus } from '../work-records/work-records-source.js'
 
 interface CheckinRow {
   readonly id: string
@@ -35,6 +35,9 @@ interface GroupedRecord {
   checkOutAt: string | null
   status: AttendanceStatus
   location: string | null
+  checkInLocation: string | null
+  checkOutLocation: string | null
+  details: AttendanceCheckinDetail[]
   severity: number
 }
 function severity(value: AttendanceStatus): number { return value === 'missing' ? 3 : value === 'early_leave' ? 2 : value === 'late' ? 1 : 0 }
@@ -66,20 +69,23 @@ export class PostgresAttendanceSource {
       const current = grouped.get(row.employee_id)
       const checkinTime = iso(row.checkin_time)
       const standardTime = time(row.standard_checkin_time)
+      const detail: AttendanceCheckinDetail = { type: row.checkin_type, time: checkinTime, standardTime, status: nextStatus, exceptionType: row.exception_type, location: row.location_title }
       if (!current) {
         grouped.set(row.employee_id, {
           id: `${row.employee_id}-${date}`, externalUserId: row.employee_id, employeeName: row.display_name, departmentName: row.department_name,
           scheduledStart: checkinType === 'checkin' ? standardTime : '—', scheduledEnd: checkinType === 'checkout' ? standardTime : '—',
           checkInAt: checkinType === 'checkin' ? checkinTime : null, checkOutAt: checkinType === 'checkout' ? checkinTime : null,
-          status: nextStatus, location: row.location_title, severity: severity(nextStatus),
+          status: nextStatus, location: row.location_title, checkInLocation: checkinType === 'checkin' ? row.location_title : null,
+          checkOutLocation: checkinType === 'checkout' ? row.location_title : null, details: [detail], severity: severity(nextStatus),
         })
         continue
       }
       const next = { ...current }
-      if (checkinType === 'checkin' && (!next.checkInAt || checkinTime < next.checkInAt)) { next.checkInAt = checkinTime; next.scheduledStart = standardTime }
-      if (checkinType === 'checkout' && (!next.checkOutAt || checkinTime > next.checkOutAt)) { next.checkOutAt = checkinTime; next.scheduledEnd = standardTime }
+      if (checkinType === 'checkin' && (!next.checkInAt || checkinTime < next.checkInAt)) { next.checkInAt = checkinTime; next.scheduledStart = standardTime; next.checkInLocation = row.location_title }
+      if (checkinType === 'checkout' && (!next.checkOutAt || checkinTime > next.checkOutAt)) { next.checkOutAt = checkinTime; next.scheduledEnd = standardTime; next.checkOutLocation = row.location_title }
       if (severity(nextStatus) > next.severity) { next.status = nextStatus; next.severity = severity(nextStatus) }
       if (!next.location && row.location_title) next.location = row.location_title
+      next.details.push(detail)
       grouped.set(row.employee_id, next)
     }
     const records = [...grouped.values()].map(({ severity: _severity, ...record }) => record)

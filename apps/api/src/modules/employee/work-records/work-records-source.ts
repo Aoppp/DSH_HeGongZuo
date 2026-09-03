@@ -17,6 +17,15 @@ export interface WorkReportRecord {
 
 export type AttendanceStatus = 'normal' | 'late' | 'early_leave' | 'missing'
 
+export interface AttendanceCheckinDetail {
+  readonly type: string
+  readonly time: string
+  readonly standardTime: string
+  readonly status: AttendanceStatus
+  readonly exceptionType: string | null
+  readonly location: string | null
+}
+
 export interface AttendanceRecord {
   readonly id: string
   readonly externalUserId: string
@@ -28,6 +37,9 @@ export interface AttendanceRecord {
   readonly checkOutAt: string | null
   readonly status: AttendanceStatus
   readonly location: string | null
+  readonly checkInLocation?: string | null
+  readonly checkOutLocation?: string | null
+  readonly details?: readonly AttendanceCheckinDetail[]
 }
 
 export interface WorkRecordsSnapshot {
