@@ -37,8 +37,8 @@ export interface EmployeeReportProfile {
   readonly department: string
   readonly departmentLevel2: string | null
   readonly submittedDays: number
-  readonly delayedCount: number
-  readonly currentStreak: number
+  readonly delayedDays: number
+  readonly missingDays: number
 }
 export interface IndividualReporter { readonly name: string; readonly linked: boolean }
 
@@ -154,31 +154,27 @@ export class DailyReportAnalyticsRepository {
   async employeeProfiles(scope: 'active' | 'departed' = 'active'): Promise<readonly EmployeeReportProfile[]> {
     const result = await this.pool.query<{
       id: string; display_name: string; department_name: string; department_level2: string | null
-      submitted_days: string; delayed_count: string; report_dates: unknown
+      submitted_days: string; delayed_days: string; missing_days: string
     }>(`SELECT employee.id, employee.display_name, employee.department_name, employee.department_level2,
         count(DISTINCT report.report_date)::text AS submitted_days,
-        count(DISTINCT report.report_date) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > report.report_date)::text AS delayed_count,
-        coalesce(jsonb_agg(DISTINCT report.report_date::text) FILTER (WHERE report.report_date IS NOT NULL), '[]'::jsonb) AS report_dates
+        count(DISTINCT report.report_date) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > report.report_date)::text AS delayed_days,
+        (SELECT count(*)::text FROM employee_wecom_schedules AS schedule
+          WHERE schedule.employee_id = employee.id AND schedule.schedule_id <> '0'
+            AND schedule.schedule_date >= employee.hire_date
+            AND schedule.schedule_date <= coalesce(employee.departure_date, schedule.schedule_date)
+            AND schedule.schedule_date < (now() AT TIME ZONE 'Asia/Shanghai')::date
+            AND NOT EXISTS (SELECT 1 FROM employee_work_daily_reports AS scheduled_report
+              WHERE scheduled_report.author_user_id = employee.wecom_user_id AND scheduled_report.report_date = schedule.schedule_date)
+            AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id = employee.id)
+        ) AS missing_days
       FROM employees AS employee
       LEFT JOIN employee_work_daily_reports AS report ON report.author_user_id = employee.wecom_user_id
       WHERE ${scope === 'departed' ? "employee.status = 'inactive'" : "employee.status <> 'inactive'"}
       GROUP BY employee.id ORDER BY employee.display_name`)
-    return result.rows.map((row) => {
-      const dates = Array.isArray(row.report_dates) ? (row.report_dates as string[]).sort().reverse() : []
-      const submitted = new Set(dates)
-      let streak = 0
-      if (dates[0]) {
-        const cursor = new Date(`${dates[0]}T00:00:00Z`)
-        while (submitted.has(cursor.toISOString().slice(0, 10))) {
-          streak += 1
-          do { cursor.setUTCDate(cursor.getUTCDate() - 1) } while (cursor.getUTCDay() === 0 || cursor.getUTCDay() === 6)
-        }
-      }
-      return {
-        id: row.id, name: row.display_name, department: row.department_name, departmentLevel2: row.department_level2,
-        submittedDays: Number(row.submitted_days), delayedCount: Number(row.delayed_count), currentStreak: streak,
-      }
-    })
+    return result.rows.map((row) => ({
+      id: row.id, name: row.display_name, department: row.department_name, departmentLevel2: row.department_level2,
+      submittedDays: Number(row.submitted_days), delayedDays: Number(row.delayed_days), missingDays: Number(row.missing_days),
+    }))
   }
 
   async individualReporters(): Promise<readonly IndividualReporter[]> {

@@ -37,6 +37,18 @@ test('员工日报档案默认查询在职员工，并可单独查询离职归�
   assert.match(statement, /WHERE employee\.status = 'inactive'/)
 })
 
+test('员工日报档案按排班计算延后天数和未交天数', async () => {
+  let statement = ''
+  const pool = { query: async (sql) => { statement = sql; return { rows: [{
+    id: 'EMP-0001', display_name: '张三', department_name: '研发部', department_level2: null,
+    submitted_days: '12', delayed_days: '2', missing_days: '3',
+  }] } } }
+  const [profile] = await new DailyReportAnalyticsRepository(pool).employeeProfiles()
+  assert.deepEqual(profile, { id: 'EMP-0001', name: '张三', department: '研发部', departmentLevel2: null, submittedDays: 12, delayedDays: 2, missingDays: 3 })
+  assert.match(statement, /employee_wecom_schedules/)
+  assert.match(statement, /scheduled_report\.report_date = schedule\.schedule_date/)
+})
+
 test('统计服务校验视图所需日期、月份和员工范围参数', async () => {
   const repository = { dashboard: async (date) => ({ date }), calendar: async (month) => ({ month }), employeeProfiles: async (scope) => [scope] }
   const service = new DailyReportAnalyticsService(repository)

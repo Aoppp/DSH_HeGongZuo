@@ -11,7 +11,7 @@ export interface SubmissionDashboard {
   readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' }[]
 }
 export interface CalendarDay { readonly date: string; readonly expected: number; readonly submitted: number; readonly missing: number; readonly delayed: number; readonly status: 'complete' | 'delayed' | 'missing' | 'empty' }
-export interface EmployeeReportProfile { readonly id: string; readonly name: string; readonly department: string; readonly departmentLevel2: string | null; readonly submittedDays: number; readonly delayedCount: number; readonly currentStreak: number }
+export interface EmployeeReportProfile { readonly id: string; readonly name: string; readonly department: string; readonly departmentLevel2: string | null; readonly submittedDays: number; readonly delayedDays: number; readonly missingDays: number }
 export type EmployeeReportProfileScope = 'active' | 'departed'
 export interface IndividualReporter { readonly name: string; readonly linked: boolean }
 export interface QualityFinding { readonly type: 'duplicate' | 'future_report_date' | 'missing_identity' | 'empty_content' | 'unmatched_employee'; readonly recordId: string; readonly date: string; readonly employee: string; readonly department: string | null; readonly detail: string }
