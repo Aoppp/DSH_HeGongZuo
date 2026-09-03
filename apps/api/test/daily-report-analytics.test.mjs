@@ -27,18 +27,22 @@ test('日历以未提交优先，其次标记延后和全部提交', async () =>
   assert.deepEqual(result.map((item) => item.status), ['complete', 'delayed', 'missing', 'empty'])
 })
 
-test('员工日报档案仅查询在职员工，历史日报与数据检查仍保留历史记录', async () => {
+test('员工日报档案默认查询在职员工，并可单独查询离职归档', async () => {
   let statement = ''
   const pool = { query: async (sql) => { statement = sql; return { rows: [] } } }
-  await new DailyReportAnalyticsRepository(pool).employeeProfiles()
+  const repository = new DailyReportAnalyticsRepository(pool)
+  await repository.employeeProfiles()
   assert.match(statement, /WHERE employee\.status <> 'inactive'/)
+  await repository.employeeProfiles('departed')
+  assert.match(statement, /WHERE employee\.status = 'inactive'/)
 })
 
-test('统计服务校验视图所需日期与月份参数', async () => {
-  const repository = { dashboard: async (date) => ({ date }), calendar: async (month) => ({ month }), employeeProfiles: async () => ['all'] }
+test('统计服务校验视图所需日期、月份和员工范围参数', async () => {
+  const repository = { dashboard: async (date) => ({ date }), calendar: async (month) => ({ month }), employeeProfiles: async (scope) => [scope] }
   const service = new DailyReportAnalyticsService(repository)
   assert.deepEqual(await service.read(new URLSearchParams({ view: 'dashboard', date: '2026-09-01' })), { date: '2026-09-01' })
   assert.deepEqual(await service.read(new URLSearchParams({ view: 'calendar', month: '2026-09' })), { month: '2026-09' })
-  assert.deepEqual(await service.read(new URLSearchParams({ view: 'employees' })), ['all'])
+  assert.deepEqual(await service.read(new URLSearchParams({ view: 'employees' })), ['active'])
+  assert.deepEqual(await service.read(new URLSearchParams({ view: 'employees', scope: 'departed' })), ['departed'])
   await assert.rejects(() => service.read(new URLSearchParams({ view: 'calendar', month: '2026-13' })), /month/)
 })

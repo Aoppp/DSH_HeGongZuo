@@ -61,7 +61,9 @@ export class PostgresAttendanceSource {
       LEFT JOIN employee_wecom_checkins AS checkin ON checkin.employee_id=employee.id
         AND checkin.checkin_time >= ($1::date::timestamp AT TIME ZONE 'Asia/Shanghai')
         AND checkin.checkin_time < (($1::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
-      WHERE schedule.schedule_date=$1::date AND schedule.schedule_id <> '0' AND employee.status <> 'inactive'
+      WHERE schedule.schedule_date=$1::date AND schedule.schedule_id <> '0'
+        AND employee.hire_date <= $1::date
+        AND (employee.departure_date IS NULL OR employee.departure_date >= $1::date)
       ORDER BY employee.display_name, checkin.checkin_time NULLS LAST, checkin.id`, [date])
     const grouped = new Map<string, GroupedRecord>()
     for (const row of result.rows) {

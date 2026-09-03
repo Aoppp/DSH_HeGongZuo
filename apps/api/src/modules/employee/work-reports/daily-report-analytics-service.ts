@@ -26,7 +26,7 @@ export class DailyReportAnalyticsService {
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new DailyReportAnalyticsValidationError('month 格式无效。')
       return this.repository.calendar(month)
     }
-    if (view === 'employees') return this.repository.employeeProfiles()
+    if (view === 'employees') return this.repository.employeeProfiles(parameters.get('scope') === 'departed' ? 'departed' : 'active')
     if (view === 'individual') return this.repository.individualReporters()
     if (view === 'quality') { const dates = range(parameters); return this.repository.quality(dates.startDate, dates.endDate) }
     throw new DailyReportAnalyticsValidationError('未知的日报统计视图。')

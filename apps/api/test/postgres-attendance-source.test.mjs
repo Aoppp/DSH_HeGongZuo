@@ -18,3 +18,12 @@ test('考勤页面读取已同步记录，并按员工汇总上下班打卡和�
     ] }],
   })
 })
+
+test('历史考勤按查询日期与入离职日期判断，不受员工当前状态影响', async () => {
+  let statement = ''
+  const source = new PostgresAttendanceSource({ query: async (sql) => { statement = sql; return { rows: [] } } })
+  await source.snapshot('2026-08-01')
+  assert.match(statement, /employee\.hire_date <= \$1::date/)
+  assert.match(statement, /employee\.departure_date IS NULL OR employee\.departure_date >= \$1::date/)
+  assert.doesNotMatch(statement, /employee\.status <> 'inactive'/)
+})
