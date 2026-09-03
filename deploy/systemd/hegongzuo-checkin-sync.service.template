@@ -1,0 +1,23 @@
+[Unit]
+Description=同步企业微信打卡数据
+After=network-online.target postgresql.service
+Wants=network-online.target
+OnFailure=hegongzuo-alert@%n.service
+
+[Service]
+Type=oneshot
+User=__DEPLOY_USER__
+Group=__DEPLOY_USER__
+WorkingDirectory=__PROJECT_DIR__
+EnvironmentFile=__PROJECT_DIR__/.env
+Environment=TZ=Asia/Shanghai
+ExecStart=/usr/bin/node apps/api/dist/modules/employee/attendance/checkin-sync-cli.js sync
+TimeoutStartSec=15min
+MemoryMax=384M
+CPUQuota=50%
+TasksMax=128
+LimitNOFILE=8192
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

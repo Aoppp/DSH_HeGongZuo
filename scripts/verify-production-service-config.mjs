@@ -12,6 +12,8 @@ const requiredTemplates = [
   'deploy/systemd/hegongzuo-work-daily-sync.service.template',
   'deploy/systemd/hegongzuo-work-daily-sync.timer.template',
   'deploy/systemd/hegongzuo-work-daily-sync.path.template',
+  'deploy/systemd/hegongzuo-checkin-sync.service.template',
+  'deploy/systemd/hegongzuo-checkin-sync.timer.template',
   'deploy/systemd/hegongzuo-alert@.service.template',
   'deploy/systemd/hegongzuo-agent-sync.service.template',
   'deploy/systemd/hegongzuo-agent-sync.path.template',
@@ -38,4 +40,7 @@ const workDailySyncTemplate = await readFile(path.join(root, 'deploy/systemd/heg
 if (!workDailySyncTemplate.includes('sync-cli.js sync') || !workDailySyncTemplate.includes('HOME=/var/lib/hegongzuo-wecom')) throw new Error('企业微信日报同步服务模板配置不完整。')
 const workDailySyncPathTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-work-daily-sync.path.template'), 'utf8')
 if (!workDailySyncPathTemplate.includes('manual-sync.request') || !workDailySyncTemplate.includes('ExecStartPre=/usr/bin/rm -f /var/lib/hegongzuo-wecom/manual-sync.request')) throw new Error('企业微信日报手动同步触发配置不完整。')
+const checkinSyncTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-checkin-sync.service.template'), 'utf8')
+const checkinSyncTimerTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-checkin-sync.timer.template'), 'utf8')
+if (!checkinSyncTemplate.includes('checkin-sync-cli.js sync') || !checkinSyncTemplate.includes('TZ=Asia/Shanghai') || !checkinSyncTimerTemplate.includes('Asia/Shanghai')) throw new Error('企业微信打卡同步服务模板配置不完整。')
 console.log('生产 systemd 模板检查通过。')

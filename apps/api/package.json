@@ -11,6 +11,8 @@
     "db:normalize-departure-reasons": "node scripts/normalize-departure-reasons.mjs",
     "work-reports:import-history": "tsx src/modules/employee/work-reports/sync-cli.ts import-history",
     "work-reports:sync": "tsx src/modules/employee/work-reports/sync-cli.ts sync",
+    "checkins:sync": "tsx src/modules/employee/attendance/checkin-sync-cli.ts sync",
+    "checkins:history": "tsx src/modules/employee/attendance/checkin-sync-cli.ts history",
     "db:setup": "pnpm db:migrate && pnpm db:seed && pnpm db:seed:accounts",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",

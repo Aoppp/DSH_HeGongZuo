@@ -1,0 +1,11 @@
+[Unit]
+Description=定时同步企业微信打卡数据
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 Asia/Shanghai
+AccuracySec=1min
+Persistent=true
+Unit=hegongzuo-checkin-sync.service
+
+[Install]
+WantedBy=timers.target

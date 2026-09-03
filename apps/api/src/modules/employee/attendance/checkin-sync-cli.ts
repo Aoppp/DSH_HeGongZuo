@@ -1,0 +1,39 @@
+import { database } from '../../../database.js'
+import { WeComCheckinClient } from './wecom-checkin-client.js'
+import { WeComCheckinRepository } from './wecom-checkin-repository.js'
+import { incrementalCheckinInput, synchronizeWeComCheckins } from './wecom-checkin-sync.js'
+
+const lockId = '2026090302'
+
+function option(name: string): string | undefined {
+  const index = process.argv.indexOf(name)
+  return index >= 0 ? process.argv[index + 1]?.trim() : undefined
+}
+
+function date(value: string | undefined, name: string): string {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error(`${name} 必须使用 YYYY-MM-DD 格式。`)
+  return value
+}
+
+async function main(): Promise<void> {
+  const command = process.argv[2] ?? 'sync'
+  if (command !== 'sync' && command !== 'history') throw new Error('用法：checkin-sync-cli.js <sync|history> [--start-date YYYY-MM-DD --end-date YYYY-MM-DD] [--employee 企业微信userid]')
+  const repository = new WeComCheckinRepository(database)
+  const lockClient = await database.connect()
+  try {
+    const lock = await lockClient.query<{ acquired: boolean }>('SELECT pg_try_advisory_lock($1::bigint) AS acquired', [lockId])
+    if (!lock.rows[0]?.acquired) throw new Error('已有企业微信打卡同步任务正在运行。')
+    const employeeUserId = option('--employee')
+    const input = command === 'sync'
+      ? await incrementalCheckinInput(repository)
+      : { source: 'history' as const, startDate: date(option('--start-date'), '--start-date'), endDate: date(option('--end-date'), '--end-date'), ...(employeeUserId ? { employeeUserId } : {}), advanceCheckpoint: false }
+    const result = await synchronizeWeComCheckins(repository, new WeComCheckinClient(), input)
+    console.log(`打卡同步完成：run=${result.runId}，员工=${result.employees}，拉取=${result.pulled}，新增=${result.inserted}，更新=${result.updated}，未变=${result.unchanged}，跳过=${result.skipped}，失败=${result.failed}，checkpoint=${result.checkpointAfter ?? '未推进'}`)
+    if (result.status !== 'succeeded') process.exitCode = 1
+  } finally {
+    await lockClient.query('SELECT pg_advisory_unlock($1::bigint)', [lockId]).catch(() => undefined)
+    lockClient.release()
+  }
+}
+
+try { await main() } catch (error) { console.error(error instanceof Error ? error.message : String(error)); process.exitCode = 1 } finally { await database.end() }
