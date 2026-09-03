@@ -160,6 +160,7 @@ export class DailyReportAnalyticsRepository {
         count(DISTINCT report.report_date) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > report.report_date)::text AS delayed_days,
         (SELECT count(*)::text FROM employee_wecom_schedules AS schedule
           WHERE schedule.employee_id = employee.id AND schedule.schedule_id <> '0'
+            AND schedule.schedule_date >= DATE '2026-08-08'
             AND schedule.schedule_date >= employee.hire_date
             AND schedule.schedule_date <= coalesce(employee.departure_date, schedule.schedule_date)
             AND schedule.schedule_date < (now() AT TIME ZONE 'Asia/Shanghai')::date

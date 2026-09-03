@@ -46,6 +46,7 @@ test('员工日报档案按排班计算延后天数和未交天数', async () =>
   const [profile] = await new DailyReportAnalyticsRepository(pool).employeeProfiles()
   assert.deepEqual(profile, { id: 'EMP-0001', name: '张三', department: '研发部', departmentLevel2: null, submittedDays: 12, delayedDays: 2, missingDays: 3 })
   assert.match(statement, /employee_wecom_schedules/)
+  assert.match(statement, /schedule\.schedule_date >= DATE '2026-08-08'/)
   assert.match(statement, /scheduled_report\.report_date = schedule\.schedule_date/)
 })
 
