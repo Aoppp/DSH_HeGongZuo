@@ -11,7 +11,12 @@ import '../work-records/employee-work-records.css'
 const statusLabels: Record<AttendanceStatus, string> = { normal: '正常', late: '迟到', early_leave: '早退', missing: '缺卡' }
 const statusOptions: readonly { readonly value: '' | AttendanceStatus; readonly label: string }[] = [{ value: '', label: '全部状态' }, { value: 'normal', label: '正常' }, { value: 'late', label: '迟到' }, { value: 'early_leave', label: '早退' }, { value: 'missing', label: '缺卡' }]
 
-function shiftDate(date: string, days: number): string { const value = new Date(`${date}T00:00:00`); value.setDate(value.getDate() + days); return value.toISOString().slice(0, 10) }
+function shiftDate(date: string, days: number): string {
+  const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+  if (!matched) return date
+  const value = new Date(Date.UTC(Number(matched[1]), Number(matched[2]) - 1, Number(matched[3]) + days))
+  return value.toISOString().slice(0, 10)
+}
 
 export function EmployeeAttendanceModule(_props: ModuleProps) {
   const [date, setDate] = useState(localDate)
@@ -35,7 +40,6 @@ export function EmployeeAttendanceModule(_props: ModuleProps) {
 
   return <div className="employee-work-records module-page">
     <header className="work-records-heading"><div><h1>考勤管理</h1><p>查看已同步的员工上下班打卡记录</p></div><div className="work-records-heading__actions"><button type="button" title="前一天" onClick={() => updateDate(shiftDate(date, -1))}><ChevronLeft size={16} />前一天</button><label><CalendarDays size={15} /><input aria-label="查询日期" type="date" value={date} onChange={(event) => updateDate(event.target.value)} /></label><button type="button" title="后一天" onClick={() => updateDate(shiftDate(date, 1))}>后一天<ChevronRight size={16} /></button><button type="button" onClick={() => void load(date)} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={15} />刷新</button></div></header>
-    <div className="work-records-connection"><span><i />企业微信打卡数据已同步</span><small>仅展示已关联员工的企业微信原始打卡记录，不进行平台考勤规则判断。</small></div>
     {error && <div className="work-records-error"><AlertTriangle size={16} />{error}<button type="button" onClick={() => void load(date)}>重新加载</button></div>}
     {loading && !snapshot ? <div className="work-records-skeleton"><SkeletonCards count={4} /><SkeletonTable columns={8} rows={6} /></div> : snapshot && <>
       <section className="work-records-metrics work-records-metrics--compact work-records-metrics--four"><article><i><Clock3 size={18} /></i><span>已记录员工<strong>{snapshot.attendance.expected}</strong><small>人</small></span></article><article><i><CheckCircle2 size={18} /></i><span>正常打卡<strong>{snapshot.attendance.normal}</strong><small>人</small></span></article><article className={snapshot.attendance.exceptions ? 'is-danger' : ''}><i><AlertTriangle size={18} /></i><span>企业微信标记异常<strong>{snapshot.attendance.exceptions}</strong><small>人</small></span></article><article><i><MapPin size={18} /></i><span>打卡记录<strong>{snapshot.attendance.records.reduce((total, record) => total + (record.details?.length ?? Number(Boolean(record.checkInAt)) + Number(Boolean(record.checkOutAt))), 0)}</strong><small>条</small></span></article></section>
