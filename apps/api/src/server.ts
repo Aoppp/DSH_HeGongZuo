@@ -20,6 +20,7 @@ import { PlatformManagementError, PlatformManagementService } from './modules/pl
 import { ManagementCockpitService } from './modules/management/management-cockpit.js'
 import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/mock-work-records-source.js'
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
+import { PostgresAttendanceSource } from './modules/employee/attendance/postgres-attendance-source.js'
 import { DailyReportRepository } from './modules/employee/work-reports/daily-report-repository.js'
 import { DailyReportService, DailyReportValidationError } from './modules/employee/work-reports/daily-report-service.js'
 import { DailyReportAnalyticsRepository } from './modules/employee/work-reports/daily-report-analytics-repository.js'
@@ -40,6 +41,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
 const platformManagement = new PlatformManagementService(database)
 const employeeWorkRecords = new MockEmployeeWorkRecordsSource()
+const employeeAttendance = new PostgresAttendanceSource(database)
 const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
 const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
@@ -257,10 +259,12 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     await platformManagement.assertModuleEnabled(permissionId)
     const date = url.searchParams.get('date') ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
     if (!isCalendarDate(date)) throw new HttpError(400, '查询日期格式无效。')
-    const snapshot = await employeeWorkRecords.snapshot(date)
-    sendJson(response, 200, attendanceRequest
-      ? { date: snapshot.date, source: snapshot.source, connectionStatus: snapshot.connectionStatus, generatedAt: snapshot.generatedAt, attendance: snapshot.attendance }
-      : { date: snapshot.date, source: snapshot.source, connectionStatus: snapshot.connectionStatus, generatedAt: snapshot.generatedAt, reports: snapshot.reports })
+    if (attendanceRequest) {
+      sendJson(response, 200, await employeeAttendance.snapshot(date))
+    } else {
+      const snapshot = await employeeWorkRecords.snapshot(date)
+      sendJson(response, 200, { date: snapshot.date, source: snapshot.source, connectionStatus: snapshot.connectionStatus, generatedAt: snapshot.generatedAt, reports: snapshot.reports })
+    }
     return
   }
 
