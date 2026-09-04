@@ -88,6 +88,27 @@ export interface AttendanceAnomalyRanking {
   readonly total: number
 }
 
+export interface AttendanceMonthMetrics {
+  readonly expected: number
+  readonly attended: number
+  readonly normal: number
+  readonly late: number
+  readonly severeLate: number
+  readonly missing: number
+  readonly leave: number
+  readonly earlyLeave: number
+  readonly attendanceRate: number
+}
+
+export interface AttendanceMonthlySummary {
+  readonly month: string
+  readonly previousMonth: string
+  readonly metrics: AttendanceMonthMetrics
+  readonly previousMetrics: AttendanceMonthMetrics
+  readonly departments: readonly (AttendanceMonthMetrics & { readonly departmentName: string })[]
+  readonly rankings: readonly AttendanceAnomalyRanking[]
+}
+
 async function readAttendanceView<T>(parameters: URLSearchParams, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`/api/employee/attendance?${parameters}`, { credentials: 'same-origin', ...(signal ? { signal } : {}) })
   if (!response.ok) throw new Error(`考勤数据加载失败（HTTP ${response.status}）。`)
@@ -100,4 +121,8 @@ export function readEmployeeAttendanceHistory(employeeId: string, signal?: Abort
 
 export function readAttendanceAnomalies(month: string, signal?: AbortSignal): Promise<{ readonly month: string; readonly rankings: readonly AttendanceAnomalyRanking[] }> {
   return readAttendanceView(new URLSearchParams({ view: 'anomalies', month }), signal)
+}
+
+export function readAttendanceMonthlySummary(month: string, signal?: AbortSignal): Promise<AttendanceMonthlySummary> {
+  return readAttendanceView(new URLSearchParams({ view: 'monthly', month }), signal)
 }

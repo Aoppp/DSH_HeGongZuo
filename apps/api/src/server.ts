@@ -277,6 +277,12 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
         sendJson(response, 200, { month, rankings: await employeeAttendance.anomalyRankings(month) })
         return
       }
+      if (view === 'monthly') {
+        const month = url.searchParams.get('month') ?? ''
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new HttpError(400, '查询月份格式无效。')
+        sendJson(response, 200, await employeeAttendance.monthlySummary(month))
+        return
+      }
       sendJson(response, 200, await employeeAttendance.snapshot(date))
     } else {
       const snapshot = await employeeWorkRecords.snapshot(date)

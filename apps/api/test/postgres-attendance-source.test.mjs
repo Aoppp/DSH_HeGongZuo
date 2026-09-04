@@ -99,3 +99,19 @@ test('历史考勤按查询日期与入离职日期判断，不受员工当前�
   assert.match(statement, /employee\.departure_date IS NULL OR employee\.departure_date >= schedule\.schedule_date/)
   assert.doesNotMatch(statement, /employee\.status <> 'inactive'/)
 })
+
+test('月度统计汇总人次、部门和异常排行', async () => {
+  const rows = [
+    { id: '1', schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '张三', department_name: '研发部', checkin_time: new Date('2026-09-03T01:10:00Z'), checkin_type: '上班打卡', exception_type: '正常', location_title: '公司', standard_checkin_time: null },
+    { id: '2', schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '张三', department_name: '研发部', checkin_time: new Date('2026-09-03T10:00:00Z'), checkin_type: '下班打卡', exception_type: '正常', location_title: '公司', standard_checkin_time: null },
+    { id: null, schedule_date: '2026-09-03', employee_id: 'EMP-0002', display_name: '李四', department_name: '销售部', checkin_time: null, checkin_type: null, exception_type: null, location_title: null, standard_checkin_time: null },
+  ]
+  const summary = await new PostgresAttendanceSource({ query: async () => ({ rows }) }).monthlySummary('2026-09')
+  assert.equal(summary.metrics.expected, 2)
+  assert.equal(summary.metrics.attended, 1)
+  assert.equal(summary.metrics.late, 1)
+  assert.equal(summary.metrics.missing, 1)
+  assert.equal(summary.metrics.attendanceRate, 50)
+  assert.equal(summary.departments[0].departmentName, '销售部')
+  assert.equal(summary.rankings.length, 2)
+})

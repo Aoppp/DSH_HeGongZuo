@@ -50,6 +50,31 @@ export interface AttendanceAnomalyRanking {
   readonly total: number
 }
 
+export interface AttendanceMonthMetrics {
+  readonly expected: number
+  readonly attended: number
+  readonly normal: number
+  readonly late: number
+  readonly severeLate: number
+  readonly missing: number
+  readonly leave: number
+  readonly earlyLeave: number
+  readonly attendanceRate: number
+}
+
+export interface AttendanceDepartmentSummary extends AttendanceMonthMetrics {
+  readonly departmentName: string
+}
+
+export interface AttendanceMonthlySummary {
+  readonly month: string
+  readonly previousMonth: string
+  readonly metrics: AttendanceMonthMetrics
+  readonly previousMetrics: AttendanceMonthMetrics
+  readonly departments: readonly AttendanceDepartmentSummary[]
+  readonly rankings: readonly AttendanceAnomalyRanking[]
+}
+
 function iso(value: string | Date): string { return (value instanceof Date ? value : new Date(value)).toISOString() }
 function dateText(value: string | Date): string { return typeof value === 'string' ? value.slice(0, 10) : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(value) }
 function time(value: string | Date | null): string { return value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—' }
@@ -71,6 +96,12 @@ function checkinStatus(value: string | Date): ExtendedAttendanceStatus {
 
 function localToday(): string { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date()) }
 function previousDate(date: string): string { const value = new Date(`${date}T00:00:00Z`); value.setUTCDate(value.getUTCDate() - 1); return value.toISOString().slice(0, 10) }
+function shiftMonth(month: string, offset: number): string { const value = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + offset, 1)); return value.toISOString().slice(0, 7) }
+function monthRange(month: string): { readonly startDate: string; readonly endDate: string } {
+  const startDate = `${month}-01`
+  const monthEnd = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10)
+  return { startDate, endDate: [monthEnd, previousDate(localToday())].sort()[0]! }
+}
 function finalStatus(record: ExtendedAttendanceRecord): ExtendedAttendanceStatus {
   if (record.checkInState === 'leave' || record.checkOutState === 'leave') return 'leave'
   if (!record.checkInAt || !record.checkOutAt) return 'missing'
@@ -161,11 +192,23 @@ export class PostgresAttendanceSource {
     return this.records('2026-07-01', previousDate(localToday()), employeeId)
   }
 
-  async anomalyRankings(month: string): Promise<readonly AttendanceAnomalyRanking[]> {
-    const startDate = `${month}-01`
-    const monthEnd = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10)
-    const endDate = [monthEnd, previousDate(localToday())].sort()[0]!
-    const records = await this.records(startDate, endDate)
+  private metrics(records: readonly ExtendedAttendanceRecord[]): AttendanceMonthMetrics {
+    const expected = records.length
+    const attended = records.filter((record) => record.status !== 'leave' && Boolean(record.checkInAt || record.checkOutAt)).length
+    const late = records.filter((record) => record.status === 'late' || record.status === 'late_severe').length
+    return {
+      expected, attended,
+      normal: records.filter((record) => record.status === 'normal').length,
+      late,
+      severeLate: records.filter((record) => record.status === 'late_severe').length,
+      missing: records.filter((record) => record.status === 'missing').length,
+      leave: records.filter((record) => record.status === 'leave').length,
+      earlyLeave: records.filter((record) => record.status === 'early_leave').length,
+      attendanceRate: expected ? Math.round(attended / expected * 1_000) / 10 : 0,
+    }
+  }
+
+  private rankings(records: readonly ExtendedAttendanceRecord[]): readonly AttendanceAnomalyRanking[] {
     const rankings = new Map<string, AttendanceAnomalyRanking>()
     for (const record of records) {
       if (record.status === 'normal' || record.status === 'leave') continue
@@ -175,6 +218,21 @@ export class PostgresAttendanceSource {
       const earlyLeave = record.details.some((detail) => detail.status === 'early_leave')
       rankings.set(record.externalUserId, { ...current, lateCount: current.lateCount + Number(late), severeLateCount: current.severeLateCount + Number(severeLate), missingCount: current.missingCount + Number(record.status === 'missing'), earlyLeaveCount: current.earlyLeaveCount + Number(earlyLeave), total: current.total + 1 })
     }
-    return [...rankings.values()].sort((left, right) => right.lateCount - left.lateCount || right.severeLateCount - left.severeLateCount || right.total - left.total || left.employeeName.localeCompare(right.employeeName, 'zh-CN'))
+    return [...rankings.values()].sort((left, right) => right.total - left.total || right.lateCount - left.lateCount || right.missingCount - left.missingCount || left.employeeName.localeCompare(right.employeeName, 'zh-CN'))
+  }
+
+  async anomalyRankings(month: string): Promise<readonly AttendanceAnomalyRanking[]> {
+    const range = monthRange(month)
+    return this.rankings(await this.records(range.startDate, range.endDate))
+  }
+
+  async monthlySummary(month: string): Promise<AttendanceMonthlySummary> {
+    const previousMonth = shiftMonth(month, -1)
+    const currentRange = monthRange(month); const previousRange = monthRange(previousMonth)
+    const [records, previousRecords] = await Promise.all([this.records(currentRange.startDate, currentRange.endDate), this.records(previousRange.startDate, previousRange.endDate)])
+    const byDepartment = new Map<string, ExtendedAttendanceRecord[]>()
+    for (const record of records) byDepartment.set(record.departmentName, [...(byDepartment.get(record.departmentName) ?? []), record])
+    const departments = [...byDepartment].map(([departmentName, items]) => ({ departmentName, ...this.metrics(items) })).sort((left, right) => right.missing - left.missing || right.late - left.late || left.departmentName.localeCompare(right.departmentName, 'zh-CN'))
+    return { month, previousMonth, metrics: this.metrics(records), previousMetrics: this.metrics(previousRecords), departments, rankings: this.rankings(records).slice(0, 10) }
   }
 }
