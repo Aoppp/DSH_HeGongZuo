@@ -8,6 +8,7 @@ interface WeComResponse {
   readonly access_token?: string
   readonly expires_in?: number
   readonly sp_no_list?: unknown
+  readonly next_cursor?: unknown
   readonly new_next_cursor?: unknown
   readonly info?: unknown
 }
@@ -52,13 +53,14 @@ export class WeComLeaveClient {
     const url = new URL('/cgi-bin/oa/getapprovalinfo', wecomApi)
     url.searchParams.set('access_token', await this.accessToken())
     const numbers: string[] = []
-    let cursor = '0'
+    let cursor = 0
     do {
-      const body = await this.response(url.toString(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ starttime: startTime, endtime: endTime, new_cursor: cursor, size: 100 }) })
+      const body = await this.response(url.toString(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ starttime: startTime, endtime: endTime, cursor, size: 100 }) })
       const page = Array.isArray(body.sp_no_list) ? body.sp_no_list.filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : []
       numbers.push(...page)
-      const next = typeof body.new_next_cursor === 'string' ? body.new_next_cursor : ''
-      if (!next || next === cursor || page.length < 100) break
+      const rawNext = body.next_cursor ?? body.new_next_cursor
+      const next = typeof rawNext === 'number' || typeof rawNext === 'string' ? Number(rawNext) : Number.NaN
+      if (!Number.isFinite(next) || next === cursor || page.length < 100) break
       cursor = next
     } while (true)
     return numbers
