@@ -90,15 +90,6 @@ export function Sidebar({ activeModule, collapsed, modules, onNavigate, onToggle
         })}
       </nav>
 
-      <div className="sidebar__scope">
-        {!collapsed && (
-          <>
-            <span><i /> 内部开发阶段</span>
-            <p>按账号已开通功能显示</p>
-          </>
-        )}
-      </div>
-
       <button type="button" className="sidebar__toggle" onClick={onToggle} aria-label={collapsed ? '展开导航' : '收起导航'}>
         {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
       </button>
