@@ -1,4 +1,4 @@
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, MapPin, RefreshCw, Search } from 'lucide-react'
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, RefreshCw, Search, UserCheck } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
@@ -9,7 +9,8 @@ import { localDate } from '../work-records/work-records-format'
 import { readEmployeeAttendance, type AttendanceStatus, type EmployeeAttendanceSnapshot } from '../work-records/work-records-api'
 import '../work-records/employee-work-records.css'
 
-const statusOptions: readonly { readonly value: '' | AttendanceStatus; readonly label: string }[] = [{ value: '', label: '全部状态' }, { value: 'normal', label: '正常' }, { value: 'late', label: '迟到' }, { value: 'early_leave', label: '早退' }, { value: 'missing', label: '缺卡' }, { value: 'leave', label: '请假' }]
+const statusOptions: readonly { readonly value: '' | AttendanceStatus; readonly label: string }[] = [{ value: '', label: '全部' }, { value: 'normal', label: '正常' }, { value: 'late', label: '迟到' }, { value: 'missing', label: '缺卡' }, { value: 'leave', label: '请假' }]
+const anomalyStatuses = new Set<AttendanceStatus>(['late', 'late_severe', 'early_leave', 'missing'])
 
 function shiftDate(date: string, days: number): string {
   const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
@@ -27,7 +28,8 @@ export function EmployeeAttendanceModule(_props: ModuleProps) {
   const [query, setQuery] = useState('')
   const [department, setDepartment] = useState('')
   const [status, setStatus] = useState<'' | AttendanceStatus>('')
-  const [historyEmployee, setHistoryEmployee] = useState<{ readonly id: string; readonly name: string } | null>(null)
+  const [onlyAnomalies, setOnlyAnomalies] = useState(false)
+  const [historyEmployee, setHistoryEmployee] = useState<{ readonly id: string; readonly name: string; readonly month: string } | null>(null)
   const [anomaliesOpen, setAnomaliesOpen] = useState(false)
   const load = useCallback(async (nextDate: string, signal?: AbortSignal) => {
     setLoading(true); setError(null)
@@ -37,17 +39,40 @@ export function EmployeeAttendanceModule(_props: ModuleProps) {
   }, [])
   useEffect(() => { const controller = new AbortController(); void load(date, controller.signal); return () => controller.abort() }, [date, load])
   const departments = useMemo(() => [...new Set(snapshot?.attendance.records.map((record) => record.departmentName) ?? [])].sort((left, right) => left.localeCompare(right, 'zh-CN')), [snapshot])
-  const records = useMemo(() => (snapshot?.attendance.records ?? []).filter((record) => (!query.trim() || `${record.employeeName} ${record.departmentName}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) && (!department || record.departmentName === department) && (!status || record.status === status || (status === 'late' && record.status === 'late_severe'))).sort((left, right) => Number(right.status !== 'normal') - Number(left.status !== 'normal') || left.employeeName.localeCompare(right.employeeName, 'zh-CN')), [snapshot, query, department, status])
+  const records = useMemo(() => (snapshot?.attendance.records ?? []).filter((record) => (!query.trim() || `${record.employeeName} ${record.departmentName}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) && (!department || record.departmentName === department) && (!status || record.status === status || (status === 'late' && record.status === 'late_severe')) && (!onlyAnomalies || anomalyStatuses.has(record.status))).sort((left, right) => {
+    const priority = { missing: 5, late_severe: 4, late: 3, early_leave: 2, leave: 1, normal: 0 }
+    return priority[right.status] - priority[left.status] || left.employeeName.localeCompare(right.employeeName, 'zh-CN')
+  }), [snapshot, query, department, status, onlyAnomalies])
+  const overview = useMemo(() => {
+    const source = snapshot?.attendance.records ?? []
+    return {
+      expected: snapshot?.attendance.expected ?? 0,
+      attended: source.filter((record) => record.status !== 'leave' && Boolean(record.checkInAt || record.checkOutAt)).length,
+      late: source.filter((record) => record.status === 'late' || record.status === 'late_severe').length,
+      missing: source.filter((record) => record.status === 'missing').length,
+      leave: source.filter((record) => record.status === 'leave').length,
+    }
+  }, [snapshot])
   const updateDate = (next: string) => setDate(next > latestDate ? latestDate : next)
 
   return <div className="employee-work-records module-page">
     <header className="work-records-heading"><div><h1>考勤管理</h1><p>查看已同步的员工上下班打卡记录</p></div><div className="work-records-heading__actions"><button type="button" title="前一天" onClick={() => updateDate(shiftDate(date, -1))}><ChevronLeft size={16} />前一天</button><label><CalendarDays size={15} /><input aria-label="查询日期" type="date" max={latestDate} value={date} onChange={(event) => updateDate(event.target.value)} /></label><button type="button" title="后一天" disabled={date >= latestDate} onClick={() => updateDate(shiftDate(date, 1))}>后一天<ChevronRight size={16} /></button><button type="button" onClick={() => void load(date)} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={15} />刷新</button></div></header>
     {error && <div className="work-records-error"><AlertTriangle size={16} />{error}<button type="button" onClick={() => void load(date)}>重新加载</button></div>}
-    {loading && !snapshot ? <div className="work-records-skeleton"><SkeletonCards count={4} /><SkeletonTable columns={8} rows={6} /></div> : snapshot && <>
-      <section className="work-records-metrics work-records-metrics--compact work-records-metrics--four"><article><i><Clock3 size={18} /></i><span>已记录员工<strong>{snapshot.attendance.expected}</strong><small>人</small></span></article><article><i><CheckCircle2 size={18} /></i><span>正常打卡<strong>{snapshot.attendance.normal}</strong><small>人</small></span></article><article className={snapshot.attendance.exceptions ? 'is-danger' : ''}><i><AlertTriangle size={18} /></i><span>打卡异常<strong>{snapshot.attendance.exceptions}</strong><small>人</small></span></article><article><i><MapPin size={18} /></i><span>打卡记录<strong>{snapshot.attendance.records.reduce((total, record) => total + (record.details?.length ?? Number(Boolean(record.checkInAt)) + Number(Boolean(record.checkOutAt))), 0)}</strong><small>条</small></span></article></section>
-      <section className="work-records-panel"><div className="work-records-section-title"><div><h2>打卡记录</h2><span>当前筛选 {records.length} 名员工</span></div><div className="work-records-section-actions"><button type="button" className="work-records-export" onClick={() => setAnomaliesOpen(true)}><AlertTriangle size={15} />打卡异常</button><button type="button" className="work-records-export" disabled={records.length === 0} onClick={() => void exportAttendance(records, date)}><Download size={15} />导出 Excel</button></div></div><div className="work-records-filters"><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名或部门" /></label><select aria-label="部门筛选" value={department} onChange={(event) => setDepartment(event.target.value)}><option value="">全部部门</option>{departments.map((item) => <option key={item}>{item}</option>)}</select><select aria-label="状态筛选" value={status} onChange={(event) => setStatus(event.target.value as '' | AttendanceStatus)}>{statusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></div><div className="work-attendance-table"><table><thead><tr><th>员工</th><th>部门</th><th>实际上班</th><th>实际下班</th><th>考勤状态</th><th>地点</th><th aria-label="操作" /></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td><strong>{record.employeeName}</strong></td><td>{record.departmentName}</td><td>{attendanceClock(record.checkInAt, record.checkInState)}</td><td>{attendanceClock(record.checkOutAt, record.checkOutState)}</td><td><span className={`attendance-status attendance-status--${record.status}`}>{attendanceStatusLabels[record.status]}</span></td><td><span className="work-attendance-location">{record.checkInLocation || record.checkOutLocation || record.location || '—'}</span></td><td><button className="work-attendance-detail" type="button" onClick={() => setHistoryEmployee({ id: record.externalUserId, name: record.employeeName })}>全部记录</button></td></tr>)}</tbody></table>{records.length === 0 && <p className="work-records-empty">当天没有排班或没有符合筛选条件的打卡记录</p>}</div></section>
+    {loading && !snapshot ? <div className="work-records-skeleton"><SkeletonCards count={5} /><SkeletonTable columns={6} rows={6} /></div> : snapshot && <>
+      <section className="work-records-metrics attendance-overview">
+        <article><i><CalendarDays size={18} /></i><span>应出勤<strong>{overview.expected}</strong><small>人</small></span></article>
+        <article className="is-success"><i><UserCheck size={18} /></i><span>已出勤<strong>{overview.attended}</strong><small>人</small></span></article>
+        <article className={overview.late ? 'is-warning' : ''}><i><Clock3 size={18} /></i><span>迟到<strong>{overview.late}</strong><small>人</small></span></article>
+        <article className={overview.missing ? 'is-danger' : ''}><i><AlertTriangle size={18} /></i><span>缺卡<strong>{overview.missing}</strong><small>人</small></span></article>
+        <article className="is-leave"><i><CheckCircle2 size={18} /></i><span>请假<strong>{overview.leave}</strong><small>人</small></span></article>
+      </section>
+      <section className="work-records-panel">
+        <div className="work-records-section-title"><div><h2>考勤明细</h2><span>当前筛选 {records.length} 名员工</span></div><div className="work-records-section-actions"><button type="button" className="work-records-export" onClick={() => setAnomaliesOpen(true)}><AlertTriangle size={15} />月度异常</button><button type="button" className="work-records-export" disabled={records.length === 0} onClick={() => void exportAttendance(records, date)}><Download size={15} />导出 Excel</button></div></div>
+        <div className="work-records-filters"><label><Search size={15} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索姓名或部门" /></label><select aria-label="部门筛选" value={department} onChange={(event) => setDepartment(event.target.value)}><option value="">全部部门</option>{departments.map((item) => <option key={item}>{item}</option>)}</select><select aria-label="状态筛选" value={status} onChange={(event) => { setStatus(event.target.value as '' | AttendanceStatus); setOnlyAnomalies(false) }}>{statusOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select><button type="button" className={`attendance-anomaly-filter${onlyAnomalies ? ' is-active' : ''}`} aria-pressed={onlyAnomalies} onClick={() => { setOnlyAnomalies((current) => !current); setStatus('') }}><AlertTriangle size={14} />仅看异常</button></div>
+        <div className="work-attendance-table"><table><thead><tr><th>姓名</th><th>部门</th><th>上班时间</th><th>下班时间</th><th>状态</th><th>地点</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td><button className="attendance-employee-link" type="button" onClick={() => setHistoryEmployee({ id: record.externalUserId, name: record.employeeName, month: date.slice(0, 7) })}>{record.employeeName}</button></td><td>{record.departmentName}</td><td>{attendanceClock(record.checkInAt, record.checkInState)}</td><td>{attendanceClock(record.checkOutAt, record.checkOutState)}</td><td><span className={`attendance-status attendance-status--${record.status}`}>{attendanceStatusLabels[record.status]}</span></td><td><span className="work-attendance-location">{record.checkInLocation || record.checkOutLocation || record.location || '—'}</span></td></tr>)}</tbody></table>{records.length === 0 && <p className="work-records-empty">当天没有排班或没有符合筛选条件的考勤记录</p>}</div>
+      </section>
     </>}
-    {historyEmployee && <AttendanceHistoryDialog employeeId={historyEmployee.id} employeeName={historyEmployee.name} onClose={() => setHistoryEmployee(null)} />}
-    {anomaliesOpen && <AttendanceAnomalyDialog month={date.slice(0, 7)} onClose={() => setAnomaliesOpen(false)} onEmployee={(employee) => { setAnomaliesOpen(false); setHistoryEmployee({ id: employee.employeeId, name: employee.employeeName }) }} />}
+    {historyEmployee && <AttendanceHistoryDialog employeeId={historyEmployee.id} employeeName={historyEmployee.name} month={historyEmployee.month} onClose={() => setHistoryEmployee(null)} />}
+    {anomaliesOpen && <AttendanceAnomalyDialog month={date.slice(0, 7)} onClose={() => setAnomaliesOpen(false)} onEmployee={(employee) => { setAnomaliesOpen(false); setHistoryEmployee({ id: employee.employeeId, name: employee.employeeName, month: date.slice(0, 7) }) }} />}
   </div>
 }

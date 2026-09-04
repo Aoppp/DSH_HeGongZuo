@@ -20,6 +20,8 @@
 .work-records-metrics article > i { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border-radius: 10px; background: #eef5ff; color: #2f6db2; }
 .work-records-metrics article.is-warning > i { background: #fff6df; color: #b26a00; }
 .work-records-metrics article.is-danger > i { background: #fff0ef; color: #c7443e; }
+.work-records-metrics article.is-success > i { background: #eaf8f0; color: #227448; }
+.work-records-metrics article.is-leave > i { background: #edf2f7; color: #58708c; }
 .work-records-metrics span { color: #667085; font-size: 12px; }
 .work-records-metrics strong { margin-left: 8px; color: #172033; font-size: 23px; }
 .work-records-metrics small { margin-left: 3px; }
@@ -36,6 +38,8 @@
 .work-records-filters label { display: inline-flex; flex: 1 1 240px; align-items: center; gap: 7px; min-height: 34px; padding: 0 10px; border: 1px solid #dfe5ed; border-radius: 8px; background: #fff; color: #8692a5; }
 .work-records-filters input { min-width: 0; width: 100%; border: 0; outline: 0; color: #344054; font: inherit; font-size: 13px; }
 .work-records-filters select { min-height: 34px; padding: 0 26px 0 10px; border: 1px solid #dfe5ed; border-radius: 8px; background: #fff; color: #475467; font: inherit; font-size: 13px; }
+.attendance-anomaly-filter { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 11px; border: 1px solid #dfe5ed; border-radius: 8px; background: #fff; color: #596579; font: inherit; font-size: 13px; cursor: pointer; }
+.attendance-anomaly-filter.is-active { border-color: #e4a5a0; background: #fff3f2; color: #ad3f39; }
 .work-records-tabs { display: flex; gap: 4px; padding: 12px 14px 0; border-bottom: 1px solid #e9edf2; }
 .work-records-tabs button { padding: 10px 13px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #667085; font-weight: 650; cursor: pointer; }
 .work-records-tabs button.is-active { border-bottom-color: #2869aa; color: #205f9f; }
@@ -54,12 +58,14 @@
 .work-attendance-table th { padding: 12px 14px; border-bottom: 1px solid #e8ecf1; background: #fafbfc; color: #667085; text-align: left; font-weight: 600; }
 .work-attendance-table td { padding: 14px; border-bottom: 1px solid #eef1f4; color: #4a5568; }
 .work-attendance-table td strong { color: #202c3f; }
+.attendance-employee-link { padding: 0; border: 0; background: none; color: #205f9f; font: inherit; font-weight: 700; cursor: pointer; }
+.attendance-employee-link:hover { color: #174b80; text-decoration: underline; text-underline-offset: 3px; }
 .work-attendance-location { display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 .work-attendance-detail { min-height: 28px; padding: 0 9px; }
 .attendance-status { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #eaf8f0; color: #227448; font-size: 12px; font-weight: 650; }
 .attendance-status--late, .attendance-status--early_leave { background: #fff4df; color: #9a5d00; }
 .attendance-status--late_severe, .attendance-status--missing { background: #fff0ef; color: #b83e39; }
-.attendance-status--leave { background: #eaf4ff; color: #2869aa; }
+.attendance-status--leave { background: #edf2f7; color: #58708c; }
 .work-records-loading, .work-records-empty { padding: 48px 20px; color: #7a8699; text-align: center; }
 .work-records-loading { display: flex; align-items: center; justify-content: center; gap: 9px; }
 .work-records-error { display: flex; align-items: center; gap: 8px; padding: 11px 13px; border: 1px solid #f2c5c1; border-radius: 9px; background: #fff4f3; color: #a53b36; font-size: 13px; }
@@ -81,11 +87,14 @@
 .attendance-detail main article p { margin: 0; color: #55657a; font-size: 12px; line-height: 1.45; text-align: right; word-break: break-word; }
 .attendance-history > section, .attendance-anomalies > section { width: min(900px, 100%); }
 .attendance-history .work-attendance-table { max-height: 620px; overflow: auto; }
+.attendance-person-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 14px 18px; border-bottom: 1px solid #e8edf3; background: #f8fafc; }
+.attendance-person-summary span { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; color: #6b778b; font-size: 11px; }
+.attendance-person-summary strong { color: #24364d; font-size: 19px; }
 .attendance-insights-loading { padding: 18px; }
 .attendance-ranking { padding: 8px 20px 20px!important; }
 .attendance-ranking > button { display: grid; width: 100%; grid-template-columns: 34px minmax(130px, 1fr) minmax(360px, 2fr); align-items: center; gap: 12px; border: 0; border-bottom: 1px solid #edf1f5; padding: 14px 0; background: #fff; color: #344054; text-align: left; cursor: pointer; }
 .attendance-ranking > button > b { display: grid; place-items: center; width: 27px; height: 27px; border-radius: 8px; background: #edf5fd; color: #2869aa; }
 .attendance-ranking > button > div { display: grid; gap: 4px; }.attendance-ranking > button > div span { color: #7a8699; font-size: 12px; }
 .attendance-ranking dl { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); margin: 0; }.attendance-ranking dl div { display: grid; gap: 3px; }.attendance-ranking dt { color: #7a8699; font-size: 11px; }.attendance-ranking dd { margin: 0; font-weight: 700; }
-@media (max-width: 1000px) { .work-records-metrics, .work-records-metrics--four { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 720px) { .work-records-heading, .work-records-connection { align-items: stretch; flex-direction: column; } .work-records-heading__actions, .work-records-filters, .work-records-section-title { flex-wrap: wrap; } .work-records-heading__actions button { flex: 1 1 auto; } .work-records-metrics, .work-records-metrics--four { grid-template-columns: 1fr 1fr; } .work-records-connection small { line-height: 1.5; } .work-records-filters label { flex-basis: 100%; } .attendance-detail { padding: 12px; } .attendance-detail main article { grid-template-columns: auto minmax(0, 1fr); } .attendance-detail main article p { grid-column: 2; text-align: left; } .attendance-ranking > button { grid-template-columns: 30px 1fr; }.attendance-ranking dl { grid-column: 2; grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 1000px) { .work-records-metrics, .work-records-metrics--four { grid-template-columns: repeat(2, minmax(0, 1fr)); } .attendance-overview article:last-child { grid-column: span 2; } }
+@media (max-width: 720px) { .work-records-heading, .work-records-connection { align-items: stretch; flex-direction: column; } .work-records-heading__actions, .work-records-filters, .work-records-section-title { flex-wrap: wrap; } .work-records-heading__actions button { flex: 1 1 auto; } .work-records-metrics, .work-records-metrics--four { grid-template-columns: 1fr 1fr; } .work-records-connection small { line-height: 1.5; } .work-records-filters label { flex-basis: 100%; } .attendance-detail { padding: 12px; } .attendance-detail main article { grid-template-columns: auto minmax(0, 1fr); } .attendance-detail main article p { grid-column: 2; text-align: left; } .attendance-ranking > button { grid-template-columns: 30px 1fr; }.attendance-ranking dl { grid-column: 2; grid-template-columns: repeat(2,1fr); } .attendance-person-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
