@@ -397,6 +397,17 @@ export class PostgresEmployeeRepository {
   }
 
   private async nextId(client: PoolClient): Promise<string> {
+    // 历史批量导入可能直接写入 EMP 编号而不推进序列。
+    // 串行化编号分配并在生成前将序列校准到现有最大编号，避免新增员工与导入数据冲突。
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('employee_id_seq'))")
+    await client.query(`SELECT setval(
+      'employee_id_seq',
+      GREATEST(
+        (SELECT last_value FROM employee_id_seq),
+        COALESCE((SELECT max(substring(id FROM '^EMP-([0-9]+)$')::bigint) FROM employees WHERE id ~ '^EMP-[0-9]+$'), 0)
+      ),
+      true
+    )`)
     const result = await client.query<{ value: string }>("SELECT nextval('employee_id_seq')::text AS value")
     const value = result.rows[0]?.value
     if (!value) throw new Error('无法生成员工 ID。')
