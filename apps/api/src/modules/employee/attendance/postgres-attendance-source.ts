@@ -14,6 +14,9 @@ interface CheckinRow {
   readonly checkin_type: string | null
   readonly exception_type: string | null
   readonly location_title: string | null
+  readonly location_detail: string | null
+  readonly lat: number | string | null
+  readonly lng: number | string | null
   readonly standard_checkin_time: string | Date | null
   readonly leave_full_day: boolean
   readonly leave_at_start: boolean
@@ -86,7 +89,14 @@ export interface EmployeeDayStatus {
 function iso(value: string | Date): string { return (value instanceof Date ? value : new Date(value)).toISOString() }
 function dateText(value: string | Date): string { return typeof value === 'string' ? value.slice(0, 10) : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(value) }
 function time(value: string | Date | null): string { return value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—' }
-function type(value: string): 'checkin' | 'checkout' | null { return value.includes('上班') ? 'checkin' : value.includes('下班') ? 'checkout' : null }
+function type(value: string): 'checkin' | 'checkout' | 'external' | null { return value.includes('上班') ? 'checkin' : value.includes('下班') ? 'checkout' : value.includes('外出') ? 'external' : null }
+function location(row: Pick<CheckinRow, 'location_title' | 'location_detail' | 'lat' | 'lng'>): string | null {
+  const title = row.location_title?.trim(); if (title) return title
+  const detail = row.location_detail?.trim(); if (detail) return detail
+  const lat = Number(row.lat), lng = Number(row.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) return null
+  return `${(lat / 1_000_000).toFixed(6)}, ${(lng / 1_000_000).toFixed(6)}`
+}
 function rawStatus(value: string | null): ExtendedAttendanceStatus {
   if (value?.includes('早退')) return 'early_leave'
   if (value?.includes('缺卡')) return 'missing'
@@ -137,7 +147,7 @@ export class PostgresAttendanceSource {
     const employeeCondition = employeeId ? `AND employee.id = $${values.push(employeeId)}` : ''
     const result = await this.pool.query<CheckinRow>(`SELECT checkin.id::text, schedule.schedule_date::text, employee.id AS employee_id, employee.display_name,
       employee.department_name, checkin.checkin_time, checkin.checkin_type, checkin.exception_type,
-      checkin.location_title, checkin.standard_checkin_time,
+      checkin.location_title, checkin.location_detail, checkin.lat, checkin.lng, checkin.standard_checkin_time,
       EXISTS (SELECT 1 FROM employee_wecom_leaves leave_record WHERE leave_record.employee_id=employee.id AND leave_record.sp_status=2
         AND leave_record.duration >= 28800 AND leave_record.start_time < ((schedule.schedule_date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
         AND leave_record.end_time >= (schedule.schedule_date::timestamp AT TIME ZONE 'Asia/Shanghai')) AS leave_full_day,
@@ -161,9 +171,11 @@ export class PostgresAttendanceSource {
       const date = dateText(row.schedule_date)
       const key = `${row.employee_id}-${date}`
       const checkinType = row.checkin_type ? type(row.checkin_type) : null
-      const checkinTime = row.checkin_time ? iso(row.checkin_time) : null
+      const missingPlaceholder = row.exception_type?.includes('未打卡') ?? false
+      const checkinTime = row.checkin_time && !missingPlaceholder ? iso(row.checkin_time) : null
+      const checkinLocation = missingPlaceholder ? null : location(row)
       const detailStatus = checkinType === 'checkin' && row.checkin_time ? checkinStatus(row.checkin_time) : rawStatus(row.exception_type)
-      const detail = checkinType && checkinTime ? { type: row.checkin_type!, time: checkinTime, standardTime: time(row.standard_checkin_time), status: detailStatus, exceptionType: row.exception_type, location: row.location_title } : null
+      const detail = checkinType && checkinTime ? { type: row.checkin_type!, time: checkinTime, standardTime: time(row.standard_checkin_time), status: detailStatus, exceptionType: row.exception_type, location: checkinLocation } : null
       const current = grouped.get(key) ?? {
         id: key, externalUserId: row.employee_id, employeeName: row.display_name, departmentName: row.department_name, date,
         scheduledStart: '—', scheduledEnd: '—', checkInAt: null, checkOutAt: null,
@@ -175,13 +187,13 @@ export class PostgresAttendanceSource {
       const details = detail ? [...current.details, detail] : [...current.details]
       let checkInAt = current.checkInAt, checkOutAt = current.checkOutAt
       let checkInLocation = current.checkInLocation, checkOutLocation = current.checkOutLocation
-      if (checkinType === 'checkin' && checkinTime && (!checkInAt || checkinTime < checkInAt)) { checkInAt = checkinTime; checkInLocation = row.location_title }
-      if (checkinType === 'checkout' && checkinTime && (!checkOutAt || checkinTime > checkOutAt)) { checkOutAt = checkinTime; checkOutLocation = row.location_title }
+      if (checkinType === 'checkin' && checkinTime && (!checkInAt || checkinTime < checkInAt)) { checkInAt = checkinTime; checkInLocation = checkinLocation }
+      if (checkinType === 'checkout' && checkinTime && (!checkOutAt || checkinTime > checkOutAt)) { checkOutAt = checkinTime; checkOutLocation = checkinLocation }
       const next: ExtendedAttendanceRecord = {
         ...current, checkInAt, checkOutAt,
         checkInState: current.checkInState === 'leave' ? 'leave' : checkInAt ? 'recorded' : 'missing',
         checkOutState: current.checkOutState === 'leave' ? 'leave' : checkOutAt ? 'recorded' : 'missing',
-        checkInLocation, checkOutLocation, location: current.location ?? row.location_title, details,
+        checkInLocation, checkOutLocation, location: current.location ?? checkinLocation, details,
       }
       grouped.set(key, { ...next, status: finalStatus(next) })
     }

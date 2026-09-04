@@ -47,6 +47,21 @@ test('上下班打卡缺失任意一项均为缺卡，实际时间保持空值',
   assert.equal(record.scheduledEnd, '—')
 })
 
+test('未打卡占位时间不作为实际时间，外出打卡仅补充地点和明细', async () => {
+  const rows = [
+    { id: '1', schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '张三', department_name: '研发部', checkin_time: new Date('2026-09-03T01:00:00Z'), checkin_type: '上班打卡', exception_type: '未打卡', location_title: null, location_detail: null, lat: 0, lng: 0, standard_checkin_time: null },
+    { id: '2', schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '张三', department_name: '研发部', checkin_time: new Date('2026-09-03T10:00:00Z'), checkin_type: '下班打卡', exception_type: '未打卡', location_title: null, location_detail: null, lat: 0, lng: 0, standard_checkin_time: null },
+    { id: '3', schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '张三', department_name: '研发部', checkin_time: new Date('2026-09-03T06:00:00Z'), checkin_type: '外出打卡', exception_type: null, location_title: null, location_detail: '湖北省孝感市安陆市', lat: 31219733, lng: 113703746, standard_checkin_time: null },
+  ]
+  const [record] = (await new PostgresAttendanceSource({ query: async () => ({ rows }) }).snapshot('2026-09-03')).attendance.records
+  assert.equal(record.checkInAt, null)
+  assert.equal(record.checkOutAt, null)
+  assert.equal(record.status, 'missing')
+  assert.equal(record.location, '湖北省孝感市安陆市')
+  assert.equal(record.details.length, 1)
+  assert.equal(record.details[0].type, '外出打卡')
+})
+
 test('9点01分起至9点15分为普通迟到，超过15分为严重迟到', async () => {
   const rows = [
     { id: '1', schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '张三', department_name: '研发部', checkin_time: new Date('2026-09-03T01:10:00Z'), checkin_type: '上班打卡', exception_type: '正常', location_title: '公司', standard_checkin_time: null },
