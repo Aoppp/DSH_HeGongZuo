@@ -1,8 +1,10 @@
 import { database } from '../../../database.js'
 import { WeComCheckinClient } from './wecom-checkin-client.js'
 import { WeComCheckinRepository } from './wecom-checkin-repository.js'
-import { incrementalCheckinInput, synchronizeWeComCheckins } from './wecom-checkin-sync.js'
+import { incrementalCheckinInput, shiftShanghaiDate, synchronizeWeComCheckins } from './wecom-checkin-sync.js'
 import { synchronizeWeComSchedules } from './wecom-schedule-sync.js'
+import { WeComLeaveClient } from './wecom-leave-client.js'
+import { synchronizeWeComLeaves } from './wecom-leave-sync.js'
 
 const lockId = '2026090302'
 
@@ -31,8 +33,13 @@ async function main(): Promise<void> {
     const client = new WeComCheckinClient()
     const result = await synchronizeWeComCheckins(repository, client, input)
     const scheduleResult = await synchronizeWeComSchedules(repository, client, input)
+    const leaveInput = command === 'sync' ? { startDate: shiftShanghaiDate(input.endDate, -30), endDate: input.endDate } : input
+    const leaveResult = process.env.HEGONGZUO_WECOM_APPROVAL_SECRET?.trim()
+      ? await synchronizeWeComLeaves(repository, new WeComLeaveClient(), leaveInput)
+      : null
     console.log(`打卡同步完成：run=${result.runId}，员工=${result.employees}，拉取=${result.pulled}，新增=${result.inserted}，更新=${result.updated}，未变=${result.unchanged}，跳过=${result.skipped}，失败=${result.failed}，checkpoint=${result.checkpointAfter ?? '未推进'}`)
     console.log(`排班同步完成：员工=${scheduleResult.employees}，排班=${scheduleResult.schedules}`)
+    console.log(leaveResult ? `请假同步完成：审批=${leaveResult.approvals}，请假时段=${leaveResult.leaves}` : '请假同步未启用：未配置 HEGONGZUO_WECOM_APPROVAL_SECRET。')
     if (result.status !== 'succeeded') process.exitCode = 1
   } finally {
     await lockClient.query('SELECT pg_advisory_unlock($1::bigint)', [lockId]).catch(() => undefined)

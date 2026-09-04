@@ -12,14 +12,18 @@ import {
 } from '../work-records/work-records-api'
 
 export const attendanceStatusLabels: Record<AttendanceStatus, string> = {
-  normal: '正常', late: '迟到', late_severe: '迟到', early_leave: '早退', missing: '缺卡',
+  normal: '正常', late: '迟到', late_severe: '迟到', early_leave: '早退', missing: '缺卡', leave: '请假',
+}
+
+export function attendanceClock(value: string | null, state?: 'recorded' | 'leave' | 'missing'): string {
+  return state === 'leave' ? '请假' : clock(value)
 }
 
 export function AttendanceHistoryDialog({ employeeId, employeeName, onClose }: { readonly employeeId: string; readonly employeeName: string; readonly onClose: () => void }) {
   const [records, setRecords] = useState<readonly AttendanceRecord[] | null>(null)
   const [error, setError] = useState('')
   useEffect(() => { const controller = new AbortController(); void readEmployeeAttendanceHistory(employeeId, controller.signal).then(({ records: items }) => setRecords(items)).catch((reason) => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '考勤记录加载失败。') }); return () => controller.abort() }, [employeeId])
-  return <div className="attendance-detail attendance-history" role="dialog" aria-modal="true"><button className="attendance-detail__backdrop" type="button" aria-label="关闭" onClick={onClose} /><section><header><div><small>全部已同步记录</small><strong>{employeeName}的出勤记录</strong></div><button type="button" aria-label="关闭" onClick={onClose}><X size={18} /></button></header>{error ? <p className="work-records-empty">{error}</p> : !records ? <SkeletonTable columns={5} rows={7} /> : <div className="work-attendance-table"><table><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>状态</th><th>地点</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td>{record.date}</td><td>{clock(record.checkInAt)}</td><td>{clock(record.checkOutAt)}</td><td><span className={`attendance-status attendance-status--${record.status}`}>{attendanceStatusLabels[record.status]}</span></td><td>{record.checkInLocation || record.checkOutLocation || record.location || '—'}</td></tr>)}</tbody></table>{records.length === 0 && <p className="work-records-empty">暂无已同步的出勤记录</p>}</div>}</section></div>
+  return <div className="attendance-detail attendance-history" role="dialog" aria-modal="true"><button className="attendance-detail__backdrop" type="button" aria-label="关闭" onClick={onClose} /><section><header><div><small>全部已同步记录</small><strong>{employeeName}的出勤记录</strong></div><button type="button" aria-label="关闭" onClick={onClose}><X size={18} /></button></header>{error ? <p className="work-records-empty">{error}</p> : !records ? <SkeletonTable columns={5} rows={7} /> : <div className="work-attendance-table"><table><thead><tr><th>日期</th><th>上班</th><th>下班</th><th>状态</th><th>地点</th></tr></thead><tbody>{records.map((record) => <tr key={record.id}><td>{record.date}</td><td>{attendanceClock(record.checkInAt, record.checkInState)}</td><td>{attendanceClock(record.checkOutAt, record.checkOutState)}</td><td><span className={`attendance-status attendance-status--${record.status}`}>{attendanceStatusLabels[record.status]}</span></td><td>{record.checkInLocation || record.checkOutLocation || record.location || '—'}</td></tr>)}</tbody></table>{records.length === 0 && <p className="work-records-empty">暂无已同步的出勤记录</p>}</div>}</section></div>
 }
 
 export function AttendanceAnomalyDialog({ month, onEmployee, onClose }: { readonly month: string; readonly onEmployee: (employee: AttendanceAnomalyRanking) => void; readonly onClose: () => void }) {

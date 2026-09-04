@@ -20,6 +20,7 @@ export interface CheckinSyncStats {
   readonly failed: number
 }
 export interface WeComScheduleRecord { readonly employeeId: string; readonly userId: string; readonly date: string; readonly scheduleId: string; readonly scheduleName: string | null; readonly groupId: string | null; readonly groupName: string | null; readonly rawData: Record<string, unknown>; readonly contentHash: string }
+export interface WeComLeaveRecord { readonly approvalNo: string; readonly segmentIndex: number; readonly employeeId: string; readonly userId: string; readonly leaveType: string | null; readonly startsAt: string; readonly endsAt: string; readonly durationSeconds: number; readonly rawData: Record<string, unknown>; readonly contentHash: string }
 
 export class WeComCheckinRepository {
   constructor(private readonly pool: Pool) {}
@@ -94,5 +95,19 @@ export class WeComCheckinRepository {
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9)
       ON CONFLICT (employee_id,schedule_date) DO UPDATE SET wecom_user_id=EXCLUDED.wecom_user_id,schedule_id=EXCLUDED.schedule_id,schedule_name=EXCLUDED.schedule_name,group_id=EXCLUDED.group_id,group_name=EXCLUDED.group_name,raw_data=EXCLUDED.raw_data,content_hash=EXCLUDED.content_hash,updated_at=now()
       WHERE employee_wecom_schedules.content_hash IS DISTINCT FROM EXCLUDED.content_hash`, [record.employeeId, record.userId, record.date, record.scheduleId, record.scheduleName, record.groupId, record.groupName, JSON.stringify(record.rawData), record.contentHash])
+  }
+
+  async upsertLeave(record: WeComLeaveRecord): Promise<void> {
+    await this.pool.query(`INSERT INTO employee_wecom_leave_records
+      (approval_no,segment_index,employee_id,wecom_user_id,leave_type,starts_at,ends_at,duration_seconds,raw_data,content_hash)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10)
+      ON CONFLICT (approval_no,segment_index) DO UPDATE SET employee_id=EXCLUDED.employee_id,wecom_user_id=EXCLUDED.wecom_user_id,
+        leave_type=EXCLUDED.leave_type,starts_at=EXCLUDED.starts_at,ends_at=EXCLUDED.ends_at,duration_seconds=EXCLUDED.duration_seconds,
+        raw_data=EXCLUDED.raw_data,content_hash=EXCLUDED.content_hash,updated_at=now()
+      WHERE employee_wecom_leave_records.content_hash IS DISTINCT FROM EXCLUDED.content_hash`, [record.approvalNo, record.segmentIndex, record.employeeId, record.userId, record.leaveType, record.startsAt, record.endsAt, record.durationSeconds, JSON.stringify(record.rawData), record.contentHash])
+  }
+
+  async deleteLeave(approvalNo: string): Promise<void> {
+    await this.pool.query('DELETE FROM employee_wecom_leave_records WHERE approval_no=$1', [approvalNo])
   }
 }

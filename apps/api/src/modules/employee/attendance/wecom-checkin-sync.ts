@@ -1,6 +1,6 @@
 import { parseWeComCheckinRecord } from './wecom-checkin-record.js'
-import { WeComCheckinRepository, type CheckinSyncSource, type CheckinSyncStats } from './wecom-checkin-repository.js'
-import { WeComCheckinClient } from './wecom-checkin-client.js'
+import type { WeComCheckinRepository, CheckinSyncSource, CheckinSyncStats } from './wecom-checkin-repository.js'
+import type { WeComCheckinClient } from './wecom-checkin-client.js'
 
 const shanghaiOffset = 8 * 60 * 60 * 1_000
 const dayMilliseconds = 24 * 60 * 60 * 1_000

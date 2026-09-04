@@ -59,6 +59,7 @@
 .attendance-status { display: inline-flex; padding: 4px 8px; border-radius: 999px; background: #eaf8f0; color: #227448; font-size: 12px; font-weight: 650; }
 .attendance-status--late, .attendance-status--early_leave { background: #fff4df; color: #9a5d00; }
 .attendance-status--late_severe, .attendance-status--missing { background: #fff0ef; color: #b83e39; }
+.attendance-status--leave { background: #eaf4ff; color: #2869aa; }
 .work-records-loading, .work-records-empty { padding: 48px 20px; color: #7a8699; text-align: center; }
 .work-records-loading { display: flex; align-items: center; justify-content: center; gap: 9px; }
 .work-records-error { display: flex; align-items: center; gap: 8px; padding: 11px 13px; border: 1px solid #f2c5c1; border-radius: 9px; background: #fff4f3; color: #a53b36; font-size: 13px; }
