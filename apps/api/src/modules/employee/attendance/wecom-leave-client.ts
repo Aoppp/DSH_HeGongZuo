@@ -60,7 +60,7 @@ export class WeComLeaveClient {
       numbers.push(...page)
       const rawNext = body.next_cursor ?? body.new_next_cursor
       const next = typeof rawNext === 'number' || typeof rawNext === 'string' ? Number(rawNext) : Number.NaN
-      if (!Number.isFinite(next) || next === cursor || page.length < 100) break
+      if (!Number.isFinite(next) || next === cursor) break
       cursor = next
     } while (true)
     return numbers

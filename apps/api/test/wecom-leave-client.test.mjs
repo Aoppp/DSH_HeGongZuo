@@ -5,7 +5,7 @@ import { WeComLeaveClient } from '../dist/modules/employee/attendance/wecom-leav
 
 test('审批列表使用企业微信 cursor 参数分页', async () => {
   const requests = []
-  const firstPage = Array.from({ length: 100 }, (_, index) => `sp-${index}`)
+  const firstPage = ['sp-0']
   const fetchImpl = async (url, init) => {
     if (String(url).includes('/gettoken')) return new Response(JSON.stringify({ errcode: 0, access_token: 'token', expires_in: 7200 }))
     requests.push(JSON.parse(init.body))
@@ -15,7 +15,7 @@ test('审批列表使用企业微信 cursor 参数分页', async () => {
   }
   const client = new WeComLeaveClient({ corpId: 'corp', secret: 'secret', fetchImpl })
   const result = await client.approvalNumbers(1, 2)
-  assert.equal(result.length, 101)
+  assert.deepEqual(result, ['sp-0', 'sp-100'])
   assert.deepEqual(requests, [
     { starttime: 1, endtime: 2, cursor: 0, size: 100 },
     { starttime: 1, endtime: 2, cursor: 100, size: 100 },
