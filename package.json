@@ -16,6 +16,8 @@
     "work-reports:sync": "corepack pnpm --filter @hegongzuo/api work-reports:sync",
     "checkins:sync": "corepack pnpm --filter @hegongzuo/api checkins:sync",
     "checkins:history": "corepack pnpm --filter @hegongzuo/api checkins:history",
+    "leaves:sync": "corepack pnpm --filter @hegongzuo/api leaves:sync",
+    "leaves:history": "corepack pnpm --filter @hegongzuo/api leaves:history",
     "db:setup": "corepack pnpm --filter @hegongzuo/api db:setup",
     "dsh": "dsh",
     "dsh:accounts": "pnpm dsh:accounts:sync && node scripts/run-account-agent-runtimes.mjs",

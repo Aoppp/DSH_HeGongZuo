@@ -96,6 +96,7 @@ test('历史考勤按查询日期与入离职日期判断，不受员工当前�
   await source.snapshot('2026-08-01')
   assert.match(statement, /employee\.hire_date <= schedule\.schedule_date/)
   assert.match(statement, /schedule\.schedule_id <> '0'/)
+  assert.match(statement, /leave_record\.sp_status=2/)
   assert.match(statement, /employee\.departure_date IS NULL OR employee\.departure_date >= schedule\.schedule_date/)
   assert.doesNotMatch(statement, /employee\.status <> 'inactive'/)
 })
@@ -114,4 +115,19 @@ test('月度统计汇总人次、部门和异常排行', async () => {
   assert.equal(summary.metrics.attendanceRate, 50)
   assert.equal(summary.departments[0].departmentName, '销售部')
   assert.equal(summary.rankings.length, 2)
+})
+
+test('员工单日状态统一返回打卡、请假和日报关联', async () => {
+  const pool = { query: async (sql) => {
+    if (sql.startsWith('SELECT id,display_name')) return { rows: [{ id: 'EMP-0001', display_name: '张三', wecom_user_id: 'zhangsan' }] }
+    if (sql.includes('FROM employee_wecom_schedules')) return { rows: [] }
+    if (sql.includes('FROM employee_wecom_leaves')) return { rows: [{ sp_no: 'SP-1', leave_type: '年假', start_time: new Date('2026-09-03T01:00:00Z'), end_time: new Date('2026-09-03T10:00:00Z'), duration: 28800, reason: '家庭事务', sp_status: 2, apply_time: new Date('2026-09-02T08:00:00Z') }] }
+    if (sql.includes('FROM employee_work_daily_reports')) return { rows: [{ record_id: 'R-1', submitted_at: new Date('2026-09-03T10:30:00Z'), report_date: '2026-09-03' }] }
+    throw new Error(`unexpected query: ${sql}`)
+  } }
+  const status = await new PostgresAttendanceSource(pool).employeeDayStatus('EMP-0001', '2026-09-03')
+  assert.equal(status.employee.wecomUserId, 'zhangsan')
+  assert.equal(status.attendance, null)
+  assert.equal(status.leaves[0].spStatus, 2)
+  assert.equal(status.dailyReports[0].recordId, 'R-1')
 })

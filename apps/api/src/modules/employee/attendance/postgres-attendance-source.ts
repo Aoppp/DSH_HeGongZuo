@@ -75,6 +75,14 @@ export interface AttendanceMonthlySummary {
   readonly rankings: readonly AttendanceAnomalyRanking[]
 }
 
+export interface EmployeeDayStatus {
+  readonly date: string
+  readonly employee: { readonly id: string; readonly name: string; readonly wecomUserId: string }
+  readonly attendance: ExtendedAttendanceRecord | null
+  readonly leaves: readonly { readonly spNo: string; readonly leaveType: string | null; readonly startTime: string; readonly endTime: string; readonly duration: number; readonly reason: string | null; readonly spStatus: number; readonly applyTime: string | null }[]
+  readonly dailyReports: readonly { readonly recordId: string; readonly submittedAt: string; readonly reportDate: string }[]
+}
+
 function iso(value: string | Date): string { return (value instanceof Date ? value : new Date(value)).toISOString() }
 function dateText(value: string | Date): string { return typeof value === 'string' ? value.slice(0, 10) : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(value) }
 function time(value: string | Date | null): string { return value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—' }
@@ -130,15 +138,15 @@ export class PostgresAttendanceSource {
     const result = await this.pool.query<CheckinRow>(`SELECT checkin.id::text, schedule.schedule_date::text, employee.id AS employee_id, employee.display_name,
       employee.department_name, checkin.checkin_time, checkin.checkin_type, checkin.exception_type,
       checkin.location_title, checkin.standard_checkin_time,
-      EXISTS (SELECT 1 FROM employee_wecom_leave_records leave_record WHERE leave_record.employee_id=employee.id
-        AND leave_record.duration_seconds >= 28800 AND leave_record.starts_at < ((schedule.schedule_date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
-        AND leave_record.ends_at >= (schedule.schedule_date::timestamp AT TIME ZONE 'Asia/Shanghai')) AS leave_full_day,
-      EXISTS (SELECT 1 FROM employee_wecom_leave_records leave_record WHERE leave_record.employee_id=employee.id
-        AND leave_record.starts_at <= ((schedule.schedule_date + time '09:00') AT TIME ZONE 'Asia/Shanghai')
-        AND leave_record.ends_at >= ((schedule.schedule_date + time '09:00') AT TIME ZONE 'Asia/Shanghai')) AS leave_at_start,
-      EXISTS (SELECT 1 FROM employee_wecom_leave_records leave_record WHERE leave_record.employee_id=employee.id
-        AND leave_record.starts_at <= ((schedule.schedule_date + time '18:00') AT TIME ZONE 'Asia/Shanghai')
-        AND leave_record.ends_at >= ((schedule.schedule_date + time '18:00') AT TIME ZONE 'Asia/Shanghai')) AS leave_at_end
+      EXISTS (SELECT 1 FROM employee_wecom_leaves leave_record WHERE leave_record.employee_id=employee.id AND leave_record.sp_status=2
+        AND leave_record.duration >= 28800 AND leave_record.start_time < ((schedule.schedule_date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+        AND leave_record.end_time >= (schedule.schedule_date::timestamp AT TIME ZONE 'Asia/Shanghai')) AS leave_full_day,
+      EXISTS (SELECT 1 FROM employee_wecom_leaves leave_record WHERE leave_record.employee_id=employee.id AND leave_record.sp_status=2
+        AND leave_record.start_time <= ((schedule.schedule_date + time '09:00') AT TIME ZONE 'Asia/Shanghai')
+        AND leave_record.end_time >= ((schedule.schedule_date + time '09:00') AT TIME ZONE 'Asia/Shanghai')) AS leave_at_start,
+      EXISTS (SELECT 1 FROM employee_wecom_leaves leave_record WHERE leave_record.employee_id=employee.id AND leave_record.sp_status=2
+        AND leave_record.start_time <= ((schedule.schedule_date + time '18:00') AT TIME ZONE 'Asia/Shanghai')
+        AND leave_record.end_time >= ((schedule.schedule_date + time '18:00') AT TIME ZONE 'Asia/Shanghai')) AS leave_at_end
       FROM employee_wecom_schedules AS schedule JOIN employees AS employee ON employee.id=schedule.employee_id
       LEFT JOIN employee_wecom_checkins AS checkin ON checkin.employee_id=employee.id
         AND checkin.checkin_time >= (schedule.schedule_date::timestamp AT TIME ZONE 'Asia/Shanghai')
@@ -234,5 +242,20 @@ export class PostgresAttendanceSource {
     for (const record of records) byDepartment.set(record.departmentName, [...(byDepartment.get(record.departmentName) ?? []), record])
     const departments = [...byDepartment].map(([departmentName, items]) => ({ departmentName, ...this.metrics(items) })).sort((left, right) => right.missing - left.missing || right.late - left.late || left.departmentName.localeCompare(right.departmentName, 'zh-CN'))
     return { month, previousMonth, metrics: this.metrics(records), previousMetrics: this.metrics(previousRecords), departments, rankings: this.rankings(records).slice(0, 10) }
+  }
+
+  async employeeDayStatus(employeeId: string, date: string): Promise<EmployeeDayStatus | null> {
+    const employeeResult = await this.pool.query<{ id: string; display_name: string; wecom_user_id: string | null }>(`SELECT id,display_name,wecom_user_id FROM employees WHERE id=$1`, [employeeId])
+    const employee = employeeResult.rows[0]; if (!employee?.wecom_user_id) return null
+    const [attendanceRecords, leavesResult, reportsResult] = await Promise.all([
+      this.records(date, date, employeeId),
+      this.pool.query<{ sp_no: string; leave_type: string | null; start_time: string | Date; end_time: string | Date; duration: number; reason: string | null; sp_status: number; apply_time: string | Date | null }>(`SELECT sp_no,leave_type,start_time,end_time,duration,reason,sp_status,apply_time FROM employee_wecom_leaves WHERE employee_id=$1 AND start_time < (($2::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai') AND end_time >= ($2::date::timestamp AT TIME ZONE 'Asia/Shanghai') ORDER BY start_time,sp_no`, [employeeId, date]),
+      this.pool.query<{ record_id: string; submitted_at: string | Date; report_date: string | Date }>(`SELECT record_id,submitted_at,report_date FROM employee_work_daily_reports WHERE author_user_id=$1 AND LEAST(report_date,(submitted_at AT TIME ZONE 'Asia/Shanghai')::date)=$2::date ORDER BY submitted_at,record_id`, [employee.wecom_user_id, date]),
+    ])
+    return {
+      date, employee: { id: employee.id, name: employee.display_name, wecomUserId: employee.wecom_user_id }, attendance: attendanceRecords[0] ?? null,
+      leaves: leavesResult.rows.map((row) => ({ spNo: row.sp_no, leaveType: row.leave_type, startTime: iso(row.start_time), endTime: iso(row.end_time), duration: row.duration, reason: row.reason, spStatus: row.sp_status, applyTime: row.apply_time ? iso(row.apply_time) : null })),
+      dailyReports: reportsResult.rows.map((row) => ({ recordId: row.record_id, submittedAt: iso(row.submitted_at), reportDate: dateText(row.report_date) })),
+    }
   }
 }

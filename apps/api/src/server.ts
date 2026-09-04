@@ -291,6 +291,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/employee/day-status' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-attendance')
+    await platformManagement.assertModuleEnabled('employee-attendance')
+    const employeeId = url.searchParams.get('employeeId')?.trim() ?? ''
+    const date = url.searchParams.get('date') ?? ''
+    if (!employeeId || employeeId.length > 80) throw new HttpError(400, '员工编号无效。')
+    if (!isCalendarDate(date)) throw new HttpError(400, '查询日期格式无效。')
+    const status = await employeeAttendance.employeeDayStatus(employeeId, date)
+    if (!status) throw new HttpError(404, '员工不存在或尚未关联企业微信。')
+    sendJson(response, 200, status)
+    return
+  }
+
   if (url.pathname === '/api/employee/wecom-directory/sync' && request.method === 'POST') {
     requirePermission(currentUser, 'employee-data')
     await platformManagement.assertModuleEnabled('employee-data')
