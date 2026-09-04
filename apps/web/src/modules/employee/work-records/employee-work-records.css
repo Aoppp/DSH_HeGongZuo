@@ -8,6 +8,9 @@
 .work-records-heading__actions input { border: 0; outline: 0; color: inherit; font: inherit; }
 .work-records-heading__actions button { padding: 0 13px; cursor: pointer; }
 .work-records-heading__actions button:disabled { opacity: .6; cursor: default; }
+.attendance-tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid #dfe5ec; }
+.attendance-tabs button { flex: 0 0 auto; padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: #667085; font: inherit; font-size: 13px; cursor: pointer; }
+.attendance-tabs button.active { border-bottom-color: #2b6d9e; color: #245f8b; font-weight: 650; }
 .work-records-demo { padding: 5px 9px; border-radius: 999px; background: #fff4dd; color: #9a5b00; font-size: 12px; font-weight: 650; }
 .work-records-connection { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 14px; border: 1px solid #dbe5f0; border-radius: 10px; background: #f7faff; color: #40506a; font-size: 13px; }
 .work-records-connection span { display: flex; align-items: center; gap: 8px; font-weight: 600; }
