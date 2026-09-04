@@ -1,0 +1,25 @@
+.employee-editor__panel--recognition { width: min(980px, 100%); }
+.employee-editor__title-row { display: flex !important; align-items: center; flex-direction: row !important; gap: 10px !important; }
+.employee-editor__recognition-toggle { width: auto !important; height: 30px !important; padding: 0 10px; border: 1px solid #c8d9f4 !important; color: var(--blue-700) !important; font-size: 12px; font-weight: 700; background: #f4f8ff !important; }
+.employee-editor__create-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 22px; align-items: start; }
+.employee-paste-recognition { position: sticky; top: 98px; display: flex; flex-direction: column; gap: 12px; border: 1px solid #d9e4f3; border-radius: 10px; padding: 15px; background: #f8faff; }
+.employee-paste-recognition__heading { display: flex; flex-direction: column; gap: 3px; }
+.employee-paste-recognition__heading strong { color: var(--ink-900); font-size: 14px; }
+.employee-paste-recognition__heading span { color: var(--ink-400); font-size: 11px; }
+.employee-paste-recognition textarea { width: 100%; min-height: 150px; resize: vertical; border: 1px solid #cbd9ec; border-radius: 8px; padding: 10px; outline: none; color: var(--ink-900); font: inherit; font-size: 12px; line-height: 1.6; background: white; }
+.employee-paste-recognition textarea:focus { border-color: var(--blue-500); box-shadow: 0 0 0 3px rgba(36, 104, 216, 0.09); }
+.employee-paste-recognition__result { display: flex; flex-direction: column; gap: 7px; font-size: 11px; }
+.employee-paste-recognition__result p { margin: 0; line-height: 1.5; }
+.employee-paste-recognition .is-error { color: #b33d3d; }
+.employee-paste-recognition .is-warning { color: #8a6515; }
+.employee-paste-recognition .is-valid { color: #22764f; }
+.employee-paste-recognition dl { display: grid; margin: 0; gap: 7px; }
+.employee-paste-recognition dl div { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 8px; }
+.employee-paste-recognition dt { color: var(--ink-400); }
+.employee-paste-recognition dd { margin: 0; overflow-wrap: anywhere; color: var(--ink-700); }
+.employee-paste-recognition > button { min-height: 38px; border: 0; border-radius: 8px; color: white; font-size: 12px; font-weight: 700; background: var(--blue-600); }
+.employee-paste-recognition > button:disabled { cursor: not-allowed; color: var(--ink-400); background: #e5ebf3; }
+.employee-paste-recognition details { color: var(--ink-500); font-size: 11px; }
+.employee-paste-recognition summary { cursor: pointer; }
+.employee-paste-recognition ol { columns: 2; margin: 8px 0 0; padding-left: 22px; line-height: 1.7; }
+@media (max-width: 820px) { .employee-editor__create-layout { grid-template-columns: 1fr; } .employee-paste-recognition { position: static; } }

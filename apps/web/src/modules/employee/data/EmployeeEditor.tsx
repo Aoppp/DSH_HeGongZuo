@@ -1,10 +1,12 @@
 // 员工管理 / 档案编辑与离职表单。
 import { Download, FileText, Pencil, Save, Trash2, Upload, X } from 'lucide-react'
-import type { FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 
 import { employeeResumeUrl, employeeStatuses, employmentTypes, type EmployeeRecord, type EmployeeStatus, type EmploymentType } from './employee-data'
 import { employmentTypeLabels, statusLabels, type EditorMode } from './employee-data-types'
 import { EmployeeReportHistory } from './EmployeeReportHistory'
+import { EmployeePasteRecognition } from './EmployeePasteRecognition'
+import type { EmployeePasteValues } from './employee-paste-parser'
 
 interface EmployeeEditorProps {
   readonly mode: EditorMode | null
@@ -17,16 +19,19 @@ interface EmployeeEditorProps {
   readonly onSubmit: (event: FormEvent<HTMLFormElement>) => void
   readonly onEdit: () => void
   readonly onUpdate: <K extends keyof EmployeeRecord>(field: K, value: EmployeeRecord[K]) => void
+  readonly onApplyRecognized: (values: EmployeePasteValues) => void
   readonly onSelectResume: (file: File | undefined) => void
   readonly onRemoveResume: () => void
 }
 
-export function EmployeeEditor({ mode, draft, error, saving, pendingResume, resumeInputKey, onClose, onSubmit, onEdit, onUpdate, onSelectResume, onRemoveResume }: EmployeeEditorProps) {
+export function EmployeeEditor({ mode, draft, error, saving, pendingResume, resumeInputKey, onClose, onSubmit, onEdit, onUpdate, onApplyRecognized, onSelectResume, onRemoveResume }: EmployeeEditorProps) {
+  const [recognitionOpen, setRecognitionOpen] = useState(false)
+  useEffect(() => { setRecognitionOpen(false) }, [mode, draft?.id])
   if (!mode || !draft) return null
   const editing = mode === 'create' || mode === 'edit'
   const input = <K extends keyof EmployeeRecord>(field: K, type = 'text') => <input type={type} value={draft[field] ?? ''} onChange={(event) => onUpdate(field, event.target.value as EmployeeRecord[K])} />
-  return <div className="employee-editor" role="dialog" aria-modal="true" aria-label="员工档案编辑"><button className="employee-editor__backdrop" type="button" aria-label="关闭" onClick={onClose} /><section className="employee-editor__panel"><header><div><span>{mode === 'view' ? '员工详情' : mode === 'departure' ? '员工离职' : mode === 'create' ? '新增员工' : '编辑员工'}</span><strong>{draft.displayName || '填写员工信息'}</strong></div><button type="button" onClick={onClose} title="关闭"><X size={18} /></button></header><form onSubmit={onSubmit}>
-    {mode === 'view' ? <EmployeePreview employee={draft} /> : mode === 'departure' ? <DepartureFields employee={draft} onUpdate={onUpdate} /> : <div className="employee-editor__fields">
+  return <div className="employee-editor" role="dialog" aria-modal="true" aria-label="员工档案编辑"><button className="employee-editor__backdrop" type="button" aria-label="关闭" onClick={onClose} /><section className={`employee-editor__panel${mode === 'create' && recognitionOpen ? ' employee-editor__panel--recognition' : ''}`}><header><div><span>{mode === 'view' ? '员工详情' : mode === 'departure' ? '员工离职' : mode === 'create' ? '新增员工' : '编辑员工'}</span><div className="employee-editor__title-row"><strong>{draft.displayName || '填写员工信息'}</strong>{mode === 'create' && <button className="employee-editor__recognition-toggle" type="button" onClick={() => setRecognitionOpen((value) => !value)}>{recognitionOpen ? '收起识别' : '智能识别'}</button>}</div></div><button type="button" onClick={onClose} title="关闭"><X size={18} /></button></header><form onSubmit={onSubmit}>
+    {mode === 'view' ? <EmployeePreview employee={draft} /> : mode === 'departure' ? <DepartureFields employee={draft} onUpdate={onUpdate} /> : <div className={mode === 'create' && recognitionOpen ? 'employee-editor__create-layout' : undefined}><div className="employee-editor__fields">
       <label>姓名<input required value={draft.displayName} onChange={(event) => onUpdate('displayName', event.target.value)} /></label><label>工作邮箱（选填）{input('workEmail', 'email')}</label><label>工作电话<input required inputMode="tel" value={draft.workPhone} onChange={(event) => onUpdate('workPhone', event.target.value)} /></label><label>部门名称<input required value={draft.departmentName} onChange={(event) => onUpdate('departmentName', event.target.value)} /></label><label>岗位<input required value={draft.jobTitle} onChange={(event) => onUpdate('jobTitle', event.target.value)} /></label><label>用工类型<select value={draft.employmentType} onChange={(event) => onUpdate('employmentType', event.target.value as EmploymentType)}>{employmentTypes.map((value) => <option key={value} value={value}>{employmentTypeLabels[value]}</option>)}</select></label><label>员工状态<select value={draft.status} onChange={(event) => onUpdate('status', event.target.value as EmployeeStatus)}>{employeeStatuses.map((value) => <option key={value} value={value}>{statusLabels[value]}</option>)}</select></label><label>入职日期<input required type="date" value={draft.hireDate} onChange={(event) => onUpdate('hireDate', event.target.value)} /></label>
       {draft.status === 'inactive' && <label>离职日期<input required type="date" min={draft.hireDate} value={draft.departureDate ?? ''} onChange={(event) => onUpdate('departureDate', event.target.value || null)} /></label>}
       <h3 className="employee-editor__section-title">任职信息</h3><label>所属公司{input('companyName')}</label><label>二级部门{input('departmentLevel2')}</label><label>工作地点{input('workLocation')}</label><label>试用期（月）<input type="number" min={1} max={12} value={draft.probationMonths ?? ''} onChange={(event) => onUpdate('probationMonths', event.target.value ? Number(event.target.value) : null)} /></label><label>预计转正{input('expectedRegularDate', 'date')}</label><label>实际转正{input('actualRegularDate', 'date')}</label><label>合同到期{input('contractEndDate', 'date')}</label><label>档案编号{input('archiveNo')}</label>
@@ -34,7 +39,7 @@ export function EmployeeEditor({ mode, draft, error, saving, pendingResume, resu
       <h3 className="employee-editor__section-title">联系方式</h3><label>个人邮箱（选填）{input('personalEmail', 'email')}</label><label>紧急联系人{input('emergencyContact')}</label><label>紧急联系人电话<input value={draft.emergencyContactPhone ?? ''} inputMode="tel" onChange={(event) => onUpdate('emergencyContactPhone', event.target.value || null)} /></label>
       <h3 className="employee-editor__section-title">教育背景</h3><label>学历{input('education')}</label><label>专业{input('major')}</label><label>毕业学校{input('school')}</label><label>毕业时间{input('graduationDate', 'date')}</label>
       <h3 className="employee-editor__section-title">财务信息</h3><label>银行卡{input('bankAccount')}</label><label>开户行{input('bankName')}</label><label className="employee-editor__wide">备注<textarea rows={3} value={draft.notes ?? ''} onChange={(event) => onUpdate('notes', event.target.value)} /></label><label className="employee-editor__wide">员工职责<textarea rows={5} value={draft.responsibilities} onChange={(event) => onUpdate('responsibilities', event.target.value)} /></label><div className="employee-editor__wide employee-resume-upload"><span className="employee-resume-upload__label">员工简历（选填）</span><label className="employee-resume-upload__picker"><Upload size={16} />{pendingResume?.name ?? draft.resumeFileName ?? '选择 PDF、DOC 或 DOCX 文件'}<input key={resumeInputKey} type="file" accept=".pdf,.doc,.docx" onChange={(event) => onSelectResume(event.target.files?.[0])} /></label>{(pendingResume || draft.resumeFileName) && <button className="employee-resume-upload__remove" type="button" onClick={onRemoveResume}><Trash2 size={14} /> 删除简历</button>}<small>文件最大 5 MB。</small></div>
-    </div>}
+    </div>{mode === 'create' && recognitionOpen && <EmployeePasteRecognition onApply={onApplyRecognized} />}</div>}
     {error && <p className="employee-editor__error">{error}</p>}<footer><button className="employee-data__secondary" type="button" onClick={onClose}>取消</button>{mode === 'view' ? <button className="employee-data__primary" type="button" onClick={onEdit}><Pencil size={15} /> 编辑员工</button> : <button className={mode === 'departure' ? 'employee-data__primary is-danger' : 'employee-data__primary'} type="submit" disabled={saving}><Save size={15} /> {saving ? '保存中…' : mode === 'departure' ? '确认离职' : '保存'}</button>}</footer>
   </form></section></div>
 }
