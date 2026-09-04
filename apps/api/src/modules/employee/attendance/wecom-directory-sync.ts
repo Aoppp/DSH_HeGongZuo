@@ -31,7 +31,7 @@ function grouped<T>(values: readonly T[], key: (value: T) => string): Map<string
 
 // 只在姓名双方均唯一时写入关联，绝不使用企业微信部门覆盖员工档案部门。
 export async function synchronizeWeComDirectory(repository: WeComDirectoryRepository, client: WeComDirectoryClient): Promise<WeComDirectorySyncResult> {
-  const [employees, members] = await Promise.all([repository.unlinkedActiveEmployees(), client.directoryMembers()])
+  const [employees, members] = await Promise.all([repository.activeEmployees(), client.directoryMembers()])
   const employeesByName = grouped(employees, (employee) => nameKey(employee.displayName))
   const membersByName = grouped(members, (member) => nameKey(member.name))
   let linked = 0
@@ -46,6 +46,7 @@ export async function synchronizeWeComDirectory(repository: WeComDirectoryReposi
       else ambiguous += 1
       continue
     }
+    if (employee.wecomUserId === memberMatches[0]!.userId) continue
     if (await repository.linkEmployee(employee.id, memberMatches[0]!.userId)) linked += 1
   }
   return { directoryMembers: members.length, candidates: employees.length, linked, unmatched, ambiguous }

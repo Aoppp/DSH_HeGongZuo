@@ -3,14 +3,14 @@ import test from 'node:test'
 
 import { synchronizeWeComDirectory } from '../dist/modules/employee/attendance/wecom-directory-sync.js'
 
-test('企业微信通讯录仅关联姓名双方唯一的在职员工，不使用通讯录部门', async () => {
+test('企业微信通讯录修正姓名双方唯一员工的账号 ID，不使用通讯录部门', async () => {
   const links = []
   const repository = {
-    unlinkedActiveEmployees: async () => [
-      { id: 'EMP-001', displayName: '张 三' },
-      { id: 'EMP-002', displayName: '李四' },
-      { id: 'EMP-003', displayName: '王五' },
-      { id: 'EMP-004', displayName: '王五' },
+    activeEmployees: async () => [
+      { id: 'EMP-001', displayName: '张 三', wecomUserId: 'old-id' },
+      { id: 'EMP-002', displayName: '李四', wecomUserId: null },
+      { id: 'EMP-003', displayName: '王五', wecomUserId: null },
+      { id: 'EMP-004', displayName: '王五', wecomUserId: null },
     ],
     linkEmployee: async (id, userId) => { links.push([id, userId]); return true },
   }

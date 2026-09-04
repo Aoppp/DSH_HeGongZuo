@@ -85,7 +85,7 @@ export class DailyReportAnalyticsRepository {
         SELECT employee.id, count(*)::text AS report_count,
           bool_or((report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > ${effectiveReportDateSql()}) AS delayed
         FROM employee_work_daily_reports AS report
-        JOIN employees AS employee ON employee.wecom_user_id = report.author_user_id
+        JOIN employees AS employee ON coalesce(employee.wecom_report_user_id, employee.wecom_user_id) = report.author_user_id
         WHERE ${effectiveReportDateSql()} = $1::date
           AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
         GROUP BY employee.id
@@ -141,7 +141,7 @@ export class DailyReportAnalyticsRepository {
         SELECT ${effectiveReportDateSql()} AS date, count(DISTINCT employee.id)::text AS submitted,
           count(DISTINCT employee.id) FILTER (WHERE (report.submitted_at AT TIME ZONE 'Asia/Shanghai')::date > ${effectiveReportDateSql()})::text AS delayed
         FROM employee_work_daily_reports AS report
-        JOIN employees AS employee ON employee.wecom_user_id = report.author_user_id
+        JOIN employees AS employee ON coalesce(employee.wecom_report_user_id, employee.wecom_user_id) = report.author_user_id
         WHERE ${effectiveReportDateSql()} >= $1::date AND ${effectiveReportDateSql()} < $1::date + interval '1 month'
           AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
         GROUP BY ${effectiveReportDateSql()}
@@ -170,11 +170,11 @@ export class DailyReportAnalyticsRepository {
             AND schedule.schedule_date <= coalesce(employee.departure_date, schedule.schedule_date)
             AND schedule.schedule_date < (now() AT TIME ZONE 'Asia/Shanghai')::date
             AND NOT EXISTS (SELECT 1 FROM employee_work_daily_reports AS scheduled_report
-              WHERE scheduled_report.author_user_id = employee.wecom_user_id AND ${effectiveReportDateSql('scheduled_report')} = schedule.schedule_date)
+              WHERE scheduled_report.author_user_id = coalesce(employee.wecom_report_user_id, employee.wecom_user_id) AND ${effectiveReportDateSql('scheduled_report')} = schedule.schedule_date)
             AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id = employee.id)
         ) AS missing_days
       FROM employees AS employee
-      LEFT JOIN employee_work_daily_reports AS report ON report.author_user_id = employee.wecom_user_id
+      LEFT JOIN employee_work_daily_reports AS report ON report.author_user_id = coalesce(employee.wecom_report_user_id, employee.wecom_user_id)
       WHERE ${scope === 'departed' ? "employee.status = 'inactive'" : "employee.status <> 'inactive'"}
         AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
       GROUP BY employee.id ORDER BY employee.display_name`)
@@ -195,7 +195,7 @@ export class DailyReportAnalyticsRepository {
     }>(`WITH base AS (
         SELECT report.*, employee.id AS employee_id
         FROM employee_work_daily_reports AS report
-        LEFT JOIN employees AS employee ON employee.wecom_user_id = report.author_user_id
+        LEFT JOIN employees AS employee ON coalesce(employee.wecom_report_user_id, employee.wecom_user_id) = report.author_user_id
         WHERE report.report_date BETWEEN $1::date AND $2::date
       ), duplicate_records AS (
         SELECT author_user_id, report_date, count(*) AS total

@@ -115,13 +115,13 @@ export class WorkDailyRepository {
         HAVING count(*) = 1
       )
       UPDATE employees AS employee
-      SET wecom_user_id = reporter.user_id, updated_at = now()
+      SET wecom_report_user_id = reporter.user_id, updated_at = now()
       FROM unique_reporters AS reporter
       JOIN unique_employees AS matched ON matched.display_name = reporter.author_name
       WHERE employee.id = matched.employee_id
-        AND employee.wecom_user_id IS NULL
+        AND employee.wecom_report_user_id IS NULL
         AND NOT EXISTS (
-          SELECT 1 FROM employees AS occupied WHERE occupied.wecom_user_id = reporter.user_id
+          SELECT 1 FROM employees AS occupied WHERE occupied.wecom_report_user_id = reporter.user_id
         )`)
     return result.rowCount ?? 0
   }

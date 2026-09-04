@@ -89,7 +89,7 @@ const selectedColumns = `report.record_id, report.author_user_id, report.author_
   report.tomorrow_plan, report.other_items, report.attachments, report.wecom_updated_at`
 
 const joinedReports = `employee_work_daily_reports AS report
-  LEFT JOIN employees AS employee ON employee.wecom_user_id = report.author_user_id`
+  LEFT JOIN employees AS employee ON coalesce(employee.wecom_report_user_id, employee.wecom_user_id) = report.author_user_id`
 
 function isoTimestamp(value: string | Date): string {
   const date = value instanceof Date ? value : new Date(value)
@@ -189,11 +189,11 @@ export class DailyReportRepository {
   }
 
   async employeeHistory(employeeId: string, page: number, pageSize: number): Promise<EmployeeReportHistoryPage | null> {
-    const employee = await this.pool.query<{ wecom_user_id: string | null }>(
-      `SELECT wecom_user_id FROM employees WHERE id = $1`, [employeeId],
+    const employee = await this.pool.query<{ report_user_id: string | null }>(
+      `SELECT coalesce(wecom_report_user_id, wecom_user_id) AS report_user_id FROM employees WHERE id = $1`, [employeeId],
     )
     if (!employee.rows[0]) return null
-    const userId = employee.rows[0].wecom_user_id?.trim() || null
+    const userId = employee.rows[0].report_user_id?.trim() || null
     if (!userId) return { reports: [], linked: false, total: 0, page, pageSize, totalPages: 0 }
     const count = await this.pool.query<{ total: string }>(
       `SELECT count(*)::text AS total FROM employee_work_daily_reports WHERE author_user_id = $1`, [userId],

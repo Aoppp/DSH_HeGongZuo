@@ -119,7 +119,7 @@ test('月度统计汇总人次、部门和异常排行', async () => {
 
 test('员工单日状态统一返回打卡、请假和日报关联', async () => {
   const pool = { query: async (sql) => {
-    if (sql.startsWith('SELECT id,display_name')) return { rows: [{ id: 'EMP-0001', display_name: '张三', wecom_user_id: 'zhangsan' }] }
+    if (sql.startsWith('SELECT id,display_name')) return { rows: [{ id: 'EMP-0001', display_name: '张三', wecom_user_id: 'zhangsan', report_user_id: 'report-zhangsan' }] }
     if (sql.includes('FROM employee_wecom_schedules')) return { rows: [] }
     if (sql.includes('FROM employee_wecom_leaves')) return { rows: [{ sp_no: 'SP-1', leave_type: '年假', start_time: new Date('2026-09-03T01:00:00Z'), end_time: new Date('2026-09-03T10:00:00Z'), duration: 28800, reason: '家庭事务', sp_status: 2, apply_time: new Date('2026-09-02T08:00:00Z') }] }
     if (sql.includes('FROM employee_work_daily_reports')) return { rows: [{ record_id: 'R-1', submitted_at: new Date('2026-09-03T10:30:00Z'), report_date: '2026-09-03' }] }

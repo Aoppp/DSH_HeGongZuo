@@ -35,4 +35,6 @@ corepack pnpm leaves:history -- --start-date 2026-07-01 --end-date 2026-09-04
 
 请假审批以 `sp_no` 幂等写入 `employee_wecom_leaves`，只通过 `employees.wecom_user_id` 关联员工，不使用姓名匹配。审批中、已通过、驳回和撤销均保留；考勤聚合时仅将 `sp_status=2` 的时段视为有效请假。请假 checkpoint 和运行日志分别保存在 `employee_wecom_leave_sync_checkpoints` 和 `employee_wecom_leave_sync_runs`。
 
+`employees.wecom_user_id` 保存企业微信通讯录账号 ID，供打卡、排班和请假使用；`employees.wecom_report_user_id` 独立保存日报数据源中的填写人 ID。每日同步会先用通讯录校验并修正唯一姓名员工的账号 ID，避免不同数据源的 ID 相互覆盖。
+
 生产环境的现有打卡定时任务会在打卡和排班同步后继续执行请假增量同步。统一员工单日状态可通过 `GET /api/employee/day-status?employeeId=...&date=YYYY-MM-DD` 查询打卡、请假和日报关联结果。

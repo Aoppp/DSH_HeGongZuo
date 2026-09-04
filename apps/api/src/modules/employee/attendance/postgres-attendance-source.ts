@@ -245,12 +245,12 @@ export class PostgresAttendanceSource {
   }
 
   async employeeDayStatus(employeeId: string, date: string): Promise<EmployeeDayStatus | null> {
-    const employeeResult = await this.pool.query<{ id: string; display_name: string; wecom_user_id: string | null }>(`SELECT id,display_name,wecom_user_id FROM employees WHERE id=$1`, [employeeId])
+    const employeeResult = await this.pool.query<{ id: string; display_name: string; wecom_user_id: string | null; report_user_id: string | null }>(`SELECT id,display_name,wecom_user_id,coalesce(wecom_report_user_id,wecom_user_id) AS report_user_id FROM employees WHERE id=$1`, [employeeId])
     const employee = employeeResult.rows[0]; if (!employee?.wecom_user_id) return null
     const [attendanceRecords, leavesResult, reportsResult] = await Promise.all([
       this.records(date, date, employeeId),
       this.pool.query<{ sp_no: string; leave_type: string | null; start_time: string | Date; end_time: string | Date; duration: number; reason: string | null; sp_status: number; apply_time: string | Date | null }>(`SELECT sp_no,leave_type,start_time,end_time,duration,reason,sp_status,apply_time FROM employee_wecom_leaves WHERE employee_id=$1 AND start_time < (($2::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai') AND end_time >= ($2::date::timestamp AT TIME ZONE 'Asia/Shanghai') ORDER BY start_time,sp_no`, [employeeId, date]),
-      this.pool.query<{ record_id: string; submitted_at: string | Date; report_date: string | Date }>(`SELECT record_id,submitted_at,report_date FROM employee_work_daily_reports WHERE author_user_id=$1 AND LEAST(report_date,(submitted_at AT TIME ZONE 'Asia/Shanghai')::date)=$2::date ORDER BY submitted_at,record_id`, [employee.wecom_user_id, date]),
+      this.pool.query<{ record_id: string; submitted_at: string | Date; report_date: string | Date }>(`SELECT record_id,submitted_at,report_date FROM employee_work_daily_reports WHERE author_user_id=$1 AND LEAST(report_date,(submitted_at AT TIME ZONE 'Asia/Shanghai')::date)=$2::date ORDER BY submitted_at,record_id`, [employee.report_user_id, date]),
     ])
     return {
       date, employee: { id: employee.id, name: employee.display_name, wecomUserId: employee.wecom_user_id }, attendance: attendanceRecords[0] ?? null,

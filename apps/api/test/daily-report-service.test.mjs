@@ -116,7 +116,7 @@ test('员工历史日报只返回日期和工作内容', async () => {
   const pool = {
     query: async () => {
       calls += 1
-      if (calls === 1) return { rows: [{ wecom_user_id: 'wecom-001' }] }
+      if (calls === 1) return { rows: [{ report_user_id: 'wecom-001' }] }
       if (calls === 2) return { rows: [{ total: '1' }] }
       return { rows: [{ record_id: 'report-1', report_date: '2026-09-02', today_summary: '  完成数据整理  ' }] }
     },
