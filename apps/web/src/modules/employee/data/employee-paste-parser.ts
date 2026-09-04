@@ -3,7 +3,7 @@ import type { EmployeeRecord, EmploymentType } from './employee-data'
 export const employeePasteColumns = [
   '所属公司', '姓名', '入职时间', '试用期时长（月）', '预计转正日期', '实际转正日期', '合同到期日期', '合同到期',
   '一级部门', '二级部门', '职位', '用工类型', '性别', '身份证', '出生日期', '年龄', '工龄（月）', '联系方式',
-  '邮箱', '企业邮箱', '学历', '专业', '毕业学校', '毕业时间', '紧急联系人', '紧急联系人电话', '居住住址',
+  '邮箱', '企业邮箱', '学历', '专业', '毕业学校', '毕业时间', '婚否', '育否', '籍贯', '紧急联系人', '紧急联系人电话', '居住住址',
   '身份证地址', '银行卡', '银行信息',
 ] as const
 
@@ -11,6 +11,7 @@ export type EmployeePasteValues = Pick<EmployeeRecord,
   'companyName' | 'displayName' | 'hireDate' | 'probationMonths' | 'expectedRegularDate' | 'actualRegularDate' |
   'contractEndDate' | 'departmentName' | 'departmentLevel2' | 'jobTitle' | 'employmentType' | 'gender' | 'idNumber' |
   'birthDate' | 'workPhone' | 'personalEmail' | 'workEmail' | 'education' | 'major' | 'school' | 'graduationDate' |
+  'maritalStatus' | 'hasChildren' | 'hometown' |
   'emergencyContact' | 'emergencyContactPhone' | 'residentialAddress' | 'idAddress' | 'bankAccount' | 'bankName'>
 
 export interface EmployeePasteResult {
@@ -94,9 +95,10 @@ export function parseEmployeePaste(text: string, now = new Date()): EmployeePast
     expectedRegularDate, actualRegularDate, contractEndDate, departmentName: cells[8]!, departmentLevel2: optional(cells[9]!),
     jobTitle: cells[10]!, employmentType: employmentType(cells[11]!, errors), gender: optional(cells[12]!), idNumber: optional(cells[13]!)?.toUpperCase() ?? null,
     birthDate, workPhone: cells[17]!, personalEmail: optional(cells[18]!), workEmail: optional(cells[19]!), education: optional(cells[20]!),
-    major: optional(cells[21]!), school: optional(cells[22]!), graduationDate, emergencyContact: optional(cells[24]!),
-    emergencyContactPhone: optional(cells[25]!), residentialAddress: optional(cells[26]!), idAddress: optional(cells[27]!),
-    bankAccount: optional(cells[28]!), bankName: optional(cells[29]!),
+    major: optional(cells[21]!), school: optional(cells[22]!), graduationDate, maritalStatus: optional(cells[24]!),
+    hasChildren: optional(cells[25]!), hometown: optional(cells[26]!), emergencyContact: optional(cells[27]!),
+    emergencyContactPhone: optional(cells[28]!), residentialAddress: optional(cells[29]!), idAddress: optional(cells[30]!),
+    bankAccount: optional(cells[31]!), bankName: optional(cells[32]!),
   }
   return { cells, values: errors.length ? null : values, errors, warnings }
 }
