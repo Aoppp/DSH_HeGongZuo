@@ -57,6 +57,8 @@ test('异常的未来汇报日期按实际提交日期参与看板统计', async
   await new DailyReportAnalyticsRepository(pool).dashboard('2026-08-14')
   assert.match(statements[0], /LEAST\(report\.report_date/)
   assert.match(statements[0], /employee_daily_report_individual_scope/)
+  assert.match(statements[0], /employee_wecom_leaves/)
+  assert.match(statements[1], /employee_wecom_leaves/)
 })
 
 test('统计服务校验视图所需日期、月份和员工范围参数', async () => {

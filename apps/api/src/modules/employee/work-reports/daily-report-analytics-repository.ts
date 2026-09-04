@@ -67,12 +67,20 @@ function dateText(value: string | Date): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(value)
 }
 
+function approvedLeaveSql(employeeAlias: string, dateParameter: string): string {
+  return `EXISTS (SELECT 1 FROM employee_wecom_leaves AS leave_record
+    WHERE leave_record.employee_id=${employeeAlias}.id AND leave_record.sp_status=2
+      AND leave_record.start_time < ((${dateParameter}::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+      AND leave_record.end_time >= (${dateParameter}::date::timestamp AT TIME ZONE 'Asia/Shanghai'))`
+}
+
 function expectedEmployeesSql(dateParameter: string): string {
   return `SELECT id, display_name, department_name, department_level2
     FROM employees AS employee JOIN employee_wecom_schedules AS schedule ON schedule.employee_id=employee.id AND schedule.schedule_date=${dateParameter}::date AND schedule.schedule_id <> '0'
     WHERE employee.hire_date <= ${dateParameter}::date
       AND (departure_date IS NULL OR departure_date >= ${dateParameter}::date)
       AND employee.status <> 'on_leave'
+      AND NOT ${approvedLeaveSql('employee', dateParameter)}
       AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
       AND (employee.status <> 'inactive' OR departure_date >= ${dateParameter}::date)`
 }
@@ -102,8 +110,12 @@ export class DailyReportAnalyticsRepository {
     })
     const groups = new Map<string, SubmissionEmployee[]>()
     for (const employee of employees) groups.set(employee.department, [...(groups.get(employee.department) ?? []), employee])
-    const excludedResult = await this.pool.query<{ display_name: string; reason: '请假' | '未排班' | '单独汇报' }>(`SELECT employee.display_name, '请假'::text AS reason FROM employees employee WHERE employee.status='on_leave'
+    const excludedResult = await this.pool.query<{ display_name: string; reason: '请假' | '未排班' | '单独汇报' }>(`SELECT employee.display_name, '请假'::text AS reason FROM employees employee
+      WHERE employee.hire_date <= $1::date AND (employee.departure_date IS NULL OR employee.departure_date >= $1::date)
+        AND (employee.status='on_leave' OR ${approvedLeaveSql('employee', '$1')})
+        AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope individual WHERE individual.employee_id=employee.id)
       UNION ALL SELECT employee.display_name, '未排班'::text FROM employees employee WHERE employee.status <> 'inactive' AND employee.status <> 'on_leave'
+        AND NOT ${approvedLeaveSql('employee', '$1')}
         AND NOT EXISTS (SELECT 1 FROM employee_wecom_schedules schedule WHERE schedule.employee_id=employee.id AND schedule.schedule_date=$1::date)
         AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope individual WHERE individual.employee_id=employee.id)
       UNION ALL SELECT individual.display_name, '单独汇报'::text FROM employee_daily_report_individual_scope individual
@@ -134,6 +146,7 @@ export class DailyReportAnalyticsRepository {
           AND employee.hire_date <= days.date
           AND (employee.departure_date IS NULL OR employee.departure_date >= days.date)
           AND employee.status <> 'on_leave'
+          AND NOT ${approvedLeaveSql('employee', 'days.date')}
           AND (employee.status <> 'inactive' OR employee.departure_date >= days.date)
           AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
         GROUP BY days.date

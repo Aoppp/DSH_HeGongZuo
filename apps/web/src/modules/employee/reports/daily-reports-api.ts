@@ -79,7 +79,7 @@ export function readDailyReport(id: string, signal?: AbortSignal): Promise<Daily
 }
 
 export function readDailyReportSyncState(signal?: AbortSignal): Promise<DailyReportSyncState> {
-  return request('/api/daily-reports/sync', signal ? { signal } : {})
+  return request('/api/daily-reports/sync', { cache: 'no-store', ...(signal ? { signal } : {}) })
 }
 
 export function startDailyReportSync(): Promise<{ readonly accepted: boolean; readonly state: DailyReportSyncState }> {

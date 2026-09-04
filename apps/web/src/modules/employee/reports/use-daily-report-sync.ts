@@ -59,6 +59,14 @@ export function useDailyReportSync(onCompleted: () => void) {
     return () => window.clearInterval(timer)
   }, [polling, refresh])
 
+  useEffect(() => {
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void refresh() }
+    const timer = window.setInterval(refreshWhenVisible, 60_000)
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refreshWhenVisible); document.removeEventListener('visibilitychange', refreshWhenVisible) }
+  }, [refresh])
+
   const start = useCallback(async () => {
     if (starting || waitingRef.current || state?.queued || state?.run?.status === 'running') return
     setStarting(true)
