@@ -58,7 +58,7 @@ export class WorkDailyRepository {
   async latestRun(): Promise<WorkDailySyncRun | null> {
     const result = await this.pool.query<WorkDailySyncRunRow>(`SELECT id::text, source, status, started_at, finished_at,
       pulled_count, inserted_count, updated_count, unchanged_count, failed_count
-      FROM employee_work_daily_sync_runs ORDER BY id DESC LIMIT 1`)
+      FROM employee_work_daily_sync_runs ORDER BY employee_work_daily_sync_runs.id DESC LIMIT 1`)
     const row = result.rows[0]
     if (!row) return null
     return {
