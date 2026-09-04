@@ -35,7 +35,7 @@ function date(value: string, label: string, errors: string[]): string | null {
 
 function employmentType(value: string, errors: string[]): EmploymentType {
   const key = value.trim().toLocaleLowerCase('zh-CN')
-  const types: Record<string, EmploymentType> = { '': 'full_time', '全职': 'full_time', '正式': 'full_time', '正式员工': 'full_time', 'full_time': 'full_time', '兼职': 'part_time', 'part_time': 'part_time', '外包': 'contractor', '劳务': 'contractor', 'contractor': 'contractor', '实习': 'intern', '实习生': 'intern', 'intern': 'intern' }
+  const types: Record<string, EmploymentType> = { '': 'full_time', '全职': 'full_time', '合同工': 'full_time', '正式': 'full_time', '正式员工': 'full_time', 'full_time': 'full_time', '兼职': 'part_time', 'part_time': 'part_time', '外包': 'contractor', '劳务': 'contractor', 'contractor': 'contractor', '实习': 'intern', '实习生': 'intern', 'intern': 'intern' }
   const result = types[key]
   if (!result) { errors.push(`无法识别用工类型“${value.trim()}”。`); return 'full_time' }
   return result

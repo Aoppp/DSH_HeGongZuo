@@ -33,6 +33,14 @@ test('列数不足、列数过多或粘贴多行时拒绝识别', () => {
   assert.match(parseEmployeePaste(`${row.join('\t')}\n${row.join('\t')}`).errors[0], /一次只能识别一行/)
 })
 
+test('将合同工识别为全职', () => {
+  const changed = [...row]
+  changed[11] = '合同工'
+  const result = parseEmployeePaste(changed.join('\t'))
+  assert.equal(result.values?.employmentType, 'full_time')
+  assert.deepEqual(result.errors, [])
+})
+
 test('年龄、工龄和合同剩余天数只用于核对', () => {
   const changed = [...row]
   changed[15] = '99'
