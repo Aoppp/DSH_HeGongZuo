@@ -54,13 +54,16 @@ export class WeComLeaveClient {
     url.searchParams.set('access_token', await this.accessToken())
     const numbers: string[] = []
     let cursor = 0
+    const visitedCursors = new Set([cursor])
     do {
       const body = await this.response(url.toString(), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ starttime: startTime, endtime: endTime, cursor, size: 100 }) })
       const page = Array.isArray(body.sp_no_list) ? body.sp_no_list.filter((value): value is string => typeof value === 'string' && Boolean(value.trim())) : []
       numbers.push(...page)
       const rawNext = body.next_cursor ?? body.new_next_cursor
+      if (rawNext === undefined || rawNext === null || (typeof rawNext === 'string' && !rawNext.trim())) break
       const next = typeof rawNext === 'number' || typeof rawNext === 'string' ? Number(rawNext) : Number.NaN
-      if (!Number.isFinite(next) || next === cursor) break
+      if (!Number.isFinite(next) || visitedCursors.has(next)) break
+      visitedCursors.add(next)
       cursor = next
     } while (true)
     return numbers
