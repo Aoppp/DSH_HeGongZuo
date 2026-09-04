@@ -15,7 +15,7 @@ export interface WorkReportRecord {
   readonly fields: readonly WorkReportField[]
 }
 
-export type AttendanceStatus = 'normal' | 'late' | 'early_leave' | 'missing'
+export type AttendanceStatus = 'normal' | 'late' | 'late_severe' | 'early_leave' | 'missing'
 
 export interface AttendanceCheckinDetail {
   readonly type: string

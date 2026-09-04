@@ -264,6 +264,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const date = url.searchParams.get('date') ?? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
     if (!isCalendarDate(date)) throw new HttpError(400, '查询日期格式无效。')
     if (attendanceRequest) {
+      const view = url.searchParams.get('view')
+      if (view === 'history') {
+        const employeeId = url.searchParams.get('employeeId')?.trim() ?? ''
+        if (!employeeId || employeeId.length > 80) throw new HttpError(400, '员工编号无效。')
+        sendJson(response, 200, { records: await employeeAttendance.employeeHistory(employeeId) })
+        return
+      }
+      if (view === 'anomalies') {
+        const month = url.searchParams.get('month') ?? ''
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new HttpError(400, '查询月份格式无效。')
+        sendJson(response, 200, { month, rankings: await employeeAttendance.anomalyRankings(month) })
+        return
+      }
       sendJson(response, 200, await employeeAttendance.snapshot(date))
     } else {
       const snapshot = await employeeWorkRecords.snapshot(date)

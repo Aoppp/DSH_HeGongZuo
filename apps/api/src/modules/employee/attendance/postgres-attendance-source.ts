@@ -2,8 +2,11 @@ import type { Pool } from 'pg'
 
 import type { AttendanceCheckinDetail, AttendanceRecord, AttendanceStatus } from '../work-records/work-records-source.js'
 
+export type ExtendedAttendanceStatus = AttendanceStatus | 'late_severe'
+
 interface CheckinRow {
   readonly id: string | null
+  readonly schedule_date: string | Date
   readonly employee_id: string
   readonly display_name: string
   readonly department_name: string
@@ -14,89 +17,138 @@ interface CheckinRow {
   readonly standard_checkin_time: string | Date | null
 }
 
-function iso(value: string | Date): string { return (value instanceof Date ? value : new Date(value)).toISOString() }
-function time(value: string | Date | null): string { return value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—' }
-function type(value: string): 'checkin' | 'checkout' | null { return value.includes('上班') ? 'checkin' : value.includes('下班') ? 'checkout' : null }
-function status(value: string | null): AttendanceStatus {
-  if (value?.includes('迟到')) return 'late'
-  if (value?.includes('早退')) return 'early_leave'
-  if (value?.includes('缺卡')) return 'missing'
-  return 'normal'
+export interface ExtendedAttendanceRecord {
+  readonly id: string
+  readonly externalUserId: string
+  readonly employeeName: string
+  readonly departmentName: string
+  readonly date: string
+  readonly scheduledStart: string
+  readonly scheduledEnd: string
+  readonly checkInAt: string | null
+  readonly checkOutAt: string | null
+  readonly status: ExtendedAttendanceStatus
+  readonly location: string | null
+  readonly checkInLocation: string | null
+  readonly checkOutLocation: string | null
+  readonly details: readonly (Omit<AttendanceCheckinDetail, 'status'> & { readonly status: ExtendedAttendanceStatus })[]
 }
 
-interface GroupedRecord {
-  id: string
-  externalUserId: string
-  employeeName: string
-  departmentName: string
-  scheduledStart: string
-  scheduledEnd: string
-  checkInAt: string | null
-  checkOutAt: string | null
-  status: AttendanceStatus
-  location: string | null
-  checkInLocation: string | null
-  checkOutLocation: string | null
-  details: AttendanceCheckinDetail[]
-  severity: number
+export interface AttendanceAnomalyRanking {
+  readonly employeeId: string
+  readonly employeeName: string
+  readonly departmentName: string
+  readonly lateCount: number
+  readonly severeLateCount: number
+  readonly missingCount: number
+  readonly earlyLeaveCount: number
+  readonly total: number
 }
-function severity(value: AttendanceStatus): number { return value === 'missing' ? 3 : value === 'early_leave' ? 2 : value === 'late' ? 1 : 0 }
+
+function iso(value: string | Date): string { return (value instanceof Date ? value : new Date(value)).toISOString() }
+function dateText(value: string | Date): string { return typeof value === 'string' ? value.slice(0, 10) : new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(value) }
+function time(value: string | Date | null): string { return value ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(value)) : '—' }
+function type(value: string): 'checkin' | 'checkout' | null { return value.includes('上班') ? 'checkin' : value.includes('下班') ? 'checkout' : null }
+function rawStatus(value: string | null): ExtendedAttendanceStatus {
+  if (value?.includes('早退')) return 'early_leave'
+  if (value?.includes('缺卡')) return 'missing'
+  if (value?.includes('迟到')) return 'late'
+  return 'normal'
+}
+function checkinStatus(value: string | Date): ExtendedAttendanceStatus {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).formatToParts(new Date(value))
+  const part = (type: Intl.DateTimeFormatPartTypes): number => Number(parts.find((item) => item.type === type)?.value ?? 0)
+  const seconds = part('hour') * 3600 + part('minute') * 60 + part('second')
+  if (seconds > 9 * 3600 + 15 * 60) return 'late_severe'
+  if (seconds > 9 * 3600) return 'late'
+  return 'normal'
+}
+function finalStatus(record: ExtendedAttendanceRecord): ExtendedAttendanceStatus {
+  if (!record.checkInAt || !record.checkOutAt) return 'missing'
+  const statuses = record.details.map((detail) => detail.status)
+  if (statuses.includes('missing')) return 'missing'
+  if (statuses.includes('late_severe')) return 'late_severe'
+  if (statuses.includes('early_leave')) return 'early_leave'
+  if (statuses.includes('late')) return 'late'
+  return 'normal'
+}
 
 export interface PostgresAttendanceSnapshot {
   readonly date: string
   readonly source: 'wecom'
   readonly connectionStatus: 'connected'
   readonly generatedAt: string
-  readonly attendance: { readonly expected: number; readonly normal: number; readonly exceptions: number; readonly records: readonly AttendanceRecord[] }
+  readonly attendance: { readonly expected: number; readonly normal: number; readonly exceptions: number; readonly records: readonly ExtendedAttendanceRecord[] }
 }
 
 export class PostgresAttendanceSource {
   constructor(private readonly pool: Pool) {}
 
-  async snapshot(date: string): Promise<PostgresAttendanceSnapshot> {
-    const result = await this.pool.query<CheckinRow>(`SELECT checkin.id::text, employee.id AS employee_id, employee.display_name,
+  private async records(startDate: string, endDate: string, employeeId?: string): Promise<ExtendedAttendanceRecord[]> {
+    const values: unknown[] = [startDate, endDate]
+    const employeeCondition = employeeId ? `AND employee.id = $${values.push(employeeId)}` : ''
+    const result = await this.pool.query<CheckinRow>(`SELECT checkin.id::text, schedule.schedule_date::text, employee.id AS employee_id, employee.display_name,
       employee.department_name, checkin.checkin_time, checkin.checkin_type, checkin.exception_type,
       checkin.location_title, checkin.standard_checkin_time
       FROM employee_wecom_schedules AS schedule JOIN employees AS employee ON employee.id=schedule.employee_id
       LEFT JOIN employee_wecom_checkins AS checkin ON checkin.employee_id=employee.id
-        AND checkin.checkin_time >= ($1::date::timestamp AT TIME ZONE 'Asia/Shanghai')
-        AND checkin.checkin_time < (($1::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
-      WHERE schedule.schedule_date=$1::date AND schedule.schedule_id <> '0'
-        AND employee.hire_date <= $1::date
-        AND (employee.departure_date IS NULL OR employee.departure_date >= $1::date)
-      ORDER BY employee.display_name, checkin.checkin_time NULLS LAST, checkin.id`, [date])
-    const grouped = new Map<string, GroupedRecord>()
+        AND checkin.checkin_time >= (schedule.schedule_date::timestamp AT TIME ZONE 'Asia/Shanghai')
+        AND checkin.checkin_time < ((schedule.schedule_date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+      WHERE schedule.schedule_date BETWEEN $1::date AND $2::date AND schedule.schedule_id <> '0'
+        AND employee.hire_date <= schedule.schedule_date
+        AND (employee.departure_date IS NULL OR employee.departure_date >= schedule.schedule_date)
+        ${employeeCondition}
+      ORDER BY schedule.schedule_date DESC, employee.display_name, checkin.checkin_time NULLS LAST, checkin.id`, values)
+    const grouped = new Map<string, ExtendedAttendanceRecord>()
     for (const row of result.rows) {
+      const date = dateText(row.schedule_date)
+      const key = `${row.employee_id}-${date}`
       const checkinType = row.checkin_type ? type(row.checkin_type) : null
-      const nextStatus = status(row.exception_type)
-      const current = grouped.get(row.employee_id)
       const checkinTime = row.checkin_time ? iso(row.checkin_time) : null
-      const standardTime = time(row.standard_checkin_time)
-      const detail: AttendanceCheckinDetail | null = checkinType && checkinTime ? { type: row.checkin_type!, time: checkinTime, standardTime, status: nextStatus, exceptionType: row.exception_type, location: row.location_title } : null
-      if (!current) {
-        grouped.set(row.employee_id, {
-          id: `${row.employee_id}-${date}`, externalUserId: row.employee_id, employeeName: row.display_name, departmentName: row.department_name,
-          scheduledStart: checkinType === 'checkin' ? standardTime : '—', scheduledEnd: checkinType === 'checkout' ? standardTime : '—',
-          checkInAt: checkinType === 'checkin' ? checkinTime : null, checkOutAt: checkinType === 'checkout' ? checkinTime : null,
-          status: checkinType ? nextStatus : 'missing', location: row.location_title, checkInLocation: checkinType === 'checkin' ? row.location_title : null,
-          checkOutLocation: checkinType === 'checkout' ? row.location_title : null, details: detail ? [detail] : [], severity: checkinType ? severity(nextStatus) : severity('missing'),
-        })
-        continue
+      const detailStatus = checkinType === 'checkin' && row.checkin_time ? checkinStatus(row.checkin_time) : rawStatus(row.exception_type)
+      const detail = checkinType && checkinTime ? { type: row.checkin_type!, time: checkinTime, standardTime: time(row.standard_checkin_time), status: detailStatus, exceptionType: row.exception_type, location: row.location_title } : null
+      const current = grouped.get(key) ?? {
+        id: key, externalUserId: row.employee_id, employeeName: row.display_name, departmentName: row.department_name, date,
+        scheduledStart: '—', scheduledEnd: '—', checkInAt: null, checkOutAt: null, status: 'missing' as const,
+        location: null, checkInLocation: null, checkOutLocation: null, details: [],
       }
-      const next = { ...current }
-      if (!checkinType) continue
-      if (!checkinTime) continue
-      if (checkinType === 'checkin' && (!next.checkInAt || checkinTime < next.checkInAt)) { next.checkInAt = checkinTime; next.scheduledStart = standardTime; next.checkInLocation = row.location_title }
-      if (checkinType === 'checkout' && (!next.checkOutAt || checkinTime > next.checkOutAt)) { next.checkOutAt = checkinTime; next.scheduledEnd = standardTime; next.checkOutLocation = row.location_title }
-      if (severity(nextStatus) > next.severity) { next.status = nextStatus; next.severity = severity(nextStatus) }
-      if (!next.location && row.location_title) next.location = row.location_title
-      if (detail) next.details.push(detail)
-      grouped.set(row.employee_id, next)
+      const details = detail ? [...current.details, detail] : [...current.details]
+      let checkInAt = current.checkInAt, checkOutAt = current.checkOutAt
+      let checkInLocation = current.checkInLocation, checkOutLocation = current.checkOutLocation
+      if (checkinType === 'checkin' && checkinTime && (!checkInAt || checkinTime < checkInAt)) { checkInAt = checkinTime; checkInLocation = row.location_title }
+      if (checkinType === 'checkout' && checkinTime && (!checkOutAt || checkinTime > checkOutAt)) { checkOutAt = checkinTime; checkOutLocation = row.location_title }
+      const next: ExtendedAttendanceRecord = { ...current, checkInAt, checkOutAt, checkInLocation, checkOutLocation, location: current.location ?? row.location_title, details }
+      grouped.set(key, { ...next, status: finalStatus(next) })
     }
-    const records = [...grouped.values()].map(({ severity: _severity, ...record }) => record)
+    return [...grouped.values()]
+  }
+
+  async snapshot(date: string): Promise<PostgresAttendanceSnapshot> {
+    const records = await this.records(date, date)
     return { date, source: 'wecom', connectionStatus: 'connected', generatedAt: new Date().toISOString(), attendance: {
       expected: records.length, normal: records.filter((record) => record.status === 'normal').length,
       exceptions: records.filter((record) => record.status !== 'normal').length, records,
     } }
+  }
+
+  async employeeHistory(employeeId: string): Promise<readonly ExtendedAttendanceRecord[]> {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+    return this.records('2026-07-01', today, employeeId)
+  }
+
+  async anomalyRankings(month: string): Promise<readonly AttendanceAnomalyRanking[]> {
+    const startDate = `${month}-01`
+    const endDate = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10)
+    const records = await this.records(startDate, endDate)
+    const rankings = new Map<string, AttendanceAnomalyRanking>()
+    for (const record of records) {
+      if (record.status === 'normal') continue
+      const current = rankings.get(record.externalUserId) ?? { employeeId: record.externalUserId, employeeName: record.employeeName, departmentName: record.departmentName, lateCount: 0, severeLateCount: 0, missingCount: 0, earlyLeaveCount: 0, total: 0 }
+      const late = record.details.some((detail) => detail.status === 'late' || detail.status === 'late_severe')
+      const severeLate = record.details.some((detail) => detail.status === 'late_severe')
+      const earlyLeave = record.details.some((detail) => detail.status === 'early_leave')
+      rankings.set(record.externalUserId, { ...current, lateCount: current.lateCount + Number(late), severeLateCount: current.severeLateCount + Number(severeLate), missingCount: current.missingCount + Number(record.status === 'missing'), earlyLeaveCount: current.earlyLeaveCount + Number(earlyLeave), total: current.total + 1 })
+    }
+    return [...rankings.values()].sort((left, right) => right.lateCount - left.lateCount || right.severeLateCount - left.severeLateCount || right.total - left.total || left.employeeName.localeCompare(right.employeeName, 'zh-CN'))
   }
 }

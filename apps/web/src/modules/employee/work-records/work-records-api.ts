@@ -1,4 +1,4 @@
-export type AttendanceStatus = 'normal' | 'late' | 'early_leave' | 'missing'
+export type AttendanceStatus = 'normal' | 'late' | 'late_severe' | 'early_leave' | 'missing'
 
 export interface AttendanceCheckinDetail {
   readonly type: string
@@ -39,6 +39,8 @@ export interface EmployeeAttendanceSnapshot extends SourceState {
     readonly exceptions: number
     readonly records: readonly {
       readonly id: string
+      readonly externalUserId: string
+      readonly date: string
       readonly employeeName: string
       readonly departmentName: string
       readonly scheduledStart: string
@@ -69,4 +71,31 @@ export function readEmployeeReports(date: string, signal?: AbortSignal): Promise
 
 export function readEmployeeAttendance(date: string, signal?: AbortSignal): Promise<EmployeeAttendanceSnapshot> {
   return readSnapshot('/api/employee/attendance', date, '考勤数据', signal)
+}
+
+export type AttendanceRecord = EmployeeAttendanceSnapshot['attendance']['records'][number]
+
+export interface AttendanceAnomalyRanking {
+  readonly employeeId: string
+  readonly employeeName: string
+  readonly departmentName: string
+  readonly lateCount: number
+  readonly severeLateCount: number
+  readonly missingCount: number
+  readonly earlyLeaveCount: number
+  readonly total: number
+}
+
+async function readAttendanceView<T>(parameters: URLSearchParams, signal?: AbortSignal): Promise<T> {
+  const response = await fetch(`/api/employee/attendance?${parameters}`, { credentials: 'same-origin', ...(signal ? { signal } : {}) })
+  if (!response.ok) throw new Error(`考勤数据加载失败（HTTP ${response.status}）。`)
+  return response.json() as Promise<T>
+}
+
+export function readEmployeeAttendanceHistory(employeeId: string, signal?: AbortSignal): Promise<{ readonly records: readonly AttendanceRecord[] }> {
+  return readAttendanceView(new URLSearchParams({ view: 'history', employeeId }), signal)
+}
+
+export function readAttendanceAnomalies(month: string, signal?: AbortSignal): Promise<{ readonly month: string; readonly rankings: readonly AttendanceAnomalyRanking[] }> {
+  return readAttendanceView(new URLSearchParams({ view: 'anomalies', month }), signal)
 }
