@@ -16,12 +16,14 @@
 .work-records-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
 .work-records-metrics--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .work-records-metrics--four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.work-records-metrics article { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid #e4e8ef; border-radius: 12px; background: #fff; box-shadow: 0 4px 15px rgba(23, 32, 51, .035); }
-.work-records-metrics article > i { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border-radius: 10px; background: #eef5ff; color: #2f6db2; }
-.work-records-metrics article.is-warning > i { background: #fff6df; color: #b26a00; }
-.work-records-metrics article.is-danger > i { background: #fff0ef; color: #c7443e; }
-.work-records-metrics article.is-success > i { background: #eaf8f0; color: #227448; }
-.work-records-metrics article.is-leave > i { background: #edf2f7; color: #58708c; }
+.work-records-metrics article, .work-records-metrics .attendance-overview-card { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid #e4e8ef; border-radius: 12px; background: #fff; box-shadow: 0 4px 15px rgba(23, 32, 51, .035); }
+.work-records-metrics .attendance-overview-card { width: 100%; color: inherit; font: inherit; text-align: left; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+.work-records-metrics .attendance-overview-card:hover { border-color: #b7cce2; box-shadow: 0 6px 18px rgba(23, 62, 104, .08); }
+.work-records-metrics article > i, .work-records-metrics .attendance-overview-card > i { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 auto; border-radius: 10px; background: #eef5ff; color: #2f6db2; }
+.work-records-metrics article.is-warning > i, .work-records-metrics .is-warning > i { background: #fff6df; color: #b26a00; }
+.work-records-metrics article.is-danger > i, .work-records-metrics .is-danger > i { background: #fff0ef; color: #c7443e; }
+.work-records-metrics article.is-success > i, .work-records-metrics .is-success > i { background: #eaf8f0; color: #227448; }
+.work-records-metrics article.is-leave > i, .work-records-metrics .is-leave > i { background: #edf2f7; color: #58708c; }
 .work-records-metrics span { color: #667085; font-size: 12px; }
 .work-records-metrics strong { margin-left: 8px; color: #172033; font-size: 23px; }
 .work-records-metrics small { margin-left: 3px; }
@@ -86,6 +88,13 @@
 .attendance-detail main article div span, .attendance-detail main article em { color: #68768b; font-size: 12px; font-style: normal; }
 .attendance-detail main article p { margin: 0; color: #55657a; font-size: 12px; line-height: 1.45; text-align: right; word-break: break-word; }
 .attendance-history > section, .attendance-anomalies > section { width: min(900px, 100%); }
+.attendance-overview-dialog > section { width: min(560px, 100%); }
+.attendance-overview-list { max-height: min(560px, calc(100vh - 190px)); overflow: auto; padding: 6px 18px 16px; }
+.attendance-overview-list > button { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 4px; border: 0; border-bottom: 1px solid #edf1f5; background: #fff; color: #344054; text-align: left; cursor: pointer; }
+.attendance-overview-list > button:hover { background: #f8fbfe; }
+.attendance-overview-list > button > div { display: grid; gap: 3px; }
+.attendance-overview-list > button strong { color: #205f9f; font-size: 14px; }
+.attendance-overview-list > button div span { color: #7a8699; font-size: 12px; }
 .attendance-history .work-attendance-table { max-height: 620px; overflow: auto; }
 .attendance-person-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 14px 18px; border-bottom: 1px solid #e8edf3; background: #f8fafc; }
 .attendance-person-summary span { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; color: #6b778b; font-size: 11px; }

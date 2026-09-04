@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ModuleProps } from '../../../app/types'
 import { SkeletonCards, SkeletonTable } from '../../../components/Skeleton'
 import { exportAttendance } from './export-attendance'
-import { AttendanceAnomalyDialog, AttendanceHistoryDialog, attendanceClock, attendanceStatusLabels } from './AttendanceInsights'
+import { AttendanceAnomalyDialog, AttendanceHistoryDialog, AttendanceOverviewDialog, attendanceClock, attendanceStatusLabels } from './AttendanceInsights'
 import { localDate } from '../work-records/work-records-format'
-import { readEmployeeAttendance, type AttendanceStatus, type EmployeeAttendanceSnapshot } from '../work-records/work-records-api'
+import { readEmployeeAttendance, type AttendanceRecord, type AttendanceStatus, type EmployeeAttendanceSnapshot } from '../work-records/work-records-api'
 import '../work-records/employee-work-records.css'
 
 const statusOptions: readonly { readonly value: '' | AttendanceStatus; readonly label: string }[] = [{ value: '', label: '全部' }, { value: 'normal', label: '正常' }, { value: 'late', label: '迟到' }, { value: 'missing', label: '缺卡' }, { value: 'leave', label: '请假' }]
 const anomalyStatuses = new Set<AttendanceStatus>(['late', 'late_severe', 'early_leave', 'missing'])
+type OverviewKind = 'expected' | 'attended' | 'late' | 'missing' | 'leave'
 
 function shiftDate(date: string, days: number): string {
   const matched = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
@@ -29,6 +30,7 @@ export function EmployeeAttendanceModule(_props: ModuleProps) {
   const [department, setDepartment] = useState('')
   const [status, setStatus] = useState<'' | AttendanceStatus>('')
   const [onlyAnomalies, setOnlyAnomalies] = useState(false)
+  const [overviewOpen, setOverviewOpen] = useState<OverviewKind | null>(null)
   const [historyEmployee, setHistoryEmployee] = useState<{ readonly id: string; readonly name: string; readonly month: string } | null>(null)
   const [anomaliesOpen, setAnomaliesOpen] = useState(false)
   const load = useCallback(async (nextDate: string, signal?: AbortSignal) => {
@@ -53,6 +55,17 @@ export function EmployeeAttendanceModule(_props: ModuleProps) {
       leave: source.filter((record) => record.status === 'leave').length,
     }
   }, [snapshot])
+  const overviewRecords = useMemo<Record<OverviewKind, readonly AttendanceRecord[]>>(() => {
+    const source = snapshot?.attendance.records ?? []
+    return {
+      expected: source,
+      attended: source.filter((record) => record.status !== 'leave' && Boolean(record.checkInAt || record.checkOutAt)),
+      late: source.filter((record) => record.status === 'late' || record.status === 'late_severe'),
+      missing: source.filter((record) => record.status === 'missing'),
+      leave: source.filter((record) => record.status === 'leave'),
+    }
+  }, [snapshot])
+  const overviewLabels: Record<OverviewKind, string> = { expected: '应出勤人员', attended: '已出勤人员', late: '迟到人员', missing: '缺卡人员', leave: '请假人员' }
   const updateDate = (next: string) => setDate(next > latestDate ? latestDate : next)
 
   return <div className="employee-work-records module-page">
@@ -60,11 +73,11 @@ export function EmployeeAttendanceModule(_props: ModuleProps) {
     {error && <div className="work-records-error"><AlertTriangle size={16} />{error}<button type="button" onClick={() => void load(date)}>重新加载</button></div>}
     {loading && !snapshot ? <div className="work-records-skeleton"><SkeletonCards count={5} /><SkeletonTable columns={6} rows={6} /></div> : snapshot && <>
       <section className="work-records-metrics attendance-overview">
-        <article><i><CalendarDays size={18} /></i><span>应出勤<strong>{overview.expected}</strong><small>人</small></span></article>
-        <article className="is-success"><i><UserCheck size={18} /></i><span>已出勤<strong>{overview.attended}</strong><small>人</small></span></article>
-        <article className={overview.late ? 'is-warning' : ''}><i><Clock3 size={18} /></i><span>迟到<strong>{overview.late}</strong><small>人</small></span></article>
-        <article className={overview.missing ? 'is-danger' : ''}><i><AlertTriangle size={18} /></i><span>缺卡<strong>{overview.missing}</strong><small>人</small></span></article>
-        <article className="is-leave"><i><CheckCircle2 size={18} /></i><span>请假<strong>{overview.leave}</strong><small>人</small></span></article>
+        <button type="button" className="attendance-overview-card" onClick={() => setOverviewOpen('expected')}><i><CalendarDays size={18} /></i><span>应出勤<strong>{overview.expected}</strong><small>人</small></span></button>
+        <button type="button" className="attendance-overview-card is-success" onClick={() => setOverviewOpen('attended')}><i><UserCheck size={18} /></i><span>已出勤<strong>{overview.attended}</strong><small>人</small></span></button>
+        <button type="button" className={`attendance-overview-card${overview.late ? ' is-warning' : ''}`} onClick={() => setOverviewOpen('late')}><i><Clock3 size={18} /></i><span>迟到<strong>{overview.late}</strong><small>人</small></span></button>
+        <button type="button" className={`attendance-overview-card${overview.missing ? ' is-danger' : ''}`} onClick={() => setOverviewOpen('missing')}><i><AlertTriangle size={18} /></i><span>缺卡<strong>{overview.missing}</strong><small>人</small></span></button>
+        <button type="button" className="attendance-overview-card is-leave" onClick={() => setOverviewOpen('leave')}><i><CheckCircle2 size={18} /></i><span>请假<strong>{overview.leave}</strong><small>人</small></span></button>
       </section>
       <section className="work-records-panel">
         <div className="work-records-section-title"><div><h2>考勤明细</h2><span>当前筛选 {records.length} 名员工</span></div><div className="work-records-section-actions"><button type="button" className="work-records-export" onClick={() => setAnomaliesOpen(true)}><AlertTriangle size={15} />月度异常</button><button type="button" className="work-records-export" disabled={records.length === 0} onClick={() => void exportAttendance(records, date)}><Download size={15} />导出 Excel</button></div></div>
@@ -73,6 +86,7 @@ export function EmployeeAttendanceModule(_props: ModuleProps) {
       </section>
     </>}
     {historyEmployee && <AttendanceHistoryDialog employeeId={historyEmployee.id} employeeName={historyEmployee.name} month={historyEmployee.month} onClose={() => setHistoryEmployee(null)} />}
+    {overviewOpen && <AttendanceOverviewDialog title={overviewLabels[overviewOpen]} records={overviewRecords[overviewOpen]} onClose={() => setOverviewOpen(null)} onEmployee={(record) => { setOverviewOpen(null); setHistoryEmployee({ id: record.externalUserId, name: record.employeeName, month: date.slice(0, 7) }) }} />}
     {anomaliesOpen && <AttendanceAnomalyDialog month={date.slice(0, 7)} onClose={() => setAnomaliesOpen(false)} onEmployee={(employee) => { setAnomaliesOpen(false); setHistoryEmployee({ id: employee.employeeId, name: employee.employeeName, month: date.slice(0, 7) }) }} />}
   </div>
 }

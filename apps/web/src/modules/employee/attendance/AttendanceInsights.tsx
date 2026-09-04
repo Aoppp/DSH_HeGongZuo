@@ -19,6 +19,10 @@ export function attendanceClock(value: string | null, state?: 'recorded' | 'leav
   return state === 'leave' ? '请假' : clock(value)
 }
 
+export function AttendanceOverviewDialog({ title, records, onEmployee, onClose }: { readonly title: string; readonly records: readonly AttendanceRecord[]; readonly onEmployee: (record: AttendanceRecord) => void; readonly onClose: () => void }) {
+  return <div className="attendance-detail attendance-overview-dialog" role="dialog" aria-modal="true"><button className="attendance-detail__backdrop" type="button" aria-label="关闭" onClick={onClose} /><section><header><div><small>人员名单</small><strong>{title}</strong><span>共 {records.length} 人</span></div><button type="button" aria-label="关闭" onClick={onClose}><X size={18} /></button></header><div className="attendance-overview-list">{records.map((record) => <button key={record.id} type="button" onClick={() => onEmployee(record)}><div><strong>{record.employeeName}</strong><span>{record.departmentName}</span></div><span className={`attendance-status attendance-status--${record.status}`}>{attendanceStatusLabels[record.status]}</span></button>)}{records.length === 0 && <p className="work-records-empty">暂无对应员工</p>}</div></section></div>
+}
+
 export function AttendanceHistoryDialog({ employeeId, employeeName, month, onClose }: { readonly employeeId: string; readonly employeeName: string; readonly month: string; readonly onClose: () => void }) {
   const [records, setRecords] = useState<readonly AttendanceRecord[] | null>(null)
   const [error, setError] = useState('')
