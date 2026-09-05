@@ -664,9 +664,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePermission(currentUser, 'employee-data')
     await platformManagement.assertModuleEnabled('employee-data')
     const { departureDate, departureReason } = departureInput(await readJson(request))
+    const previous = await repository.get(departureId)
+    if (!previous) throw new HttpError(404, '员工不存在。')
     const employee = await repository.depart(departureId, departureDate, departureReason)
     if (!employee) throw new HttpError(404, '员工不存在。')
-    await platformManagement.record(currentUser.id, currentUser.displayName, '办理员工离职', '员工', employee.id, { employeeName: employee.displayName, changedFields: ['员工状态', '离职日期', '离职原因'] })
+    await platformManagement.record(currentUser.id, currentUser.displayName, '办理员工离职', '员工', employee.id, employeeAuditDetail(previous, employee))
     sendJson(response, 200, { employee })
     return
   }

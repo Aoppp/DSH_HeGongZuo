@@ -163,7 +163,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       {status && <section className="platform-management panel-card">
         <header className="platform-management__header"><div><h2>操作记录</h2><p>审计记录长期保留，按需加载。</p></div><div className="platform-management__audit-actions"><a className="employee-data__secondary platform-management__audit-export" href="/api/platform/audit-logs/export"><Download size={15} />导出全部 CSV</a><button className="employee-data__secondary platform-management__audit-toggle" type="button" onClick={toggleAudit} aria-expanded={auditOpen}><History size={15} />{auditOpen ? '收起记录' : '查看记录'}<ChevronDown className={auditOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button></div></header>
         {auditOpen && (auditLoading && auditLogs.length === 0 ? <SkeletonList count={5} /> : auditLogs.length === 0 ? <div className="account-admin__empty">暂无平台管理操作记录。</div> : <><div className="platform-management__audit">
-          {auditLogs.map((log) => <article key={log.id}><div><strong>{log.action}</strong><small>{log.targetType} · {log.targetId}{auditFields(log.detail) ? ` · 修改：${auditFields(log.detail)}` : ''}</small></div><span>{log.actorName ?? '已删除账号'} · {formatTime(log.createdAt)}</span></article>)}
+          {auditLogs.map((log) => <article key={log.id}><div><strong>{log.action}</strong><small>{log.targetType} · {log.targetId}{auditFields(log.detail) ? ` · 修改：${auditFields(log.detail)}` : ''}</small>{auditChanges(log.detail).length > 0 && <details className="platform-management__audit-detail"><summary>查看变更明细</summary><dl>{auditChanges(log.detail).map((change) => <div key={change.field}><dt>{change.label}</dt><dd><span>{change.before}</span><b>→</b><span>{change.after}</span></dd></div>)}</dl></details>}</div><span>{log.actorName ?? '已删除账号'} · {formatTime(log.createdAt)}</span></article>)}
         </div>{auditCursor && <button className="employee-data__secondary platform-management__audit-more" type="button" disabled={auditLoading} onClick={() => void loadAuditLogs(auditCursor, true)}>{auditLoading ? <LoaderCircle className="spin" size={15} /> : '加载更多记录'}</button>}</>)}
       </section>}
     </>
@@ -174,4 +174,9 @@ function auditFields(detail: unknown): string | null {
   if (!detail || typeof detail !== 'object' || !('changedFields' in detail)) return null
   const fields = (detail as { changedFields?: unknown }).changedFields
   return Array.isArray(fields) && fields.every((field) => typeof field === 'string') ? fields.join('、') : null
+}
+
+function auditChanges(detail: unknown): readonly { readonly field: string; readonly label: string; readonly before: string; readonly after: string }[] {
+  if (!detail || typeof detail !== 'object' || !('changes' in detail) || !Array.isArray((detail as { changes?: unknown }).changes)) return []
+  return (detail as { changes: unknown[] }).changes.filter((value): value is { field: string; label: string; before: string; after: string } => Boolean(value) && typeof value === 'object' && typeof (value as { field?: unknown }).field === 'string' && typeof (value as { label?: unknown }).label === 'string' && typeof (value as { before?: unknown }).before === 'string' && typeof (value as { after?: unknown }).after === 'string')
 }

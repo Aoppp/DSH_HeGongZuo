@@ -50,6 +50,7 @@ interface AuditRow {
 interface AuditDetail {
   readonly employeeName?: unknown
   readonly changedFields?: unknown
+  readonly changes?: unknown
 }
 
 function timestamp(value: string | Date): string {
@@ -70,6 +71,16 @@ function auditEmployeeName(value: unknown): string {
   return typeof name === 'string' ? name : ''
 }
 
+function auditChanges(value: unknown): string {
+  const changes = auditDetail(value).changes
+  if (!Array.isArray(changes)) return ''
+  return changes.map((change) => {
+    if (!change || typeof change !== 'object') return ''
+    const item = change as { label?: unknown; before?: unknown; after?: unknown }
+    return typeof item.label === 'string' && typeof item.before === 'string' && typeof item.after === 'string' ? `${item.label}：${item.before} → ${item.after}` : ''
+  }).filter(Boolean).join('；')
+}
+
 function csvCell(value: string | number | null | undefined): string {
   const text = String(value ?? '')
   // 防止 Excel 将审计内容当作公式执行。
@@ -87,6 +98,7 @@ export function auditCsvLine(row: AuditRow): string {
     row.target_id,
     auditEmployeeName(row.detail),
     auditChangedFields(row.detail),
+    auditChanges(row.detail),
   ].map(csvCell).join(',') + '\r\n'
 }
 
@@ -176,7 +188,7 @@ export class PlatformManagementService {
       'content-disposition': `attachment; filename="audit-records.csv"; filename*=UTF-8''${encodeURIComponent('操作记录.csv')}`,
       'cache-control': 'no-store',
     })
-    if (!await writeCsv(response, '\uFEFF操作时间,操作账号,操作账号编号,操作,对象类型,对象编号,目标员工,变更字段\r\n')) return
+    if (!await writeCsv(response, '\uFEFF操作时间,操作账号,操作账号编号,操作,对象类型,对象编号,目标员工,变更字段,变更明细\r\n')) return
 
     let cursor: { readonly createdAt: string; readonly id: number } | null = null
     while (!response.destroyed) {
