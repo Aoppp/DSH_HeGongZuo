@@ -86,6 +86,10 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`)
   const [endDate, setEndDate] = useState(today)
   const [analyticsRevision, setAnalyticsRevision] = useState(0)
+  function selectView(next: AnalyticsView | 'list' | 'analysis') {
+    if (next === 'analysis' && view !== 'analysis') { const yesterday = shiftCalendarDate(today, -1); setStartDate(yesterday); setEndDate(yesterday) }
+    setView(next)
+  }
   function submit(event: FormEvent) { event.preventDefault(); management.applyFilters() }
   const pages = Math.max(1, management.totalPages)
   function openDate(dateValue: string) {
@@ -100,7 +104,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   return <div className="daily-reports module-page">
     <header className="daily-reports__heading"><div><h1>日报管理</h1><p>查看提交情况、工作汇总与数据质量</p></div><div className="daily-reports__sync"><span>{sync.error || sync.message}</span><button type="button" disabled={sync.busy} onClick={() => void sync.start().then(() => setAnalyticsRevision((value) => value + 1))}>{sync.busy ? <LoaderCircle className="daily-reports__spinner" size={15} /> : <RefreshCw size={15} />}{sync.busy ? '同步中' : '同步数据'}</button>{view === 'list' && <small>共 {management.total} 条</small>}</div></header>
 
-    <nav className="report-tabs" aria-label="日报功能">{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => setView(item.id)}>{item.label}</button>)}</nav>
+    <nav className="report-tabs" aria-label="日报功能">{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => selectView(item.id)}>{item.label}</button>)}</nav>
 
     {['dashboard','calendar','quality','analysis'].includes(view) && <div className="report-scope">
       {view === 'dashboard' && <><label>统计日期<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} /></label><div className="report-scope__presets"><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, -1))}>前一天</button><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, 1))}>下一天</button></div></>}
