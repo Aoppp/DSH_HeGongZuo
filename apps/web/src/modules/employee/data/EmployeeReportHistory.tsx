@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { SkeletonList } from '../../../components/Skeleton'
+import { Pagination } from '../../../components/Pagination'
 import { readEmployeeReportHistory, type EmployeeReportHistoryPage } from './employee-report-history-api'
 import './employee-report-history.css'
 
@@ -36,7 +37,7 @@ export function EmployeeReportHistory({ employeeId }: { readonly employeeId: str
         : history && !history.linked ? <div className="employee-report-history__state">该员工暂未关联企业微信账号</div>
           : history && history.reports.length ? <>
             <div className="employee-report-history__list">{history.reports.map((report) => <article key={report.id}><time>{report.date}</time><p>{report.content}</p></article>)}</div>
-            {history.totalPages > 1 && <nav aria-label="历史日报分页"><span>共 {history.total} 条</span><div><button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</button><button type="button" disabled={page >= history.totalPages} onClick={() => setPage((value) => value + 1)}>下一页</button></div></nav>}
+            {history.totalPages > 1 && <nav aria-label="历史日报分页"><span>共 {history.total} 条</span><Pagination page={page} totalPages={history.totalPages} onChange={setPage} label="历史日报分页" /></nav>}
           </> : <div className="employee-report-history__state">暂无历史日报</div>}
   </section>
 }

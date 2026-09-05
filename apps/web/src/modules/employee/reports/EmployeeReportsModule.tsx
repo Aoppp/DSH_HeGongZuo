@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 
 import type { ModuleProps } from '../../../app/types'
 import { SkeletonDetail, SkeletonTable } from '../../../components/Skeleton'
+import { Pagination } from '../../../components/Pagination'
 import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
@@ -129,7 +130,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
       {!management.loading && !management.error && management.loaded && management.reports.length === 0 && <div className="daily-reports__empty">{management.hasFilters ? '没有符合筛选条件的日报' : '暂无日报记录'}</div>}
     </section>
 
-    {!management.loading && !management.error && management.total > 0 && <nav className="daily-reports__pagination" aria-label="日报分页"><span>共 {management.total} 条・第 {management.page} / {pages} 页</span><label>每页<select value={management.pageSize} onChange={(event) => management.setPageSize(Number(event.target.value))}><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option></select>条</label><div><button type="button" disabled={management.page <= 1} onClick={() => management.setPage((value) => value - 1)}>上一页</button><button type="button" disabled={management.page >= pages} onClick={() => management.setPage((value) => value + 1)}>下一页</button></div></nav>}
+    {!management.loading && !management.error && management.total > 0 && <nav className="daily-reports__pagination" aria-label="日报分页"><span>共 {management.total} 条・第 {management.page} / {pages} 页</span><label>每页<select value={management.pageSize} onChange={(event) => management.setPageSize(Number(event.target.value))}><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option></select>条</label><Pagination page={management.page} totalPages={pages} onChange={(page) => management.setPage(() => page)} label="日报分页" /></nav>}
 
     {management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : ''}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <SkeletonDetail /> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}</>}
   </div>
