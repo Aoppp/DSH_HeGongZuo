@@ -48,7 +48,6 @@ export function ReportAnalysisView({ startDate, endDate }: { readonly startDate:
   return <section className="report-analysis panel-card">
     <header className="report-analysis__header">
       <div>
-        <span className="report-analysis__eyebrow"><FileSearch size={14} />日报管理</span>
         <h2>汇总分析</h2>
         <p>围绕已选日期范围整理日报内容，结果仅在当前页面保留。</p>
       </div>
