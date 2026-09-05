@@ -7,7 +7,7 @@ import { Pagination } from '../../../components/Pagination'
 import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
-import { CalendarView, DashboardView, EmployeeArchiveView, IndividualReportersView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
+import { CalendarView, DashboardView, EmployeeArchiveView, EmployeeHistoryDialog, IndividualReportersView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
 import { ReportAnalysisView } from './ReportAnalysisView'
 import { shanghaiCalendarDate, shiftCalendarDate } from './report-dates'
 import './daily-reports.css'
@@ -86,6 +86,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`)
   const [endDate, setEndDate] = useState(today)
   const [analyticsRevision, setAnalyticsRevision] = useState(0)
+  const [archiveEmployee, setArchiveEmployee] = useState<{ readonly id: string; readonly name: string } | null>(null)
   function selectView(next: AnalyticsView | 'list' | 'analysis') {
     if (next === 'analysis' && view !== 'analysis') { const yesterday = shiftCalendarDate(today, -1); setStartDate(yesterday); setEndDate(yesterday) }
     setView(next)
@@ -105,7 +106,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   }
   const views: readonly { id: AnalyticsView | 'list' | 'analysis'; label: string }[] = [
     { id: 'dashboard', label: '提交看板' }, { id: 'calendar', label: '日历' }, { id: 'list', label: '日报列表' },
-    { id: 'employees', label: '员工档案' }, { id: 'analysis', label: '汇总分析' }, { id: 'quality', label: '数据检查' }, { id: 'individual', label: '单独汇报' },
+    { id: 'employees', label: '离职归档' }, { id: 'analysis', label: '汇总分析' }, { id: 'quality', label: '数据检查' }, { id: 'individual', label: '单独汇报' },
   ]
 
   return <div className="daily-reports module-page">
@@ -122,7 +123,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
 
     {view === 'dashboard' && <DashboardView date={reportDate} revision={analyticsRevision} />}
     {view === 'calendar' && <CalendarView month={month} onSelectDate={openDate} revision={analyticsRevision} />}
-    {view === 'employees' && <EmployeeArchiveView revision={analyticsRevision} />}
+    {view === 'employees' && <EmployeeArchiveView revision={analyticsRevision} scope="departed" />}
     {view === 'individual' && <IndividualReportersView revision={analyticsRevision} />}
     {view === 'analysis' && <ReportAnalysisView startDate={startDate} endDate={endDate} onOpenReport={(id) => void management.openDetail(id)} />}
     {view === 'analysis' && management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : ''}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <SkeletonDetail /> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}
@@ -140,7 +141,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
 
     <section className="daily-reports__panel">
       <div className="daily-reports__table-wrap"><table><thead><tr><th>汇报日期</th><th>填写人</th><th>所在部门</th><th>今日工作总结</th><th>明日工作计划</th><th>提交时间</th><th aria-label="操作" /></tr></thead>
-        <tbody>{!management.loading && !management.error && management.reports.map((report) => <tr key={report.record_id}><td><strong>{date(report.report_date)}</strong></td><td>{report.employee.name}{!report.employee.matched && <em className="daily-reports__unmatched">未关联</em>}</td><td>{department(report)}</td><td><p className="daily-reports__summary">{content(report.today_summary)}</p></td><td><p className="daily-reports__summary">{content(report.tomorrow_plan)}</p></td><td>{time(report.submit_time)}{delayed(report) && <em className="daily-reports__delayed">延后提交</em>}</td><td><button type="button" className="daily-reports__view" onClick={() => void management.openDetail(report.record_id)}>查看</button></td></tr>)}</tbody></table></div>
+        <tbody>{!management.loading && !management.error && management.reports.map((report) => <tr key={report.record_id}><td><strong>{date(report.report_date)}</strong></td><td>{report.employee.employee_id ? <button type="button" className="daily-reports__employee" onClick={() => setArchiveEmployee({ id: report.employee.employee_id!, name: report.employee.name })}>{report.employee.name}</button> : report.employee.name}{!report.employee.matched && <em className="daily-reports__unmatched">未关联</em>}</td><td>{department(report)}</td><td><p className="daily-reports__summary">{content(report.today_summary)}</p></td><td><p className="daily-reports__summary">{content(report.tomorrow_plan)}</p></td><td>{time(report.submit_time)}{delayed(report) && <em className="daily-reports__delayed">延后提交</em>}</td><td><button type="button" className="daily-reports__view" onClick={() => void management.openDetail(report.record_id)}>查看</button></td></tr>)}</tbody></table></div>
       {management.loading && <SkeletonTable columns={7} rows={management.pageSize > 10 ? 8 : management.pageSize} header={false} />}
       {!management.loading && !management.error && management.loaded && management.reports.length === 0 && <div className="daily-reports__empty">{management.hasFilters ? '没有符合筛选条件的日报' : '暂无日报记录'}</div>}
     </section>
@@ -148,5 +149,6 @@ export function EmployeeReportsModule(_props: ModuleProps) {
     {!management.loading && !management.error && management.total > 0 && <nav className="daily-reports__pagination" aria-label="日报分页"><span>共 {management.total} 条・第 {management.page} / {pages} 页</span><label>每页<select value={management.pageSize} onChange={(event) => management.setPageSize(Number(event.target.value))}><option value={10}>10</option><option value={20}>20</option><option value={50}>50</option><option value={100}>100</option></select>条</label><Pagination page={management.page} totalPages={pages} onChange={(page) => management.setPage(() => page)} label="日报分页" /></nav>}
 
     {management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : ''}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <SkeletonDetail /> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}</>}
+    {archiveEmployee && <EmployeeHistoryDialog employeeId={archiveEmployee.id} employeeName={archiveEmployee.name} onClose={() => setArchiveEmployee(null)} />}
   </div>
 }

@@ -190,7 +190,9 @@ export class DailyReportAnalyticsRepository {
       LEFT JOIN employee_work_daily_reports AS report ON report.author_user_id = coalesce(employee.wecom_report_user_id, employee.wecom_user_id)
       WHERE ${scope === 'departed' ? "employee.status = 'inactive'" : "employee.status <> 'inactive'"}
         AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id=employee.id)
-      GROUP BY employee.id ORDER BY employee.display_name`)
+      GROUP BY employee.id
+      ${scope === 'departed' ? 'HAVING count(report.record_id) > 0' : ''}
+      ORDER BY employee.display_name`)
     return result.rows.map((row) => ({
       id: row.id, name: row.display_name, department: row.department_name, departmentLevel2: row.department_level2,
       submittedDays: Number(row.submitted_days), delayedDays: Number(row.delayed_days), missingDays: Number(row.missing_days),

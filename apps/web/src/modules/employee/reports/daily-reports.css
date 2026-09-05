@@ -25,6 +25,7 @@
 .daily-reports tbody tr:last-child td { border-bottom: 0; }
 .daily-reports tbody tr:hover { background: #fbfcfd; }
 .daily-reports td strong { color: #213247; font-weight: 650; }
+.daily-reports__employee { border: 0; padding: 0; color: #1f6f60; background: transparent; font: inherit; font-weight: 650; text-align: left; }.daily-reports__employee:hover { color: #163f3a; text-decoration: underline; }
 .daily-reports__summary { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; color: #344054; line-height: 1.6; overflow-wrap: anywhere; white-space: pre-line; }
 .daily-reports__view { height: 32px; padding: 0 10px; }
 .daily-reports__delayed { display: block; width: fit-content; margin-top: 5px; border-radius: 999px; padding: 2px 7px; background: #fff3dc; color: #976000; font-size: 11px; font-style: normal; white-space: nowrap; }
