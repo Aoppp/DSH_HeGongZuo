@@ -67,30 +67,9 @@
   background: color-mix(in srgb, var(--jade-100) 32%, var(--canvas));
 }
 
-.sidebar__group-links::before {
-  position: absolute;
-  top: 13px;
-  bottom: 13px;
-  left: 10px;
-  width: 1px;
-  content: '';
-  background: color-mix(in srgb, var(--jade-500) 38%, transparent);
-}
-
 .sidebar__nested-link {
-  position: relative;
   margin: 0;
   padding-left: 10px !important;
-}
-
-.sidebar__nested-link::before {
-  position: absolute;
-  top: 50%;
-  left: -10px;
-  width: 10px;
-  height: 1px;
-  content: '';
-  background: color-mix(in srgb, var(--jade-500) 38%, transparent);
 }
 
 .access-gate {
