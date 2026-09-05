@@ -30,6 +30,55 @@ function MarkdownContent({ content, references, onOpenReport }: { readonly conte
   return <div className="report-analysis__markdown">{nodes}</div>
 }
 
+function escapePrintHtml(value: string) {
+  return value.replace(/[&<>]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[character]!))
+}
+
+function printInline(value: string) {
+  return escapePrintHtml(value)
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/【([^｜】]+)｜(\d{4}-\d{2}-\d{2})｜[^】]+】/g, '【$1｜$2】')
+}
+
+function markdownToPrintHtml(content: string) {
+  const sections: string[] = []
+  let list: { ordered: boolean; values: string[] } | null = null
+  const flushList = () => {
+    if (!list) return
+    const tag = list.ordered ? 'ol' : 'ul'
+    sections.push(`<${tag}>${list.values.map((value) => `<li>${printInline(value)}</li>`).join('')}</${tag}>`)
+    list = null
+  }
+  for (const line of content.replaceAll('\r\n', '\n').split('\n')) {
+    const heading = /^(#{1,3})\s+(.+)$/.exec(line)
+    const bullet = /^[-*]\s+(.+)$/.exec(line)
+    const ordered = /^\d+[.)]\s+(.+)$/.exec(line)
+    if (heading) {
+      flushList()
+      const tag = `h${Math.min(heading[1]!.length + 1, 4)}`
+      sections.push(`<${tag}>${printInline(heading[2]!)}</${tag}>`)
+      continue
+    }
+    if (bullet || ordered) {
+      const isOrdered = Boolean(ordered)
+      if (!list || list.ordered !== isOrdered) {
+        flushList()
+        list = { ordered: isOrdered, values: [] }
+      }
+      list.values.push((bullet ?? ordered)![1]!)
+      continue
+    }
+    if (!line.trim()) {
+      flushList()
+      continue
+    }
+    flushList()
+    sections.push(`<p>${printInline(line)}</p>`)
+  }
+  flushList()
+  return sections.join('')
+}
+
 export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
   const [question, setQuestion] = useState('')
   const [summary, setSummary] = useState<{ readonly content: string; readonly count: number; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined } | null>(null)
@@ -40,6 +89,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
   const [queryError, setQueryError] = useState<string | null>(null)
   useEffect(() => { let active = true; setSummary(null); void readReportAnalysisSnapshot(startDate, endDate).then((snapshot) => { if (active && snapshot) setSummary({ content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
   async function runSummary() {
+    if (summary && !window.confirm('已有该时间段报告，是否继续重新生成？')) return
     setSummaryBusy(true)
     setSummaryError(null)
     try {
@@ -65,7 +115,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
     <header className="report-analysis__header">
       <div>
         <h2>汇总分析</h2>
-        <p>围绕已选日期范围整理日报内容，结果仅在当前页面保留。</p>
+        <p>围绕已选日期范围整理日报内容，并保留该范围最近一次生成的报告。</p>
       </div>
     </header>
 
@@ -102,6 +152,6 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
 }
 
 function AnalysisResult({ title, count, content, references, generatedAt, question, startDate, endDate, onOpenReport }: { readonly title: string; readonly count: number; readonly content: string; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined; readonly question?: string; readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
-  const print = () => { const popup = window.open('', '_blank'); if (!popup) return; popup.document.write(`<html><head><title>${title}</title><style>body{font-family:PingFang SC,Microsoft YaHei,sans-serif;margin:28px;color:#172522;line-height:1.8}h1{font-size:22px}pre{white-space:pre-wrap;font:inherit}@page{size:A4;margin:16mm}</style></head><body><h1>${title}</h1><p>${startDate} 至 ${endDate} · 已分析 ${count} 条日报</p><pre>${content.replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]!))}</pre><script>window.onload=()=>window.print()</script></body></html>`); popup.document.close() }
+  const print = () => { const popup = window.open('', '_blank'); if (!popup) return; popup.document.write(`<html><head><title>${escapePrintHtml(title)}</title><style>body{font-family:PingFang SC,Microsoft YaHei,sans-serif;margin:28px;color:#172522;line-height:1.75;font-size:12px}h1{font-size:22px;margin:0 0 6px}h2{font-size:18px;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid #dbe7e3}h3{font-size:15px;margin:18px 0 8px}h4{font-size:13px;margin:14px 0 6px}p{margin:7px 0}ul,ol{margin:7px 0 14px;padding-left:22px}li{margin:5px 0}strong{font-weight:650}.meta{margin:0 0 20px;color:#65736e}@page{size:A4;margin:16mm}</style></head><body><h1>${escapePrintHtml(title)}</h1><p class="meta">${escapePrintHtml(startDate)} 至 ${escapePrintHtml(endDate)} · 已分析 ${count} 条日报</p>${markdownToPrintHtml(content)}<script>window.onload=()=>window.print()</script></body></html>`); popup.document.close() }
   return <article className="report-analysis__result"><header><div><strong>{title}</strong><small>{question ? `问题：${question} · ` : ''}已分析 {count} 条日报 · {startDate} 至 {endDate}{generatedAt ? ` · 已保存` : ''}</small></div>{!question && <button type="button" className="report-analysis__export" onClick={print}>导出 PDF</button>}</header><MarkdownContent content={content} references={references} onOpenReport={onOpenReport} /></article>
 }
