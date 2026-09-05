@@ -1,7 +1,7 @@
 -- 将原“考勤与汇报”权限平滑拆分为两个可独立分配的权限。
 ALTER TABLE account_module_permissions DROP CONSTRAINT IF EXISTS account_module_permissions_permission_id_check;
 ALTER TABLE account_module_permissions ADD CONSTRAINT account_module_permissions_permission_id_check
-  CHECK (permission_id IN ('employee-data', 'employee-query', 'employee-work-records', 'employee-attendance', 'employee-reports', 'meeting-records', 'finance-management', 'project-management', 'management-cockpit', 'platform-administration'));
+  CHECK (permission_id IN ('employee-data', 'employee-query', 'employee-work-records', 'employee-attendance', 'employee-reports', 'recruitment-management', 'meeting-records', 'finance-management', 'project-management', 'management-cockpit', 'platform-administration'));
 
 INSERT INTO account_module_permissions (account_id, permission_id)
 SELECT account_id, replacement.permission_id
@@ -14,4 +14,4 @@ DELETE FROM account_module_permissions WHERE permission_id = 'employee-work-reco
 
 ALTER TABLE account_module_permissions DROP CONSTRAINT IF EXISTS account_module_permissions_permission_id_check;
 ALTER TABLE account_module_permissions ADD CONSTRAINT account_module_permissions_permission_id_check
-  CHECK (permission_id IN ('employee-data', 'employee-query', 'employee-attendance', 'employee-reports', 'meeting-records', 'finance-management', 'project-management', 'management-cockpit', 'platform-administration'));
+  CHECK (permission_id IN ('employee-data', 'employee-query', 'employee-attendance', 'employee-reports', 'recruitment-management', 'meeting-records', 'finance-management', 'project-management', 'management-cockpit', 'platform-administration'));
