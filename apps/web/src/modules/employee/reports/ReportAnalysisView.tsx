@@ -26,23 +26,33 @@ function MarkdownContent({ content }: { readonly content: string }) {
 }
 
 export function ReportAnalysisView({ startDate, endDate }: { readonly startDate: string; readonly endDate: string }) {
-  const [content, setContent] = useState<string | null>(null)
   const [question, setQuestion] = useState('')
-  const [count, setCount] = useState<number | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  async function run(nextQuestion?: string) {
-    setBusy(true)
-    setError(null)
+  const [summary, setSummary] = useState<{ readonly content: string; readonly count: number } | null>(null)
+  const [query, setQuery] = useState<{ readonly content: string; readonly count: number; readonly question: string } | null>(null)
+  const [summaryBusy, setSummaryBusy] = useState(false)
+  const [queryBusy, setQueryBusy] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [queryError, setQueryError] = useState<string | null>(null)
+  async function runSummary() {
+    setSummaryBusy(true)
+    setSummaryError(null)
     try {
-      const result = await analyzeReports({ startDate, endDate, ...(nextQuestion?.trim() ? { question: nextQuestion.trim() } : {}) })
-      setContent(result.content)
-      setCount(result.reportCount)
+      const result = await analyzeReports({ startDate, endDate })
+      setSummary({ content: result.content, count: result.reportCount })
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '汇总分析暂时不可用。')
+      setSummaryError(reason instanceof Error ? reason.message : '汇总服务暂时不可用。')
     } finally {
-      setBusy(false)
+      setSummaryBusy(false)
     }
+  }
+  async function runQuery() {
+    const value = question.trim()
+    if (!value) return
+    setQueryBusy(true)
+    setQueryError(null)
+    try { const result = await analyzeReports({ startDate, endDate, question: value }); setQuery({ content: result.content, count: result.reportCount, question: value }) }
+    catch (reason) { setQueryError(reason instanceof Error ? reason.message : '查询服务暂时不可用。') }
+    finally { setQueryBusy(false) }
   }
 
   return <section className="report-analysis">
@@ -60,31 +70,31 @@ export function ReportAnalysisView({ startDate, endDate }: { readonly startDate:
       </div>
       <div className="report-analysis__summary-footer">
         <ul aria-label="汇总内容"><li>整体进展</li><li>已完成事项</li><li>风险与问题</li><li>下一步计划</li><li>未提交情况</li></ul>
-        <button type="button" className="report-analysis__button report-analysis__button--primary" disabled={busy} onClick={() => void run()}>
-          {busy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}
-          {busy ? '正在生成' : '生成汇总'}
+        <button type="button" className="report-analysis__button report-analysis__button--primary" disabled={summaryBusy} onClick={() => void runSummary()}>
+          {summaryBusy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}
+          {summaryBusy ? '正在生成' : '生成汇总'}
         </button>
       </div>
     </article>
+    {summaryError && <div className="daily-reports__error">{summaryError}</div>}
+    {summary && <AnalysisResult title="日报汇总" count={summary.count} content={summary.content} startDate={startDate} endDate={endDate} />}
 
     <article className="report-analysis__card report-analysis__question">
       <div className="report-analysis__card-heading">
         <div><h3>智能查询</h3><p>针对当前日期范围内的日报提出具体问题</p></div>
       </div>
       <div className="report-analysis__question-form">
-        <input value={question} maxLength={500} placeholder="例如：本周有哪些需要重点关注的问题？" aria-label="定向查询问题" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void run(question) } }} />
-        <button type="button" className="report-analysis__button report-analysis__button--secondary" disabled={busy || !question.trim()} onClick={() => void run(question)}>查询</button>
+        <input value={question} maxLength={500} placeholder="例如：本周有哪些需要重点关注的问题？" aria-label="定向查询问题" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void runQuery() } }} />
+        <button type="button" className="report-analysis__button report-analysis__button--secondary" disabled={queryBusy || !question.trim()} onClick={() => void runQuery()}>{queryBusy ? '正在查询' : '查询'}</button>
       </div>
       <div className="report-analysis__examples"><span>示例问题</span>{['本周有哪些客户问题？', '谁提到生产延期？', '有哪些事项尚未完成？'].map((example) => <button type="button" key={example} onClick={() => setQuestion(example)}>{example}</button>)}</div>
     </article>
 
-    {error && <div className="daily-reports__error">{error}</div>}
-    {content && <article className="report-analysis__result">
-      <header>
-        <div><strong>{question.trim() ? '查询结果' : '日报汇总'}</strong><small>已分析 {count} 条日报 · {startDate} 至 {endDate}</small></div>
-        <span>当前结果</span>
-      </header>
-      <MarkdownContent content={content} />
-    </article>}
+    {queryError && <div className="daily-reports__error">{queryError}</div>}
+    {query && <AnalysisResult title="查询结果" count={query.count} content={query.content} question={query.question} startDate={startDate} endDate={endDate} />}
   </section>
+}
+
+function AnalysisResult({ title, count, content, question, startDate, endDate }: { readonly title: string; readonly count: number; readonly content: string; readonly question?: string; readonly startDate: string; readonly endDate: string }) {
+  return <article className="report-analysis__result"><header><div><strong>{title}</strong><small>{question ? `问题：${question} · ` : ''}已分析 {count} 条日报 · {startDate} 至 {endDate}</small></div><span>当前结果</span></header><MarkdownContent content={content} /></article>
 }
