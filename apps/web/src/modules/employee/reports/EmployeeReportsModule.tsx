@@ -124,7 +124,8 @@ export function EmployeeReportsModule(_props: ModuleProps) {
     {view === 'calendar' && <CalendarView month={month} onSelectDate={openDate} revision={analyticsRevision} />}
     {view === 'employees' && <EmployeeArchiveView revision={analyticsRevision} />}
     {view === 'individual' && <IndividualReportersView revision={analyticsRevision} />}
-    {view === 'analysis' && <ReportAnalysisView startDate={startDate} endDate={endDate} />}
+    {view === 'analysis' && <ReportAnalysisView startDate={startDate} endDate={endDate} onOpenReport={(id) => void management.openDetail(id)} />}
+    {view === 'analysis' && management.detailOpen && <div className="daily-report-detail" role="dialog" aria-modal="true" aria-label="日报详情"><button type="button" className="daily-report-detail__backdrop" aria-label="关闭详情" onClick={management.closeDetail} /><section><header><div><small>日报详情</small><strong>{management.detail ? `${management.detail.employee.name}・${date(management.detail.report_date)}` : ''}</strong></div><button type="button" aria-label="关闭" onClick={management.closeDetail}><X size={19} /></button></header><main>{management.detailLoading ? <SkeletonDetail /> : management.detailError ? <div className="daily-reports__error"><span>{management.detailError}</span><button type="button" onClick={() => void management.retryDetail()}>重新加载</button></div> : management.detail && <DetailContent report={management.detail} />}</main></section></div>}
     {view === 'quality' && <QualityView startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
 
     {view === 'list' && <><form className="daily-reports__filters" onSubmit={submit}>
