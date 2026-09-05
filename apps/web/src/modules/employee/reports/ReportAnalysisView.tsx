@@ -1,7 +1,7 @@
 import { FileSearch, LoaderCircle } from 'lucide-react'
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 
-import { analyzeReports, type ReportAnalysisReference } from './report-analysis-api'
+import { analyzeReports, readReportAnalysisSnapshot, type ReportAnalysisReference } from './report-analysis-api'
 
 function inline(value: string, references: readonly ReportAnalysisReference[], onOpenReport: (id: string) => void) {
   return value.split(/(\*\*[^*]+\*\*|【[^｜】]+｜\d{4}-\d{2}-\d{2}｜[^】]+】)/g).map((part, index) => {
@@ -32,18 +32,19 @@ function MarkdownContent({ content, references, onOpenReport }: { readonly conte
 
 export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
   const [question, setQuestion] = useState('')
-  const [summary, setSummary] = useState<{ readonly content: string; readonly count: number; readonly references: readonly ReportAnalysisReference[] } | null>(null)
+  const [summary, setSummary] = useState<{ readonly content: string; readonly count: number; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined } | null>(null)
   const [query, setQuery] = useState<{ readonly content: string; readonly count: number; readonly question: string; readonly references: readonly ReportAnalysisReference[] } | null>(null)
   const [summaryBusy, setSummaryBusy] = useState(false)
   const [queryBusy, setQueryBusy] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [queryError, setQueryError] = useState<string | null>(null)
+  useEffect(() => { let active = true; setSummary(null); void readReportAnalysisSnapshot(startDate, endDate).then((snapshot) => { if (active && snapshot) setSummary({ content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
   async function runSummary() {
     setSummaryBusy(true)
     setSummaryError(null)
     try {
       const result = await analyzeReports({ startDate, endDate })
-      setSummary({ content: result.content, count: result.reportCount, references: result.references })
+      setSummary({ content: result.content, count: result.reportCount, references: result.references, generatedAt: result.generatedAt })
     } catch (reason) {
       setSummaryError(reason instanceof Error ? reason.message : '汇总服务暂时不可用。')
     } finally {
@@ -77,12 +78,12 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
         <ul aria-label="汇总内容"><li>部门工作进展</li><li>已完成事项</li><li>风险与问题</li><li>下一步计划</li><li>未提交情况</li></ul>
         <button type="button" className="report-analysis__button report-analysis__button--primary" disabled={summaryBusy} onClick={() => void runSummary()}>
           {summaryBusy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}
-          {summaryBusy ? '正在生成' : '生成汇总'}
+          {summaryBusy ? '正在生成' : summary ? '重新生成' : '生成汇总'}
         </button>
       </div>
     </article>
     {summaryError && <div className="daily-reports__error">{summaryError}</div>}
-    {summary && <AnalysisResult title="部门汇总" count={summary.count} content={summary.content} references={summary.references} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} />}
+    {summary && <AnalysisResult title="部门汇总" count={summary.count} content={summary.content} references={summary.references} generatedAt={summary.generatedAt} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} />}
 
     <article className="report-analysis__card report-analysis__question">
       <div className="report-analysis__card-heading">
@@ -96,10 +97,11 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
     </article>
 
     {queryError && <div className="daily-reports__error">{queryError}</div>}
-    {query && <AnalysisResult title="查询结果" count={query.count} content={query.content} references={query.references} question={query.question} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} />}
+    {query && <AnalysisResult title="查询结果" count={query.count} content={query.content} references={query.references} generatedAt={undefined} question={query.question} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} />}
   </section>
 }
 
-function AnalysisResult({ title, count, content, references, question, startDate, endDate, onOpenReport }: { readonly title: string; readonly count: number; readonly content: string; readonly references: readonly ReportAnalysisReference[]; readonly question?: string; readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
-  return <article className="report-analysis__result"><header><div><strong>{title}</strong><small>{question ? `问题：${question} · ` : ''}已分析 {count} 条日报 · {startDate} 至 {endDate}</small></div><span>当前结果</span></header><MarkdownContent content={content} references={references} onOpenReport={onOpenReport} /></article>
+function AnalysisResult({ title, count, content, references, generatedAt, question, startDate, endDate, onOpenReport }: { readonly title: string; readonly count: number; readonly content: string; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined; readonly question?: string; readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
+  const print = () => { const popup = window.open('', '_blank'); if (!popup) return; popup.document.write(`<html><head><title>${title}</title><style>body{font-family:PingFang SC,Microsoft YaHei,sans-serif;margin:28px;color:#172522;line-height:1.8}h1{font-size:22px}pre{white-space:pre-wrap;font:inherit}@page{size:A4;margin:16mm}</style></head><body><h1>${title}</h1><p>${startDate} 至 ${endDate} · 已分析 ${count} 条日报</p><pre>${content.replace(/[&<>]/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;' }[c]!))}</pre><script>window.onload=()=>window.print()</script></body></html>`); popup.document.close() }
+  return <article className="report-analysis__result"><header><div><strong>{title}</strong><small>{question ? `问题：${question} · ` : ''}已分析 {count} 条日报 · {startDate} 至 {endDate}{generatedAt ? ` · 已保存` : ''}</small></div>{!question && <button type="button" className="report-analysis__export" onClick={print}>导出 PDF</button>}</header><MarkdownContent content={content} references={references} onOpenReport={onOpenReport} /></article>
 }

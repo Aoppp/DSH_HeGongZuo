@@ -30,6 +30,7 @@ import { DailyReportAnalyticsRepository } from './modules/employee/work-reports/
 import { DailyReportAnalyticsService, DailyReportAnalyticsValidationError } from './modules/employee/work-reports/daily-report-analytics-service.js'
 import { WorkDailyManualSync, WorkDailyManualSyncError } from './modules/employee/work-reports/work-daily-manual-sync.js'
 import { ReportAnalysisService, ReportAnalysisValidationError, parseReportAnalysisInput } from './modules/employee/report-analysis/report-analysis-service.js'
+import { ReportAnalysisSnapshotRepository } from './modules/employee/report-analysis/report-analysis-snapshot-repository.js'
 import { MeetingRepository } from './modules/meetings/meeting-repository.js'
 import { MeetingUploadCredentials } from './modules/meetings/meeting-upload-credentials.js'
 import { MeetingValidationError, parseMeetingInput } from './modules/meetings/meeting-input.js'
@@ -58,6 +59,7 @@ const dailyReports = new DailyReportService(new DailyReportRepository(database))
 const dailyReportAnalytics = new DailyReportAnalyticsService(new DailyReportAnalyticsRepository(database))
 const workDailyManualSync = new WorkDailyManualSync(database, process.env.WECOM_WORK_DAILY_SYNC_REQUEST_PATH ?? '')
 const reportAnalysis = new ReportAnalysisService(new DailyReportRepository(database))
+const reportAnalysisSnapshots = new ReportAnalysisSnapshotRepository(database)
 
 function accountAuditDetail(before: AccountRecord | null, after: AccountRecord): Record<string, unknown> {
   const fields: readonly [keyof Pick<AccountRecord, 'accountId' | 'displayName' | 'position' | 'permissions'>, string][] = [['accountId', '登录名'], ['displayName', '显示名称'], ['position', '岗位'], ['permissions', '功能权限']]
@@ -603,9 +605,18 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePermission(currentUser, 'employee-reports')
     await platformManagement.assertModuleEnabled('employee-reports')
     const input = parseReportAnalysisInput(await readJson(request))
-    const result = await reportAnalysis.analyze(input)
+    const generated = await reportAnalysis.analyze(input)
+    const result = input.question ? generated : await reportAnalysisSnapshots.save(input.startDate, input.endDate, generated, currentUser.id)
     await platformManagement.record(currentUser.id, currentUser.displayName, input.question ? '查询日报汇总' : '生成日报汇总', '日报汇总', `${input.startDate}~${input.endDate}`, { changes: [{ field: 'range', label: '分析范围', before: '未生成', after: `${input.startDate} 至 ${input.endDate}` }, { field: 'reports', label: '日报数量', before: '0', after: String(result.reportCount) }, { field: 'mode', label: '分析方式', before: '未选择', after: input.question ? '问题查询' : '汇总生成' }] })
     sendJson(response, 200, result)
+    return
+  }
+
+  if (url.pathname === '/api/daily-reports/analysis' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    const input = parseReportAnalysisInput({ startDate: url.searchParams.get('startDate'), endDate: url.searchParams.get('endDate') })
+    sendJson(response, 200, { snapshot: await reportAnalysisSnapshots.latest(input.startDate, input.endDate) })
     return
   }
 
