@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, ChevronDown, ChevronLeft, ChevronRight, FolderKanban, Landmark, Users } from 'lucide-react'
+import { BriefcaseBusiness, ChevronDown, ChevronLeft, ChevronRight, Users } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
 
 import type { ModuleGroupId, ModuleId, PlatformModule } from '../app/types'
@@ -15,13 +15,10 @@ interface SidebarProps {
 const groupDefinitions: Record<ModuleGroupId, { readonly label: string; readonly icon: typeof Users }> = {
   'employee-management': { label: '员工管理', icon: Users },
   'recruitment-management': { label: '招聘管理', icon: BriefcaseBusiness },
-  'finance-management': { label: '财务管理', icon: Landmark },
-  'project-management': { label: '项目管理', icon: FolderKanban },
 }
 
 export function Sidebar({ activeModule, collapsed, modules, onNavigate, onToggle }: SidebarProps) {
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<ModuleGroupId>>(() => new Set(['employee-management']))
-  const renderedGroups = new Set<ModuleGroupId>()
 
   function followModuleLink(event: MouseEvent<HTMLAnchorElement>, moduleId: ModuleId) {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
@@ -54,6 +51,33 @@ export function Sidebar({ activeModule, collapsed, modules, onNavigate, onToggle
     })
   }
 
+  function renderSection(section:'current'|'pending', label:string) {
+    const renderedGroups = new Set<ModuleGroupId>()
+    const sectionModules = modules.filter((module) => (module.navigationSection ?? 'current') === section)
+    if (!sectionModules.length) return null
+    return <section className="sidebar__section" key={section}>
+      {!collapsed && <p>{label}</p>}
+      {sectionModules.map((module) => {
+        if (!module.group) return moduleButton(module)
+        if (renderedGroups.has(module.group)) return null
+        renderedGroups.add(module.group)
+        const group = groupDefinitions[module.group]
+        const GroupIcon = group.icon
+        const groupModules = sectionModules.filter((candidate) => candidate.group === module.group)
+        const expanded = expandedGroups.has(module.group)
+        return (
+          <section className="sidebar__module-group" key={module.group}>
+            <button type="button" className="sidebar__group-toggle" onClick={() => toggleGroup(module.group!)} title={collapsed ? group.label : undefined} aria-expanded={expanded}>
+              <GroupIcon size={18} />
+              {!collapsed && <><span>{group.label}</span>{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</>}
+            </button>
+            {expanded && <div className="sidebar__group-links">{groupModules.map(moduleButton)}</div>}
+          </section>
+        )
+      })}
+    </section>
+  }
+
   return (
     <aside className="sidebar">
       <div className="sidebar__brand">
@@ -61,34 +85,8 @@ export function Sidebar({ activeModule, collapsed, modules, onNavigate, onToggle
       </div>
 
       <nav className="sidebar__navigation" aria-label="平台模块">
-        <p>{!collapsed && '当前功能'}</p>
-        {modules.map((module) => {
-          if (!module.group) {
-            const Icon = module.icon
-            return (
-              <a href={module.path} className={activeModule === module.id ? 'is-active' : ''} title={collapsed ? module.label : undefined} onClick={(event) => followModuleLink(event, module.id)} key={module.id}>
-                <Icon size={19} />
-                {!collapsed && <span>{module.label}</span>}
-                {!collapsed && module.badge && <small>{module.badge}</small>}
-              </a>
-            )
-          }
-          if (renderedGroups.has(module.group)) return null
-          renderedGroups.add(module.group)
-          const group = groupDefinitions[module.group]
-          const GroupIcon = group.icon
-          const groupModules = modules.filter((candidate) => candidate.group === module.group)
-          const expanded = expandedGroups.has(module.group)
-          return (
-            <section className="sidebar__module-group" key={module.group}>
-              <button type="button" className="sidebar__group-toggle" onClick={() => toggleGroup(module.group!)} title={collapsed ? group.label : undefined} aria-expanded={expanded}>
-                <GroupIcon size={18} />
-                {!collapsed && <><span>{group.label}</span>{expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</>}
-              </button>
-              {expanded && <div className="sidebar__group-links">{groupModules.map(moduleButton)}</div>}
-            </section>
-          )
-        })}
+        {renderSection('current', '当前功能')}
+        {renderSection('pending', '待开发')}
       </nav>
 
       <button type="button" className="sidebar__toggle" onClick={onToggle} aria-label={collapsed ? '展开导航' : '收起导航'}>

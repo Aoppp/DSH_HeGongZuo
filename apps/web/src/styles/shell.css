@@ -329,7 +329,16 @@
   padding: 24px 14px;
 }
 
-.sidebar__navigation > p {
+.sidebar__section {
+  display: grid;
+  gap: 5px;
+}
+
+.sidebar__section + .sidebar__section {
+  margin-top: 16px;
+}
+
+.sidebar__section > p {
   min-height: 17px;
   margin: 0 10px 8px;
   color: var(--ink-400);
@@ -620,7 +629,7 @@
   }
 
   .sidebar .brand__wording,
-  .sidebar__navigation > p,
+  .sidebar__section > p,
   .sidebar__navigation button span,
   .sidebar__navigation button small,
   .sidebar__navigation a span,

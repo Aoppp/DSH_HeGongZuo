@@ -4,7 +4,8 @@ import type { LucideIcon } from 'lucide-react'
 export type AccountPermissionId = string
 
 export type ModuleId = 'management-cockpit' | 'overview' | 'work-assistant' | 'employee-data' | 'employee-agent' | 'employee-attendance' | 'employee-reports' | 'recruitment-management' | 'meeting-records' | 'finance-management' | 'project-management' | 'developer-console'
-export type ModuleGroupId = 'employee-management' | 'recruitment-management' | 'finance-management' | 'project-management'
+export type ModuleGroupId = 'employee-management' | 'recruitment-management'
+export type ModuleNavigationSection = 'current' | 'pending'
 
 export interface AuthenticatedUser {
   readonly id: string
@@ -29,6 +30,7 @@ export interface PlatformModule {
   readonly icon: LucideIcon
   readonly requiredPermission?: AccountPermissionId
   readonly group?: ModuleGroupId
+  readonly navigationSection?: ModuleNavigationSection
   readonly bossOnly?: boolean
   readonly component: ComponentType<ModuleProps>
   readonly badge?: string

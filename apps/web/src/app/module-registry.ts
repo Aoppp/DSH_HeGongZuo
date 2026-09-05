@@ -99,7 +99,7 @@ export const platformModules: readonly PlatformModule[] = [
     description: '财务数据与业务流程管理',
     icon: Landmark,
     requiredPermission: 'finance-management',
-    group: 'finance-management',
+    navigationSection: 'pending',
     component: FinanceManagementModule,
   },
   {
@@ -118,7 +118,7 @@ export const platformModules: readonly PlatformModule[] = [
     description: '项目计划与协作管理',
     icon: BriefcaseBusiness,
     requiredPermission: 'project-management',
-    group: 'project-management',
+    navigationSection: 'pending',
     component: ProjectManagementModule,
   },
   {
