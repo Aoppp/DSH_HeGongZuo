@@ -8,6 +8,7 @@ import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
 import { CalendarView, DashboardView, EmployeeArchiveView, IndividualReportersView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
+import { ReportAnalysisView } from './ReportAnalysisView'
 import { shanghaiCalendarDate, shiftCalendarDate } from './report-dates'
 import './daily-reports.css'
 
@@ -79,7 +80,7 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   const management = useDailyReports()
   const sync = useDailyReportSync(management.retry)
   const today = shanghaiCalendarDate()
-  const [view, setView] = useState<AnalyticsView | 'list'>('dashboard')
+  const [view, setView] = useState<AnalyticsView | 'list' | 'analysis'>('dashboard')
   const [reportDate, setReportDate] = useState(() => shiftCalendarDate(today, -1))
   const [month, setMonth] = useState(today.slice(0, 7))
   const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`)
@@ -91,9 +92,9 @@ export function EmployeeReportsModule(_props: ModuleProps) {
     management.showReports({ startDate: dateValue, endDate: dateValue, department: '', employee: '', keyword: '' })
     setView('list')
   }
-  const views: readonly { id: AnalyticsView | 'list'; label: string }[] = [
+  const views: readonly { id: AnalyticsView | 'list' | 'analysis'; label: string }[] = [
     { id: 'dashboard', label: '提交看板' }, { id: 'calendar', label: '日历' }, { id: 'list', label: '日报列表' },
-    { id: 'employees', label: '员工档案' }, { id: 'quality', label: '数据检查' }, { id: 'individual', label: '单独汇报' },
+    { id: 'employees', label: '员工档案' }, { id: 'analysis', label: '汇总分析' }, { id: 'quality', label: '数据检查' }, { id: 'individual', label: '单独汇报' },
   ]
 
   return <div className="daily-reports module-page">
@@ -101,16 +102,18 @@ export function EmployeeReportsModule(_props: ModuleProps) {
 
     <nav className="report-tabs" aria-label="日报功能">{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => setView(item.id)}>{item.label}</button>)}</nav>
 
-    {['dashboard','calendar','quality'].includes(view) && <div className="report-scope">
+    {['dashboard','calendar','quality','analysis'].includes(view) && <div className="report-scope">
       {view === 'dashboard' && <><label>统计日期<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} /></label><div className="report-scope__presets"><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, -1))}>前一天</button><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, 1))}>下一天</button></div></>}
       {view === 'calendar' && <label>月份<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
       {view === 'quality' && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
+      {view === 'analysis' && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
     </div>}
 
     {view === 'dashboard' && <DashboardView date={reportDate} revision={analyticsRevision} />}
     {view === 'calendar' && <CalendarView month={month} onSelectDate={openDate} revision={analyticsRevision} />}
     {view === 'employees' && <EmployeeArchiveView revision={analyticsRevision} />}
     {view === 'individual' && <IndividualReportersView revision={analyticsRevision} />}
+    {view === 'analysis' && <ReportAnalysisView startDate={startDate} endDate={endDate} />}
     {view === 'quality' && <QualityView startDate={startDate} endDate={endDate} revision={analyticsRevision} />}
 
     {view === 'list' && <><form className="daily-reports__filters" onSubmit={submit}>

@@ -83,3 +83,12 @@
 @keyframes daily-report-spin { to { transform: rotate(360deg); } }
 @media(max-width:1180px){.daily-reports__filters { grid-template-columns: repeat(2,minmax(0,1fr)); }.daily-reports__keyword { grid-column: 1 / -1; }.daily-reports__filter-actions { justify-content: flex-end; }.report-departments,.report-profile-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }}
 @media(max-width:720px){.daily-reports__heading,.daily-reports__pagination { align-items: stretch; flex-direction: column; }.daily-reports__sync { align-items: flex-start; flex-wrap: wrap; justify-content: flex-start; }.daily-reports__sync span { width: 100%; max-width: none; text-align: left; }.daily-reports__filters { grid-template-columns: 1fr; }.daily-reports__keyword { grid-column: auto; }.daily-reports__date-range { grid-template-columns: 1fr; }.daily-reports__date-range i { display: none; }.daily-reports__filter-actions { justify-content: stretch; }.daily-reports__filter-actions button { flex: 1; }.daily-reports__pagination { gap: 10px; }.daily-report-detail__meta { grid-template-columns: 1fr; }.daily-report-detail__meta div,.daily-report-detail__meta div:nth-child(odd) { border-right: 0; border-bottom: 1px solid #edf0f3; }.daily-report-detail__meta div:last-child { border-bottom: 0; }.report-scope { align-items: stretch; flex-direction: column; }.report-scope input,.report-scope select { width: 100%; }.report-dashboard__cards,.report-departments,.report-profile-grid { grid-template-columns: 1fr; }.report-profile-list > button { grid-template-columns: 1fr; gap: 4px; }.report-calendar { overflow-x: auto; }.report-calendar__week,.report-calendar__grid { min-width: 680px; }.report-quality-list article { grid-template-columns: 1fr; }.report-history article { grid-template-columns: 1fr; }.report-history span { text-align: left; }}
+ .report-analysis { display: grid; gap: 16px; }
+ .report-analysis > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+ .report-analysis h2 { margin: 0; font-size: 18px; }
+ .report-analysis p { margin: 6px 0 0; color: var(--ink-500); font-size: 13px; }
+ .report-analysis__question { display: flex; gap: 8px; }
+ .report-analysis__question input { flex: 1; min-width: 0; }
+ .report-analysis__result { display: grid; gap: 12px; padding: 18px; border: 1px solid var(--line-200); border-radius: 10px; background: var(--surface-0); }
+ .report-analysis__result small { color: var(--ink-500); }
+ .report-analysis__result div { white-space: pre-wrap; line-height: 1.8; color: var(--ink-800); }

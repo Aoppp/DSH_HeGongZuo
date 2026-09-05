@@ -188,6 +188,16 @@ export class DailyReportRepository {
     return result.rows[0] ? mapRow(result.rows[0]) : null
   }
 
+  async analysisRecords(startDate: string, endDate: string): Promise<readonly DailyReport[]> {
+    const result = await this.pool.query<DailyReportRow>(`SELECT ${selectedColumns}
+      FROM ${joinedReports}
+      WHERE ${effectiveReportDateSql()} BETWEEN $1::date AND $2::date
+        AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope AS individual WHERE individual.employee_id = employee.id)
+      ORDER BY ${effectiveReportDateSql()} ASC, report.submitted_at ASC, report.record_id ASC
+      LIMIT 2000`, [startDate, endDate])
+    return result.rows.map(mapRow)
+  }
+
   async employeeHistory(employeeId: string, page: number, pageSize: number): Promise<EmployeeReportHistoryPage | null> {
     const employee = await this.pool.query<{ report_user_id: string | null }>(
       `SELECT coalesce(wecom_report_user_id, wecom_user_id) AS report_user_id FROM employees WHERE id = $1`, [employeeId],
