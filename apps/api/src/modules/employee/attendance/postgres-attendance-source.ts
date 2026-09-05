@@ -131,6 +131,39 @@ function finalStatus(record: ExtendedAttendanceRecord): ExtendedAttendanceStatus
   return 'normal'
 }
 
+function externalCheckinTime(value: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(value))
+  const part = (name: Intl.DateTimeFormatPartTypes): number => Number(parts.find((item) => item.type === name)?.value ?? 0)
+  return part('hour') * 60 + part('minute')
+}
+
+function applyExternalCheckins(record: ExtendedAttendanceRecord): ExtendedAttendanceRecord {
+  const external = record.details.filter((detail) => type(detail.type) === 'external').sort((left, right) => left.time.localeCompare(right.time))
+  if (!external.length) return record
+
+  // 企业微信的“外出打卡”记录不携带上下班方向。当天有两次及以上时，按最早/最晚记录补齐；
+  // 仅有一次时，按下午 13:30 分界，只补齐其更可能对应的一侧，另一侧仍保留缺卡。
+  const first = external[0]!
+  const last = external.at(-1)!
+  const canFillStart = external.length >= 2 || externalCheckinTime(first.time) < 13 * 60 + 30
+  const canFillEnd = external.length >= 2 || externalCheckinTime(last.time) >= 13 * 60 + 30
+  const checkInAt = record.checkInAt ?? (canFillStart ? first.time : null)
+  const checkOutAt = record.checkOutAt ?? (canFillEnd ? last.time : null)
+  const checkInLocation = record.checkInLocation ?? (canFillStart ? first.location : null)
+  const checkOutLocation = record.checkOutLocation ?? (canFillEnd ? last.location : null)
+  const next: ExtendedAttendanceRecord = {
+    ...record,
+    checkInAt,
+    checkOutAt,
+    checkInLocation,
+    checkOutLocation,
+    location: record.location ?? first.location ?? last.location,
+    checkInState: record.checkInState === 'leave' ? 'leave' : checkInAt ? 'recorded' : 'missing',
+    checkOutState: record.checkOutState === 'leave' ? 'leave' : checkOutAt ? 'recorded' : 'missing',
+  }
+  return { ...next, status: finalStatus(next) }
+}
+
 export interface PostgresAttendanceSnapshot {
   readonly date: string
   readonly source: 'wecom'
@@ -197,7 +230,7 @@ export class PostgresAttendanceSource {
       }
       grouped.set(key, { ...next, status: finalStatus(next) })
     }
-    return [...grouped.values()]
+    return [...grouped.values()].map(applyExternalCheckins)
   }
 
   async snapshot(date: string): Promise<PostgresAttendanceSnapshot> {

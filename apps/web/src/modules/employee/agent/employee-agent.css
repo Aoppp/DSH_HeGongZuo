@@ -960,13 +960,18 @@
 }
 
 .employee-status {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   border-radius: 999px;
   padding: 4px 7px;
   color: var(--green-600);
   font-size: 12px;
   font-weight: 750;
   background: var(--green-100);
+}
+
+.employee-data__table td:nth-child(4) > small {
+  margin-top: 4px;
 }
 
 .employee-status--probation {
