@@ -989,6 +989,11 @@
   background: var(--line);
 }
 
+.employee-employment-type--full_time { color: #245f91; background: #eaf3ff; }
+.employee-employment-type--part_time { color: #6a58a8; background: #f1edff; }
+.employee-employment-type--intern { color: #a54f77; background: #fff0f6; }
+.employee-employment-type--contractor { color: #237079; background: #e9f7f8; }
+
 .employee-data__row-actions {
   display: flex;
   gap: 5px;
