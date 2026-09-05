@@ -1,4 +1,4 @@
-import { FileSearch, LoaderCircle } from 'lucide-react'
+import { ChevronDown, ChevronUp, FileSearch, LoaderCircle } from 'lucide-react'
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 
 import { analyzeReports, readReportAnalysisSnapshot, type ReportAnalysisReference } from './report-analysis-api'
@@ -84,10 +84,11 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
   const [summary, setSummary] = useState<{ readonly content: string; readonly count: number; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined } | null>(null)
   const [query, setQuery] = useState<{ readonly content: string; readonly count: number; readonly question: string; readonly references: readonly ReportAnalysisReference[] } | null>(null)
   const [summaryBusy, setSummaryBusy] = useState(false)
+  const [summaryExpanded, setSummaryExpanded] = useState(true)
   const [queryBusy, setQueryBusy] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [queryError, setQueryError] = useState<string | null>(null)
-  useEffect(() => { let active = true; setSummary(null); void readReportAnalysisSnapshot(startDate, endDate).then((snapshot) => { if (active && snapshot) setSummary({ content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
+  useEffect(() => { let active = true; setSummary(null); setSummaryExpanded(true); void readReportAnalysisSnapshot(startDate, endDate).then((snapshot) => { if (active && snapshot) setSummary({ content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
   async function runSummary() {
     if (summary && !window.confirm('已有该时间段报告，是否继续重新生成？')) return
     setSummaryBusy(true)
@@ -95,6 +96,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
     try {
       const result = await analyzeReports({ startDate, endDate })
       setSummary({ content: result.content, count: result.reportCount, references: result.references, generatedAt: result.generatedAt })
+      setSummaryExpanded(true)
     } catch (reason) {
       setSummaryError(reason instanceof Error ? reason.message : '汇总服务暂时不可用。')
     } finally {
@@ -125,7 +127,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
         <span>{startDate} 至 {endDate}</span>
       </div>
       <div className="report-analysis__summary-footer">
-        <ul aria-label="汇总内容"><li>部门工作进展</li><li>已完成事项</li><li>风险与问题</li><li>下一步计划</li><li>未提交情况</li></ul>
+        <ul aria-label="汇总能力"><li>按实际部门归类</li><li>合并整理关键事项</li><li>来源可打开原始日报</li><li>保存最近版本并可导出</li></ul>
         <button type="button" className="report-analysis__button report-analysis__button--primary" disabled={summaryBusy} onClick={() => void runSummary()}>
           {summaryBusy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}
           {summaryBusy ? '正在生成' : summary ? '重新生成' : '生成汇总'}
@@ -133,7 +135,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
       </div>
     </article>
     {summaryError && <div className="daily-reports__error">{summaryError}</div>}
-    {summary && <AnalysisResult title="部门汇总" count={summary.count} content={summary.content} references={summary.references} generatedAt={summary.generatedAt} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} />}
+    {summary && <AnalysisResult title="部门汇总" count={summary.count} content={summary.content} references={summary.references} generatedAt={summary.generatedAt} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} expanded={summaryExpanded} onToggleExpanded={() => setSummaryExpanded((value) => !value)} />}
 
     <article className="report-analysis__card report-analysis__question">
       <div className="report-analysis__card-heading">
@@ -151,7 +153,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
   </section>
 }
 
-function AnalysisResult({ title, count, content, references, generatedAt, question, startDate, endDate, onOpenReport }: { readonly title: string; readonly count: number; readonly content: string; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined; readonly question?: string; readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
+function AnalysisResult({ title, count, content, references, generatedAt, question, startDate, endDate, onOpenReport, expanded, onToggleExpanded }: { readonly title: string; readonly count: number; readonly content: string; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined; readonly question?: string; readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void; readonly expanded?: boolean; readonly onToggleExpanded?: () => void }) {
   const print = () => { const popup = window.open('', '_blank'); if (!popup) return; popup.document.write(`<html><head><title>${escapePrintHtml(title)}</title><style>body{font-family:PingFang SC,Microsoft YaHei,sans-serif;margin:28px;color:#172522;line-height:1.75;font-size:12px}h1{font-size:22px;margin:0 0 6px}h2{font-size:18px;margin:24px 0 10px;padding-bottom:6px;border-bottom:1px solid #dbe7e3}h3{font-size:15px;margin:18px 0 8px}h4{font-size:13px;margin:14px 0 6px}p{margin:7px 0}ul,ol{margin:7px 0 14px;padding-left:22px}li{margin:5px 0}strong{font-weight:650}.meta{margin:0 0 20px;color:#65736e}@page{size:A4;margin:16mm}</style></head><body><h1>${escapePrintHtml(title)}</h1><p class="meta">${escapePrintHtml(startDate)} 至 ${escapePrintHtml(endDate)} · 已分析 ${count} 条日报</p>${markdownToPrintHtml(content)}<script>window.onload=()=>window.print()</script></body></html>`); popup.document.close() }
-  return <article className="report-analysis__result"><header><div><strong>{title}</strong><small>{question ? `问题：${question} · ` : ''}已分析 {count} 条日报 · {startDate} 至 {endDate}{generatedAt ? ` · 已保存` : ''}</small></div>{!question && <button type="button" className="report-analysis__export" onClick={print}>导出 PDF</button>}</header><MarkdownContent content={content} references={references} onOpenReport={onOpenReport} /></article>
+  return <article className="report-analysis__result"><header><div><strong>{title}</strong><small>{question ? `问题：${question} · ` : ''}已分析 {count} 条日报 · {startDate} 至 {endDate}{generatedAt ? ` · 已保存` : ''}</small></div><div className="report-analysis__result-actions">{!question && <button type="button" className="report-analysis__export" onClick={print}>导出 PDF</button>}{onToggleExpanded && <button type="button" className="report-analysis__export" onClick={onToggleExpanded}>{expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}{expanded ? '收起' : '展开'}</button>}</div></header>{expanded !== false && <MarkdownContent content={content} references={references} onOpenReport={onOpenReport} />}</article>
 }
