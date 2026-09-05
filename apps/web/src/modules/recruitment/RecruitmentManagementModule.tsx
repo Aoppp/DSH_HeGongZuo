@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { ModuleProps } from '../../app/types'
 import { CandidatePool, type CandidateStage, type PipelineCandidate } from './candidates/CandidatePool'
 import './recruitment.css'
+import './recruitment-refinements.css'
 
 type Job = { id:string; title:string; department:string; status:'open'|'closed'; candidates:number }
 type JobDetails = Job & { responsibilities:string; requiredConditions:string; preferredConditions:string; exclusionConditions:string; workLocation:string; educationRequirement:string; experienceRequirement:string }

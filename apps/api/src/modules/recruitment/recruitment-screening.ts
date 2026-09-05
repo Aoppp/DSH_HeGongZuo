@@ -10,5 +10,5 @@ export function screenResume(job: RecruitmentJobInput, source: string): { bucket
   if (required.length && matchedRequired.length === 0) return { bucket: 'unrelated', reasons: ['未发现岗位必需条件中的相关经历或技能。'] }
   if (!required.length && !matchedPreferred.length) return { bucket: 'review', reasons: ['岗位尚未设置可用于自动筛选的必需或加分条件，需人工复核。'] }
   if (matchedRequired.length === required.length || matchedPreferred.length >= 2) return { bucket: 'priority', reasons: [`匹配必需条件：${matchedRequired.join('、') || '—'}。`, ...(matchedPreferred.length ? [`匹配加分条件：${matchedPreferred.join('、')}。`] : [])] }
-  return { bucket: 'review', reasons: [`部分匹配必需条件：${matchedRequired.join('、') || '未发现'}。`, ...(matchedPreferred.length ? [`匹配加分条件：${matchedPreferred.join('、')}。`] : ['请人工核对岗位职责相关性。'])] }
+  return { bucket: 'review', reasons: [`部分匹配必需条件：${matchedRequired.join('、') || '未发现'}。`, ...(matchedPreferred.length ? [`匹配加分条件：${matchedPreferred.join('、')}。`] : ['\n请人工核对岗位职责相关性。'])] }
 }
