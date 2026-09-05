@@ -37,5 +37,7 @@ ALTER TABLE account_module_permissions ADD CONSTRAINT account_module_permissions
   CHECK (permission_id IN ('employee-data', 'employee-query', 'employee-attendance', 'employee-reports', 'recruitment-management', 'meeting-records', 'finance-management', 'project-management', 'management-cockpit', 'platform-administration'));
 
 INSERT INTO account_module_permissions (account_id, permission_id)
-SELECT id, 'recruitment-management' FROM accounts WHERE position IN ('CEO', '开发者')
+SELECT id, 'recruitment-management' FROM accounts
+WHERE position IN ('CEO', '开发者', '人事经理', '人事专员')
+   OR id IN (SELECT account_id FROM account_module_permissions WHERE permission_id='platform-administration')
 ON CONFLICT (account_id, permission_id) DO NOTHING;
