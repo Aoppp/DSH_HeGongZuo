@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS recruitment_candidates (
 );
 CREATE INDEX IF NOT EXISTS recruitment_candidates_job_idx ON recruitment_candidates(job_id, screening_bucket, status, id DESC);
 
+ALTER TABLE account_module_permissions DROP CONSTRAINT IF EXISTS account_module_permissions_permission_id_check;
+ALTER TABLE account_module_permissions ADD CONSTRAINT account_module_permissions_permission_id_check
+  CHECK (permission_id IN ('employee-data', 'employee-query', 'employee-attendance', 'employee-reports', 'recruitment-management', 'meeting-records', 'finance-management', 'project-management', 'management-cockpit', 'platform-administration'));
+
 INSERT INTO account_module_permissions (account_id, permission_id)
 SELECT id, 'recruitment-management' FROM accounts WHERE position IN ('CEO', '开发者')
 ON CONFLICT (account_id, permission_id) DO NOTHING;
