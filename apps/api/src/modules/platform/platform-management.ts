@@ -216,19 +216,27 @@ export class PlatformManagementService {
   async setModuleEnabled(moduleId: string, enabled: unknown, actorAccountId: string, actorDisplayName: string): Promise<void> {
     if (!isManagedModuleId(moduleId)) throw new PlatformManagementError('该模块不支持在平台内调整。')
     if (typeof enabled !== 'boolean') throw new PlatformManagementError('模块状态必须为启用或停用。')
+    const previous = await this.pool.query<{ enabled: boolean }>('SELECT enabled FROM platform_module_settings WHERE module_id = $1', [moduleId])
     await this.pool.query(
       `INSERT INTO platform_module_settings (module_id, enabled, updated_by_account_id, updated_at)
        VALUES ($1, $2, $3, now())
        ON CONFLICT (module_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_by_account_id = EXCLUDED.updated_by_account_id, updated_at = now()`,
       [moduleId, enabled, actorAccountId],
     )
-    await this.record(actorAccountId, actorDisplayName, enabled ? '启用模块' : '停用模块', '模块', moduleId, { enabled })
+    await this.record(actorAccountId, actorDisplayName, enabled ? '启用模块' : '停用模块', '模块', moduleId, { changes: [{ field: 'enabled', label: '模块状态', before: previous.rows[0]?.enabled === false ? '已停用' : '已启用', after: enabled ? '已启用' : '已停用' }] })
   }
 
   async record(actorAccountId: string, actorDisplayName: string, action: string, targetType: string, targetId: string, detail: Record<string, unknown> = {}): Promise<void> {
     await this.pool.query(
       'INSERT INTO platform_audit_logs (actor_account_id, actor_display_name, action, target_type, target_id, detail) VALUES ($1, $2, $3, $4, $5, $6::jsonb)',
       [actorAccountId, actorDisplayName, action, targetType, targetId, JSON.stringify(detail)],
+    )
+  }
+
+  async recordSystem(actorDisplayName: string, action: string, targetType: string, targetId: string, detail: Record<string, unknown> = {}): Promise<void> {
+    await this.pool.query(
+      'INSERT INTO platform_audit_logs (actor_account_id, actor_display_name, action, target_type, target_id, detail) VALUES (NULL, $1, $2, $3, $4, $5::jsonb)',
+      [actorDisplayName, action, targetType, targetId, JSON.stringify(detail)],
     )
   }
 }

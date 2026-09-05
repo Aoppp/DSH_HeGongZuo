@@ -4,7 +4,7 @@ import type { Socket } from 'node:net'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { AccountValidationError, AccountsService } from './accounts.js'
+import { AccountValidationError, AccountsService, type AccountRecord } from './accounts.js'
 import { AgentRuntimeProxyError, agentRuntimeRequest, authorizationForAgentRuntime, checkConfiguredAgentRuntimeHealth, isAgentRuntimeRequest, proxyAgentRequest, proxyAgentUpgrade } from './agent-runtime-proxy.js'
 import { AuthError, AuthService, LoginRateLimitError } from './auth.js'
 import { database } from './database.js'
@@ -56,6 +56,13 @@ const meetingUploadCredentials = new MeetingUploadCredentials(database)
 const dailyReports = new DailyReportService(new DailyReportRepository(database))
 const dailyReportAnalytics = new DailyReportAnalyticsService(new DailyReportAnalyticsRepository(database))
 const workDailyManualSync = new WorkDailyManualSync(database, process.env.WECOM_WORK_DAILY_SYNC_REQUEST_PATH ?? '')
+
+function accountAuditDetail(before: AccountRecord | null, after: AccountRecord): Record<string, unknown> {
+  const fields: readonly [keyof Pick<AccountRecord, 'accountId' | 'displayName' | 'position' | 'permissions'>, string][] = [['accountId', '登录名'], ['displayName', '显示名称'], ['position', '岗位'], ['permissions', '功能权限']]
+  const text = (value: unknown): string => Array.isArray(value) ? value.join('、') || '无' : String(value || '未填写')
+  const changes = fields.filter(([field]) => !before || text(before[field]) !== text(after[field])).map(([field, label]) => ({ field, label, before: before ? text(before[field]) : '未创建', after: text(after[field]) }))
+  return { changes, changedFields: changes.map((change) => change.label), accountId: after.accountId, displayName: after.displayName }
+}
 
 
 function cookieToken(cookieHeader: string | undefined): string | null {
@@ -202,6 +209,13 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const idempotencyKey = typeof request.headers['idempotency-key'] === 'string' ? request.headers['idempotency-key'].trim() : ''
     if (!/^[A-Za-z0-9._:-]{16,200}$/.test(idempotencyKey)) throw new HttpError(400, 'Idempotency-Key 必须是 16 至 200 位的稳定唯一值。')
     const result = await meetings.create(parseMeetingInput(await readJson(request)), idempotencyKey)
+    await platformManagement.recordSystem('会议上传服务', result.created ? '上传会议记录' : '重复上传会议记录', '会议记录', result.record.id, { changes: [
+      { field: 'title', label: '会议标题', before: result.created ? '未创建' : result.record.title, after: result.record.title },
+      { field: 'mode', label: '会议模式', before: result.created ? '未创建' : result.record.mode, after: result.record.mode },
+      { field: 'summary', label: '会议摘要', before: result.created ? '未上传' : result.record.summary ? '已上传' : '未上传', after: result.record.summary ? '已上传' : '未上传' },
+      { field: 'transcript', label: '会议原文', before: result.created ? '未上传' : '已上传', after: result.record.transcript ? '已上传' : '未上传' },
+      { field: 'participants', label: '参会人数', before: result.created ? '0' : String(result.record.participants.length), after: String(result.record.participants.length) },
+    ] })
     const protocol = String(request.headers['x-forwarded-proto'] ?? 'https').split(',').at(-1)?.trim() || 'https'
     const hostName = String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '').split(',').at(-1)?.trim()
     sendJson(response, result.created ? 201 : 200, { success: true, id: result.record.id, url: `${protocol}://${hostName}/meetings?record=${result.record.id}`, created: result.created })
@@ -253,19 +267,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (url.pathname === '/api/recruitment/jobs' && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); sendJson(response, 200, { jobs: await recruitment.jobs() }); return }
   if (url.pathname === '/api/recruitment/candidates' && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); sendJson(response,200,{candidates:await recruitment.candidatePool()});return }
   if (url.pathname === '/api/recruitment/eliminated' && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); sendJson(response,200,{candidates:await recruitment.eliminatedPool()});return }
-  if (url.pathname === '/api/recruitment/jobs' && request.method === 'POST') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const id=await recruitment.createJob(parseJobInput(await readJson(request)),currentUser.id); await platformManagement.record(currentUser.id,currentUser.displayName,'新建招聘岗位','招聘岗位',id,{}); sendJson(response,201,{id});return }
+  if (url.pathname === '/api/recruitment/jobs' && request.method === 'POST') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const id=await recruitment.createJob(parseJobInput(await readJson(request)),currentUser.id); const job=await recruitment.job(id); await platformManagement.record(currentUser.id,currentUser.displayName,'新建招聘岗位','招聘岗位',id,{ changes: [{ field:'title',label:'岗位名称',before:'未创建',after:job?.title??'未记录' },{ field:'department',label:'所属部门',before:'未创建',after:job?.department??'未记录' },{ field:'requirements',label:'岗位要求',before:'未创建',after:job?.requiredConditions?'已填写':'未填写' }] }); sendJson(response,201,{id});return }
   const recruitmentJob = recruitmentJobId(url.pathname)
   if (recruitmentJob && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const job=await recruitment.job(recruitmentJob); if(!job) throw new HttpError(404,'岗位不存在。'); sendJson(response,200,{job});return }
-  if (recruitmentJob && request.method === 'DELETE') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); if(!await recruitment.removeJob(recruitmentJob)) throw new HttpError(404,'岗位不存在。'); await platformManagement.record(currentUser.id,currentUser.displayName,'删除招聘岗位','招聘岗位',recruitmentJob,{}); response.writeHead(204);response.end();return }
+  if (recruitmentJob && request.method === 'DELETE') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const job=await recruitment.job(recruitmentJob); if(!job || !await recruitment.removeJob(recruitmentJob)) throw new HttpError(404,'岗位不存在。'); await platformManagement.record(currentUser.id,currentUser.displayName,'删除招聘岗位','招聘岗位',recruitmentJob,{ changes: [{ field:'title',label:'岗位名称',before:job.title,after:'已删除' },{ field:'department',label:'所属部门',before:job.department,after:'已删除' }] }); response.writeHead(204);response.end();return }
   const candidatesJob = recruitmentCandidatesJobId(url.pathname)
   if (candidatesJob && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); sendJson(response,200,{candidates:await recruitment.candidates(candidatesJob)});return }
-  if (candidatesJob && request.method === 'POST') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const body=await readJson(request) as Record<string,unknown>; const count=await recruitment.upload(candidatesJob,parseUploads(body.files),currentUser.id); await platformManagement.record(currentUser.id,currentUser.displayName,'上传招聘简历','招聘岗位',candidatesJob,{count}); sendJson(response,201,{count});return }
+  if (candidatesJob && request.method === 'POST') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const body=await readJson(request) as Record<string,unknown>; const files=parseUploads(body.files); const count=await recruitment.upload(candidatesJob,files,currentUser.id); await platformManagement.record(currentUser.id,currentUser.displayName,'上传招聘简历','招聘岗位',candidatesJob,{ changes: [{ field:'files',label:'上传简历',before:'0 份',after:`${count} 份：${files.map((file)=>file.fileName).join('、')}` }] }); sendJson(response,201,{count});return }
   const recruitmentCandidate = recruitmentCandidatePath(url.pathname)
   const recruitmentPipelineCandidate = recruitmentCandidatePipelinePath(url.pathname)
-  if (recruitmentPipelineCandidate && request.method === 'POST') { requirePermission(currentUser,'recruitment-management');await platformManagement.assertModuleEnabled('recruitment-management');const body=await readJson(request) as Record<string,unknown>;const stages=['none','to_contact','interview_scheduled','interviewing','pending_offer','hired','declined'];const stage=typeof body.stage==='string'&&stages.includes(body.stage)?body.stage:null;const notes=typeof body.notes==='string'&&body.notes.trim().length<=10_000?body.notes.trim():null;if(!stage||notes===null)throw new HttpError(400,'候选状态或备注无效。');if(!await recruitment.setCandidate(recruitmentPipelineCandidate.jobId,recruitmentPipelineCandidate.candidateId,stage,notes,currentUser.id))throw new HttpError(404,'候选人不存在。');await platformManagement.record(currentUser.id,currentUser.displayName,stage==='none'?'撤回招聘候选人':'更新招聘候选人','招聘候选人',recruitmentPipelineCandidate.candidateId,{stage});sendJson(response,200,{ok:true});return }
+  if (recruitmentPipelineCandidate && request.method === 'POST') { requirePermission(currentUser,'recruitment-management');await platformManagement.assertModuleEnabled('recruitment-management');const body=await readJson(request) as Record<string,unknown>;const stages=['none','to_contact','interview_scheduled','interviewing','pending_offer','hired','declined'];const stage=typeof body.stage==='string'&&stages.includes(body.stage)?body.stage:null;const notes=typeof body.notes==='string'&&body.notes.trim().length<=10_000?body.notes.trim():null;if(!stage||notes===null)throw new HttpError(400,'候选状态或备注无效。');const previous=await recruitment.candidate(recruitmentPipelineCandidate.jobId,recruitmentPipelineCandidate.candidateId);if(!previous||!await recruitment.setCandidate(recruitmentPipelineCandidate.jobId,recruitmentPipelineCandidate.candidateId,stage,notes,currentUser.id))throw new HttpError(404,'候选人不存在。');await platformManagement.record(currentUser.id,currentUser.displayName,stage==='none'?'撤回招聘候选人':'更新招聘候选人','招聘候选人',recruitmentPipelineCandidate.candidateId,{ changes: [{field:'fileName',label:'简历文件',before:previous.fileName,after:previous.fileName},{field:'candidateStage',label:'候选阶段',before:previous.candidateStage,after:stage},{field:'candidateNotes',label:'跟进备注',before:previous.candidateNotes||'未填写',after:notes||'未填写'}] });sendJson(response,200,{ok:true});return }
   if (recruitmentCandidate?.action === 'status' && request.method === 'POST') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const body=await readJson(request) as Record<string,unknown>; const status=body.status==='eliminated'||body.status==='restored'?body.status:null; const ids=Array.isArray(body.ids)&&body.ids.every(x=>typeof x==='string'&&/^\d+$/.test(x))?body.ids as string[]:[];if(!status||!ids.length)throw new HttpError(400,'候选人状态参数无效。');const count=await recruitment.setStatus(recruitmentCandidate.jobId,ids,status,currentUser.id);await platformManagement.record(currentUser.id,currentUser.displayName,status==='eliminated'?'淘汰招聘候选人':'恢复招聘候选人','招聘岗位',recruitmentCandidate.jobId,{count});sendJson(response,200,{count});return }
   if (recruitmentCandidate?.action === 'file' && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management');const file=await recruitment.file(recruitmentCandidate.jobId,recruitmentCandidate.candidateId);if(!file)throw new HttpError(404,'简历不存在。');response.writeHead(200,{'content-type':file.mime_type,'content-disposition':`inline; filename*=UTF-8''${encodeURIComponent(file.file_name)}`,'cache-control':'private, no-store'});response.end(file.file_data);return }
-  if (recruitmentCandidate?.action === null && request.method === 'DELETE') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management');if(!await recruitment.remove(recruitmentCandidate.jobId,recruitmentCandidate.candidateId))throw new HttpError(404,'简历不存在。');await platformManagement.record(currentUser.id,currentUser.displayName,'删除招聘简历','招聘候选人',recruitmentCandidate.candidateId,{});response.writeHead(204);response.end();return }
+  if (recruitmentCandidate?.action === null && request.method === 'DELETE') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management');const candidate=await recruitment.candidate(recruitmentCandidate.jobId,recruitmentCandidate.candidateId);if(!candidate||!await recruitment.remove(recruitmentCandidate.jobId,recruitmentCandidate.candidateId))throw new HttpError(404,'简历不存在。');await platformManagement.record(currentUser.id,currentUser.displayName,'删除招聘简历','招聘候选人',recruitmentCandidate.candidateId,{changes:[{field:'fileName',label:'简历文件',before:candidate.fileName,after:'已删除'},{field:'bucket',label:'筛选结果',before:candidate.bucket,after:'已删除'}]});response.writeHead(204);response.end();return }
 
   if (url.pathname === '/api/platform/access' && request.method === 'GET') {
     sendJson(response, 200, { disabledModuleIds: await platformManagement.disabledModuleIds() })
@@ -355,7 +369,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const name = body && typeof body === 'object' && typeof (body as Record<string, unknown>).name === 'string' ? String((body as Record<string, unknown>).name).trim() : ''
     if (!name || name.length > 80) throw new HttpError(400, '凭证名称不能为空且不能超过 80 个字符。')
     const credential = await meetingUploadCredentials.create(name)
-    await platformManagement.record(currentUser.id, currentUser.displayName, '生成会议上传凭证', '会议上传凭证', credential.id, { name })
+    await platformManagement.record(currentUser.id, currentUser.displayName, '生成会议上传凭证', '会议上传凭证', credential.id, { changes: [{ field: 'name', label: '凭证名称', before: '未创建', after: name }, { field: 'token', label: '上传权限', before: '无', after: '已生成（不记录凭证原文）' }] })
     sendJson(response, 201, credential)
     return
   }
@@ -363,8 +377,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const credentialId = meetingCredentialId(url.pathname)
   if (credentialId && request.method === 'DELETE') {
     requirePlatformAdministration(currentUser)
-    if (!await meetingUploadCredentials.remove(credentialId)) throw new HttpError(404, '会议上传凭证不存在。')
-    await platformManagement.record(currentUser.id, currentUser.displayName, '删除会议上传凭证', '会议上传凭证', credentialId)
+    const credential = (await meetingUploadCredentials.list()).find((item) => item.id === credentialId)
+    if (!credential || !await meetingUploadCredentials.remove(credentialId)) throw new HttpError(404, '会议上传凭证不存在。')
+    await platformManagement.record(currentUser.id, currentUser.displayName, '删除会议上传凭证', '会议上传凭证', credentialId, { changes: [{ field: 'name', label: '凭证名称', before: credential.name, after: '已删除' }, { field: 'token', label: '上传权限', before: '有效', after: '已撤销' }] })
     sendJson(response, 200, { success: true })
     return
   }
@@ -471,7 +486,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       throw error
     }
     accountRuntimeTasks.enqueue(created, { transitionStatus: true, provision: true })
-    await platformManagement.record(currentUser.id, currentUser.displayName, '新增账号', '账号', created.id, { accountId: created.accountId, displayName: created.displayName })
+    await platformManagement.record(currentUser.id, currentUser.displayName, '新增账号', '账号', created.id, accountAuditDetail(null, created))
     sendJson(response, 202, { account: created })
     return
   }
@@ -494,7 +509,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (!updated) throw new HttpError(404, '账号不存在。')
     const runtimeChange = runtimeChangeForAccountUpdate(existing, updated, agentPermissionIds)
     if (runtimeChange.sync) accountRuntimeTasks.enqueue(updated, { transitionStatus: false, provision: runtimeChange.provision || existing.accountId !== updated.accountId })
-    await platformManagement.record(currentUser.id, currentUser.displayName, '更新账号', '账号', updated.id, { accountId: updated.accountId, displayName: updated.displayName, permissions: updated.permissions })
+    await platformManagement.record(currentUser.id, currentUser.displayName, '更新账号', '账号', updated.id, accountAuditDetail(existing, updated))
     sendJson(response, 202, { account: updated })
     return
   }
@@ -502,10 +517,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (accountIdPath && request.method === 'DELETE') {
     requirePlatformAdministration(currentUser)
     if (accountIdPath === currentUser.id) throw new HttpError(400, '不能删除当前登录的账号。')
-    if (!await accounts.delete(accountIdPath)) throw new HttpError(404, '账号不存在。')
+    const existing = await accounts.findById(accountIdPath)
+    if (!existing || !await accounts.delete(accountIdPath)) throw new HttpError(404, '账号不存在。')
     // 删除后立即从运行时配置移除该账号；systemd 配置监听器随即停止对应实例。
     accountRuntimeTasks.synchronize()
-    await platformManagement.record(currentUser.id, currentUser.displayName, '删除账号', '账号', accountIdPath)
+    await platformManagement.record(currentUser.id, currentUser.displayName, '删除账号', '账号', accountIdPath, { changes: [{ field: 'accountId', label: '登录名', before: existing.accountId, after: '已删除' }, { field: 'displayName', label: '显示名称', before: existing.displayName, after: '已删除' }, { field: 'permissions', label: '功能权限', before: existing.permissions.join('、') || '无', after: '已删除' }] })
     sendJson(response, 200, { ok: true })
     return
   }
@@ -576,7 +592,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePermission(currentUser, 'employee-reports')
     await platformManagement.assertModuleEnabled('employee-reports')
     const result = await workDailyManualSync.trigger()
-    if (result.accepted) await platformManagement.record(currentUser.id, currentUser.displayName, '手动同步日报', '日报', 'wecom')
+    if (result.accepted) await platformManagement.record(currentUser.id, currentUser.displayName, '手动同步日报', '日报', 'wecom', { changes: [{ field: 'sync', label: '同步任务', before: '未执行', after: '已提交后台执行' }] })
     sendJson(response, 202, result)
     return
   }
