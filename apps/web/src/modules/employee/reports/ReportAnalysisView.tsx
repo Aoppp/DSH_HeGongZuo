@@ -31,6 +31,58 @@ export function ReportAnalysisView({ startDate, endDate }: { readonly startDate:
   const [count, setCount] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  async function run(nextQuestion?: string) { setBusy(true); setError(null); try { const result = await analyzeReports({ startDate, endDate, ...(nextQuestion?.trim() ? { question: nextQuestion.trim() } : {}) }); setContent(result.content); setCount(result.reportCount) } catch (reason) { setError(reason instanceof Error ? reason.message : '汇总分析暂时不可用。') } finally { setBusy(false) } }
-  return <section className="report-analysis panel-card"><header><div><span className="report-analysis__eyebrow"><FileSearch size={14} />日报管理</span><h2>汇总分析</h2><p>根据当前日期范围生成临时汇总或定向查询，结果不会保存。</p></div><button type="button" className="employee-data__primary" disabled={busy} onClick={() => void run()}>{busy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}生成汇总</button></header><div className="report-analysis__question"><label><span>定向查询</span><input value={question} maxLength={500} placeholder="例如：本周有哪些需要重点关注的问题？" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void run(question) } }} /></label><button type="button" disabled={busy || !question.trim()} onClick={() => void run(question)}>查询</button></div>{error && <div className="daily-reports__error">{error}</div>}{content && <article className="report-analysis__result"><header><div><strong>{question.trim() ? '查询结果' : '日报汇总'}</strong><small>已分析 {count} 条日报 · {startDate} 至 {endDate}</small></div><span>临时结果</span></header><MarkdownContent content={content} /></article>}</section>
+  async function run(nextQuestion?: string) {
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await analyzeReports({ startDate, endDate, ...(nextQuestion?.trim() ? { question: nextQuestion.trim() } : {}) })
+      setContent(result.content)
+      setCount(result.reportCount)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '汇总分析暂时不可用。')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <section className="report-analysis panel-card">
+    <header className="report-analysis__header">
+      <div>
+        <span className="report-analysis__eyebrow"><FileSearch size={14} />日报管理</span>
+        <h2>汇总分析</h2>
+        <p>围绕已选日期范围整理日报内容，结果仅在当前页面保留。</p>
+      </div>
+    </header>
+
+    <div className="report-analysis__actions">
+      <div className="report-analysis__action-copy">
+        <strong>生成日报汇总</strong>
+        <span>{startDate} 至 {endDate}</span>
+      </div>
+      <button type="button" className="report-analysis__button report-analysis__button--primary" disabled={busy} onClick={() => void run()}>
+        {busy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}
+        {busy ? '正在生成' : '生成汇总'}
+      </button>
+    </div>
+
+    <div className="report-analysis__question">
+      <div className="report-analysis__question-title">
+        <strong>按问题查询</strong>
+        <span>输入具体问题，可在当前日期范围内查找重点信息。</span>
+      </div>
+      <div className="report-analysis__question-form">
+        <input value={question} maxLength={500} placeholder="例如：本周有哪些需要重点关注的问题？" aria-label="定向查询问题" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void run(question) } }} />
+        <button type="button" className="report-analysis__button report-analysis__button--secondary" disabled={busy || !question.trim()} onClick={() => void run(question)}>查询</button>
+      </div>
+    </div>
+
+    {error && <div className="daily-reports__error">{error}</div>}
+    {content && <article className="report-analysis__result">
+      <header>
+        <div><strong>{question.trim() ? '查询结果' : '日报汇总'}</strong><small>已分析 {count} 条日报 · {startDate} 至 {endDate}</small></div>
+        <span>当前结果</span>
+      </header>
+      <MarkdownContent content={content} />
+    </article>}
+  </section>
 }
