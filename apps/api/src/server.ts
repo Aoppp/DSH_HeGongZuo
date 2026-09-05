@@ -32,6 +32,8 @@ import { WorkDailyManualSync, WorkDailyManualSyncError } from './modules/employe
 import { MeetingRepository } from './modules/meetings/meeting-repository.js'
 import { MeetingUploadCredentials } from './modules/meetings/meeting-upload-credentials.js'
 import { MeetingValidationError, parseMeetingInput } from './modules/meetings/meeting-input.js'
+import { RecruitmentRepository } from './modules/recruitment/recruitment-repository.js'
+import { RecruitmentValidationError, parseJobInput, parseUploads } from './modules/recruitment/recruitment-input.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
 
@@ -49,6 +51,7 @@ const wecomDirectory = new WeComDirectoryRepository(database)
 const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
 const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
+const recruitment = new RecruitmentRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
 const dailyReports = new DailyReportService(new DailyReportRepository(database))
 const dailyReportAnalytics = new DailyReportAnalyticsService(new DailyReportAnalyticsRepository(database))
@@ -127,6 +130,9 @@ function accountResetPasswordId(pathname: string): string | null {
   const match = pathname.match(/^\/api\/accounts\/([^/]+)\/reset-password$/)
   return match?.[1] ? decodeURIComponent(match[1]) : null
 }
+function recruitmentJobId(pathname: string): string | null { return pathname.match(/^\/api\/recruitment\/jobs\/(\d+)$/)?.[1] ?? null }
+function recruitmentCandidatesJobId(pathname: string): string | null { return pathname.match(/^\/api\/recruitment\/jobs\/(\d+)\/candidates$/)?.[1] ?? null }
+function recruitmentCandidatePath(pathname: string): { jobId: string; candidateId: string; action: 'status'|'file'|null } | null { const m=pathname.match(/^\/api\/recruitment\/jobs\/(\d+)\/candidates\/(\d+)(?:\/(status|file))?$/); return m?{jobId:m[1]!,candidateId:m[2]!,action:(m[3] as 'status'|'file'|undefined)??null}:null }
 
 function accountRetryId(pathname: string): string | null {
   const match = pathname.match(/^\/api\/accounts\/([^/]+)\/retry-initialization$/)
@@ -242,6 +248,18 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   // —— 以下业务接口全部要求登录 ——
   const currentUser = await requireAuth(auth, request)
+
+  if (url.pathname === '/api/recruitment/jobs' && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); sendJson(response, 200, { jobs: await recruitment.jobs() }); return }
+  if (url.pathname === '/api/recruitment/jobs' && request.method === 'POST') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const id=await recruitment.createJob(parseJobInput(await readJson(request)),currentUser.id); await platformManagement.record(currentUser.id,currentUser.displayName,'新建招聘岗位','招聘岗位',id,{}); sendJson(response,201,{id});return }
+  const recruitmentJob = recruitmentJobId(url.pathname)
+  if (recruitmentJob && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const job=await recruitment.job(recruitmentJob); if(!job) throw new HttpError(404,'岗位不存在。'); sendJson(response,200,{job});return }
+  const candidatesJob = recruitmentCandidatesJobId(url.pathname)
+  if (candidatesJob && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); sendJson(response,200,{candidates:await recruitment.candidates(candidatesJob)});return }
+  if (candidatesJob && request.method === 'POST') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); const body=await readJson(request) as Record<string,unknown>; const count=await recruitment.upload(candidatesJob,parseUploads(body.files),currentUser.id); await platformManagement.record(currentUser.id,currentUser.displayName,'上传招聘简历','招聘岗位',candidatesJob,{count}); sendJson(response,201,{count});return }
+  const recruitmentCandidate = recruitmentCandidatePath(url.pathname)
+  if (recruitmentCandidate?.action === 'status' && request.method === 'POST') { requirePermission(currentUser, 'recruitment-management'); const body=await readJson(request) as Record<string,unknown>; const status=body.status==='eliminated'||body.status==='restored'?body.status:null; const ids=Array.isArray(body.ids)&&body.ids.every(x=>typeof x==='string'&&/^\d+$/.test(x))?body.ids as string[]:[];if(!status||!ids.length)throw new HttpError(400,'候选人状态参数无效。');const count=await recruitment.setStatus(recruitmentCandidate.jobId,ids,status,currentUser.id);await platformManagement.record(currentUser.id,currentUser.displayName,status==='eliminated'?'淘汰招聘候选人':'恢复招聘候选人','招聘岗位',recruitmentCandidate.jobId,{count});sendJson(response,200,{count});return }
+  if (recruitmentCandidate?.action === 'file' && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management');const file=await recruitment.file(recruitmentCandidate.jobId,recruitmentCandidate.candidateId);if(!file)throw new HttpError(404,'简历不存在。');response.writeHead(200,{'content-type':file.mime_type,'content-disposition':`inline; filename*=UTF-8''${encodeURIComponent(file.file_name)}`,'cache-control':'private, no-store'});response.end(file.file_data);return }
+  if (recruitmentCandidate?.action === null && request.method === 'DELETE') { requirePermission(currentUser, 'recruitment-management');if(!await recruitment.remove(recruitmentCandidate.jobId,recruitmentCandidate.candidateId))throw new HttpError(404,'简历不存在。');await platformManagement.record(currentUser.id,currentUser.displayName,'删除招聘简历','招聘候选人',recruitmentCandidate.candidateId,{});response.writeHead(204);response.end();return }
 
   if (url.pathname === '/api/platform/access' && request.method === 'GET') {
     sendJson(response, 200, { disabledModuleIds: await platformManagement.disabledModuleIds() })
@@ -414,6 +432,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       { id: 'employee-query', label: '数据查询', group: '员工管理' },
       { id: 'employee-attendance', label: '考勤管理', group: '员工管理' },
       { id: 'employee-reports', label: '日报管理', group: '员工管理' },
+      { id: 'recruitment-management', label: '简历筛选', group: '招聘管理' },
       { id: 'meeting-records', label: '查看全部会议记录', group: '会议管理' },
       { id: 'finance-management', label: '待开发', group: '财务管理' },
       { id: 'project-management', label: '待开发', group: '项目管理' },
@@ -689,7 +708,7 @@ function postgresErrorStatus(error: unknown): { status: number; message: string 
 
 const server = createServer((request, response) => {
   void handleRequest(request, response).catch((error: unknown) => {
-    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof DailyReportValidationError || error instanceof DailyReportAnalyticsValidationError || error instanceof WorkDailyManualSyncError || error instanceof MeetingValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
+    if (error instanceof HttpError || error instanceof WeComCallbackError || error instanceof AgentRuntimeProxyError || error instanceof EmployeeValidationError || error instanceof DailyReportValidationError || error instanceof DailyReportAnalyticsValidationError || error instanceof WorkDailyManualSyncError || error instanceof MeetingValidationError || error instanceof RecruitmentValidationError || error instanceof AuthError || error instanceof LoginRateLimitError || error instanceof AccountValidationError || error instanceof PlatformManagementError) {
       const status = error instanceof LoginRateLimitError
         ? 429
         : error instanceof WorkDailyManualSyncError

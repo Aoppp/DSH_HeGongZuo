@@ -11,6 +11,7 @@ import { ProjectManagementModule } from '../modules/project/management/ProjectMa
 import { OverviewModule } from '../modules/overview/main/OverviewModule'
 import { WorkAssistantModule } from '../modules/work-assistant/main/WorkAssistantModule'
 import { MeetingRecordsModule } from '../modules/meetings/records/MeetingRecordsModule'
+import { RecruitmentManagementModule } from '../modules/recruitment/RecruitmentManagementModule'
 import type { AuthenticatedUser, ModuleId, PlatformModule } from './types'
 
 // 每个功能只在此注册一次。删除该项即可从导航和路由中同时移除功能。
@@ -80,6 +81,16 @@ export const platformModules: readonly PlatformModule[] = [
     requiredPermission: 'employee-reports',
     group: 'employee-management',
     component: EmployeeReportsModule,
+  },
+  {
+    id: 'recruitment-management',
+    path: '/recruitment',
+    label: '招聘管理',
+    description: '按岗位批量筛选与管理候选人简历',
+    icon: BriefcaseBusiness,
+    requiredPermission: 'recruitment-management',
+    group: 'recruitment-management',
+    component: RecruitmentManagementModule,
   },
   {
     id: 'finance-management',

@@ -14,6 +14,7 @@ export type EmployeeManagementPermissionId = (typeof employeeManagementPermissio
 // 平台业务管理权限的单一事实来源；新增管理模块时在此注册对应权限。
 export const platformManagementPermissionIds = [
   ...employeeManagementPermissionIds,
+  'recruitment-management',
   'meeting-records',
   'finance-management',
   'project-management',

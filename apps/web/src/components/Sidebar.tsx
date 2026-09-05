@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronLeft, ChevronRight, FolderKanban, Landmark, Users } from 'lucide-react'
+import { BriefcaseBusiness, ChevronDown, ChevronLeft, ChevronRight, FolderKanban, Landmark, Users } from 'lucide-react'
 import { useState, type MouseEvent } from 'react'
 
 import type { ModuleGroupId, ModuleId, PlatformModule } from '../app/types'
@@ -14,6 +14,7 @@ interface SidebarProps {
 
 const groupDefinitions: Record<ModuleGroupId, { readonly label: string; readonly icon: typeof Users }> = {
   'employee-management': { label: '员工管理', icon: Users },
+  'recruitment-management': { label: '招聘管理', icon: BriefcaseBusiness },
   'finance-management': { label: '财务管理', icon: Landmark },
   'project-management': { label: '项目管理', icon: FolderKanban },
 }
