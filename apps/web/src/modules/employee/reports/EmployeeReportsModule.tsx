@@ -90,6 +90,13 @@ export function EmployeeReportsModule(_props: ModuleProps) {
     if (next === 'analysis' && view !== 'analysis') { const yesterday = shiftCalendarDate(today, -1); setStartDate(yesterday); setEndDate(yesterday) }
     setView(next)
   }
+  function setAnalysisRange(preset: 'today' | 'week' | 'month') {
+    if (preset === 'today') { setStartDate(today); setEndDate(today); return }
+    if (preset === 'month') { setStartDate(`${today.slice(0, 7)}-01`); setEndDate(today); return }
+    const day = new Date(`${today}T12:00:00Z`).getUTCDay() || 7
+    setStartDate(shiftCalendarDate(today, 1 - day))
+    setEndDate(today)
+  }
   function submit(event: FormEvent) { event.preventDefault(); management.applyFilters() }
   const pages = Math.max(1, management.totalPages)
   function openDate(dateValue: string) {
@@ -106,11 +113,11 @@ export function EmployeeReportsModule(_props: ModuleProps) {
 
     <nav className="report-tabs" aria-label="日报功能">{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => selectView(item.id)}>{item.label}</button>)}</nav>
 
-    {['dashboard','calendar','quality','analysis'].includes(view) && <div className="report-scope">
+    {['dashboard','calendar','quality','analysis'].includes(view) && <div className={view === 'analysis' ? 'report-scope report-scope--analysis' : 'report-scope'}>
       {view === 'dashboard' && <><label>统计日期<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} /></label><div className="report-scope__presets"><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, -1))}>前一天</button><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, 1))}>下一天</button></div></>}
       {view === 'calendar' && <label>月份<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
       {view === 'quality' && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
-      {view === 'analysis' && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
+      {view === 'analysis' && <><div className="report-scope__analysis-dates"><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></div><div className="report-scope__analysis-presets"><button type="button" onClick={() => setAnalysisRange('today')}>今天</button><button type="button" onClick={() => setAnalysisRange('week')}>本周</button><button type="button" onClick={() => setAnalysisRange('month')}>本月</button></div></>}
     </div>}
 
     {view === 'dashboard' && <DashboardView date={reportDate} revision={analyticsRevision} />}

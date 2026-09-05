@@ -45,7 +45,7 @@ export function ReportAnalysisView({ startDate, endDate }: { readonly startDate:
     }
   }
 
-  return <section className="report-analysis panel-card">
+  return <section className="report-analysis">
     <header className="report-analysis__header">
       <div>
         <h2>汇总分析</h2>
@@ -53,27 +53,30 @@ export function ReportAnalysisView({ startDate, endDate }: { readonly startDate:
       </div>
     </header>
 
-    <div className="report-analysis__actions">
-      <div className="report-analysis__action-copy">
-        <strong>生成日报汇总</strong>
+    <article className="report-analysis__card report-analysis__card--summary">
+      <div className="report-analysis__card-heading">
+        <div><h3>生成日报汇总</h3><p>自动整理当前日期范围内全部日报</p></div>
         <span>{startDate} 至 {endDate}</span>
       </div>
-      <button type="button" className="report-analysis__button report-analysis__button--primary" disabled={busy} onClick={() => void run()}>
-        {busy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}
-        {busy ? '正在生成' : '生成汇总'}
-      </button>
-    </div>
+      <div className="report-analysis__summary-footer">
+        <ul aria-label="汇总内容"><li>整体进展</li><li>已完成事项</li><li>风险与问题</li><li>下一步计划</li><li>未提交情况</li></ul>
+        <button type="button" className="report-analysis__button report-analysis__button--primary" disabled={busy} onClick={() => void run()}>
+          {busy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}
+          {busy ? '正在生成' : '生成汇总'}
+        </button>
+      </div>
+    </article>
 
-    <div className="report-analysis__question">
-      <div className="report-analysis__question-title">
-        <strong>按问题查询</strong>
-        <span>输入具体问题，可在当前日期范围内查找重点信息。</span>
+    <article className="report-analysis__card report-analysis__question">
+      <div className="report-analysis__card-heading">
+        <div><h3>智能查询</h3><p>针对当前日期范围内的日报提出具体问题</p></div>
       </div>
       <div className="report-analysis__question-form">
         <input value={question} maxLength={500} placeholder="例如：本周有哪些需要重点关注的问题？" aria-label="定向查询问题" onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); void run(question) } }} />
         <button type="button" className="report-analysis__button report-analysis__button--secondary" disabled={busy || !question.trim()} onClick={() => void run(question)}>查询</button>
       </div>
-    </div>
+      <div className="report-analysis__examples"><span>示例问题</span>{['本周有哪些客户问题？', '谁提到生产延期？', '有哪些事项尚未完成？'].map((example) => <button type="button" key={example} onClick={() => setQuestion(example)}>{example}</button>)}</div>
+    </article>
 
     {error && <div className="daily-reports__error">{error}</div>}
     {content && <article className="report-analysis__result">
