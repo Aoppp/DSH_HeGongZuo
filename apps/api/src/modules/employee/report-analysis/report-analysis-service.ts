@@ -38,7 +38,7 @@ export class ReportAnalysisService {
     const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
       headers: { authorization: `Bearer ${requiredEnvironment('HEGONGZUO_DAYLYREPORT_DEEPSEEK_API_KEY')}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'deepseek-v4-flash', temperature: 0.2, max_tokens: retry ? 4_000 : 8_000, messages: [{ role: 'system', content: '你是企业内部日报分析工具。不得编造资料中不存在的事实；不得评价员工人格或作出人事决定。' }, { role: 'user', content: `${instruction}${retry ? '\n请直接输出最终 Markdown 正文，不要留空。' : ''}\n\n日报资料：\n${source}` }] }),
+      body: JSON.stringify({ model: 'deepseek-v4-flash', thinking: { type: 'disabled' }, temperature: 0.2, max_tokens: retry ? 4_000 : 8_000, messages: [{ role: 'system', content: '你是企业内部日报分析工具。不得编造资料中不存在的事实；不得评价员工人格或作出人事决定。' }, { role: 'user', content: `${instruction}${retry ? '\n请直接输出最终 Markdown 正文，不要留空。' : ''}\n\n日报资料：\n${source}` }] }),
       signal: AbortSignal.timeout(90_000),
     })
     if (!response.ok) throw new ReportAnalysisValidationError('汇总服务暂时不可用，请稍后重试。')
