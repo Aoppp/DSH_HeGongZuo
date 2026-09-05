@@ -70,11 +70,11 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
 
     <article className="report-analysis__card report-analysis__card--summary">
       <div className="report-analysis__card-heading">
-        <div><h3>生成日报汇总</h3><p>自动整理当前日期范围内全部日报</p></div>
+        <div><h3>生成日报汇总</h3><p>按部门整理当前日期范围内的日报重点</p></div>
         <span>{startDate} 至 {endDate}</span>
       </div>
       <div className="report-analysis__summary-footer">
-        <ul aria-label="汇总内容"><li>整体进展</li><li>已完成事项</li><li>风险与问题</li><li>下一步计划</li><li>未提交情况</li></ul>
+        <ul aria-label="汇总内容"><li>部门工作进展</li><li>已完成事项</li><li>风险与问题</li><li>下一步计划</li><li>未提交情况</li></ul>
         <button type="button" className="report-analysis__button report-analysis__button--primary" disabled={summaryBusy} onClick={() => void runSummary()}>
           {summaryBusy ? <LoaderCircle className="spin" size={15} /> : <FileSearch size={15} />}
           {summaryBusy ? '正在生成' : '生成汇总'}
@@ -82,7 +82,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
       </div>
     </article>
     {summaryError && <div className="daily-reports__error">{summaryError}</div>}
-    {summary && <AnalysisResult title="日报汇总" count={summary.count} content={summary.content} references={summary.references} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} />}
+    {summary && <AnalysisResult title="部门汇总" count={summary.count} content={summary.content} references={summary.references} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} />}
 
     <article className="report-analysis__card report-analysis__question">
       <div className="report-analysis__card-heading">
