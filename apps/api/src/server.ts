@@ -361,6 +361,20 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/platform/notification-settings' && request.method === 'GET') {
+    requirePlatformAdministration(currentUser)
+    sendJson(response, 200, await platformManagement.notificationSettings())
+    return
+  }
+
+  if (url.pathname === '/api/platform/notification-settings' && request.method === 'PUT') {
+    requirePlatformAdministration(currentUser)
+    const body = await readJson(request)
+    await platformManagement.replaceNotificationSettings(body && typeof body === 'object' ? (body as Record<string, unknown>).settings : null, currentUser.id, currentUser.displayName)
+    sendJson(response, 200, await platformManagement.notificationSettings())
+    return
+  }
+
   if (url.pathname === '/api/platform/meeting-upload-credentials' && request.method === 'GET') {
     requirePlatformAdministration(currentUser)
     sendJson(response, 200, { credentials: await meetingUploadCredentials.list() })

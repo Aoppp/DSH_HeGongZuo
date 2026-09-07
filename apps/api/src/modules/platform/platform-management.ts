@@ -17,6 +17,12 @@ export const managedModuleIds = [
 
 export type ManagedModuleId = typeof managedModuleIds[number]
 
+export const notificationTypes = ['contract', 'daily_report', 'attendance'] as const
+export type NotificationType = typeof notificationTypes[number]
+const notificationLabels: Record<NotificationType, string> = { contract: '合同提醒', daily_report: '日报提醒', attendance: '考勤提醒' }
+
+function isNotificationType(value: unknown): value is NotificationType { return typeof value === 'string' && notificationTypes.includes(value as NotificationType) }
+
 const moduleLabels: Record<ManagedModuleId, string> = {
   'management-cockpit': '管理驾驶舱',
   'employee-data': '员工数据',
@@ -224,6 +230,45 @@ export class PlatformManagementService {
       [moduleId, enabled, actorAccountId],
     )
     await this.record(actorAccountId, actorDisplayName, enabled ? '启用模块' : '停用模块', '模块', moduleId, { changes: [{ field: 'enabled', label: '模块状态', before: previous.rows[0]?.enabled === false ? '已停用' : '已启用', after: enabled ? '已启用' : '已停用' }] })
+  }
+
+  async notificationSettings(): Promise<{ readonly settings: readonly { readonly type: NotificationType; readonly label: string; readonly enabled: boolean; readonly accountIds: readonly string[] }[]; readonly accounts: readonly { readonly id: string; readonly displayName: string; readonly accountId: string; readonly position: string }[] }> {
+    const [settings, recipients, accounts] = await Promise.all([
+      this.pool.query<{ notification_type: NotificationType; enabled: boolean }>('SELECT notification_type, enabled FROM platform_notification_settings'),
+      this.pool.query<{ notification_type: NotificationType; account_id: string }>('SELECT notification_type, account_id FROM platform_notification_recipients'),
+      this.pool.query<{ id: string; display_name: string; account_id: string; position: string }>("SELECT id, display_name, account_id, position FROM accounts WHERE status='active' ORDER BY display_name, account_id"),
+    ])
+    const enabledByType = new Map(settings.rows.map((item) => [item.notification_type, item.enabled]))
+    const recipientsByType = new Map<NotificationType, string[]>()
+    for (const recipient of recipients.rows) recipientsByType.set(recipient.notification_type, [...(recipientsByType.get(recipient.notification_type) ?? []), recipient.account_id])
+    return { settings: notificationTypes.map((type) => ({ type, label: notificationLabels[type], enabled: enabledByType.get(type) ?? true, accountIds: recipientsByType.get(type) ?? [] })), accounts: accounts.rows.map((account) => ({ id: account.id, displayName: account.display_name, accountId: account.account_id, position: account.position })) }
+  }
+
+  async replaceNotificationSettings(value: unknown, actorAccountId: string, actorDisplayName: string): Promise<void> {
+    if (!Array.isArray(value) || value.length !== notificationTypes.length) throw new PlatformManagementError('通知设置格式无效。')
+    const settings = value.map((item) => {
+      if (!item || typeof item !== 'object') throw new PlatformManagementError('通知设置格式无效。')
+      const record = item as Record<string, unknown>
+      if (!isNotificationType(record.type) || typeof record.enabled !== 'boolean' || !Array.isArray(record.accountIds) || !record.accountIds.every((id) => typeof id === 'string' && id.length > 0)) throw new PlatformManagementError('通知设置格式无效。')
+      return { type: record.type, enabled: record.enabled, accountIds: [...new Set(record.accountIds)] }
+    })
+    if (new Set(settings.map((item) => item.type)).size !== notificationTypes.length) throw new PlatformManagementError('每类通知只能配置一次。')
+    const selectedIds = [...new Set(settings.flatMap((item) => item.accountIds))]
+    if (selectedIds.length > 0) {
+      const accounts = await this.pool.query<{ id: string }>("SELECT id FROM accounts WHERE status='active' AND id = ANY($1::varchar[])", [selectedIds])
+      if (accounts.rows.length !== selectedIds.length) throw new PlatformManagementError('接收账号不存在或当前不可用。')
+    }
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      for (const setting of settings) {
+        await client.query('INSERT INTO platform_notification_settings (notification_type, enabled, updated_by_account_id, updated_at) VALUES ($1, $2, $3, now()) ON CONFLICT (notification_type) DO UPDATE SET enabled=EXCLUDED.enabled, updated_by_account_id=EXCLUDED.updated_by_account_id, updated_at=now()', [setting.type, setting.enabled, actorAccountId])
+        await client.query('DELETE FROM platform_notification_recipients WHERE notification_type=$1', [setting.type])
+        if (setting.accountIds.length) await client.query('INSERT INTO platform_notification_recipients (notification_type, account_id) SELECT $1, unnest($2::varchar[])', [setting.type, setting.accountIds])
+      }
+      await client.query('COMMIT')
+    } catch (error) { await client.query('ROLLBACK'); throw error } finally { client.release() }
+    await this.record(actorAccountId, actorDisplayName, '更新通知接收设置', '通知设置', 'recipient-settings', { changes: settings.map((setting) => ({ field: setting.type, label: notificationLabels[setting.type], before: '原配置', after: `${setting.enabled ? '已启用' : '已停用'}；接收账号 ${setting.accountIds.length} 个` })) })
   }
 
   async record(actorAccountId: string, actorDisplayName: string, action: string, targetType: string, targetId: string, detail: Record<string, unknown> = {}): Promise<void> {

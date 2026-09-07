@@ -63,3 +63,8 @@ export interface NewMeetingUploadCredential extends MeetingUploadCredential { re
 export function readMeetingUploadCredentials(): Promise<readonly MeetingUploadCredential[]> { return request<{ credentials: readonly MeetingUploadCredential[] }>('/api/platform/meeting-upload-credentials').then((result) => result.credentials) }
 export function createMeetingUploadCredential(name: string): Promise<NewMeetingUploadCredential> { return request('/api/platform/meeting-upload-credentials', { method: 'POST', body: JSON.stringify({ name }) }) }
 export function deleteMeetingUploadCredential(id: string): Promise<void> { return request(`/api/platform/meeting-upload-credentials/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(() => undefined) }
+
+export interface NotificationRecipientSetting { readonly type: 'contract' | 'daily_report' | 'attendance'; readonly label: string; readonly enabled: boolean; readonly accountIds: readonly string[] }
+export interface NotificationSettings { readonly settings: readonly NotificationRecipientSetting[]; readonly accounts: readonly { readonly id: string; readonly displayName: string; readonly accountId: string; readonly position: string }[] }
+export function readNotificationSettings(): Promise<NotificationSettings> { return request('/api/platform/notification-settings') }
+export function saveNotificationSettings(settings: readonly NotificationRecipientSetting[]): Promise<NotificationSettings> { return request('/api/platform/notification-settings', { method: 'PUT', body: JSON.stringify({ settings }) }) }
