@@ -14,7 +14,7 @@ function chinaDate(offset = 0): string {
 export class NotificationService {
   constructor(private readonly pool: Pool, private readonly employees: PostgresEmployeeRepository, private readonly reports: DailyReportAnalyticsRepository, private readonly attendance: PostgresAttendanceSource) {}
 
-  async dispatch(): Promise<void> {
+  async dispatch(options: { readonly resolveSyncFailures?: boolean } = {}): Promise<void> {
     const recipients = await this.pool.query<{ notification_type: NotificationType; account_id: string }>(`SELECT r.notification_type, r.account_id FROM platform_notification_recipients r JOIN platform_notification_settings s ON s.notification_type=r.notification_type WHERE s.enabled=true`)
     const byType = new Map<NotificationType, string[]>()
     for (const row of recipients.rows) byType.set(row.notification_type, [...(byType.get(row.notification_type) ?? []), row.account_id])
@@ -28,6 +28,7 @@ export class NotificationService {
     if (byType.has('contract')) { const key = `contract:${today}`; const alerts = await this.employees.listContractExpiryAlerts(7); if (alerts.length) await send('contract', key, '合同到期提醒', `当前有 ${alerts.length} 名员工处于合同到期提醒范围，其中 ${alerts.filter((item) => item.daysLeft < 0).length} 名已逾期。`, '/employee/data'); else await resolve('contract', key) }
     if (byType.has('daily_report')) { const key = `daily-report:${yesterday}`; const dashboard = await this.reports.dashboard(yesterday); if (dashboard.missing || dashboard.delayed) await send('daily_report', key, '日报提交提醒', `${yesterday}：${dashboard.missing} 人未提交，${dashboard.delayed} 人延后提交。`, `/employee/daily-reports?view=dashboard&date=${yesterday}&focus=exceptions`); else await resolve('daily_report', key) }
     if (byType.has('attendance')) { const key = `attendance:${yesterday}`; const snapshot = await this.attendance.snapshot(yesterday); const records = snapshot.attendance.records; const missing = records.filter((item) => item.status === 'missing').length; const late = records.filter((item) => item.status === 'late' || item.status === 'late_severe' || item.status === 'early_leave').length; if (missing || late) await send('attendance', key, '考勤异常提醒', `${yesterday}：${missing} 人缺卡，${late} 人存在迟到或早退。`, `/employee/attendance?date=${yesterday}&onlyAnomalies=1`); else await resolve('attendance', key) }
+    if (options.resolveSyncFailures) await this.pool.query("UPDATE platform_notifications SET resolved_at=coalesce(resolved_at,now()), read_at=coalesce(read_at,now()) WHERE notification_type IN ('daily_report','attendance') AND source_key LIKE 'sync-failure:%' AND resolved_at IS NULL")
   }
 
   async notifySyncFailure(failedUnit: string): Promise<void> {

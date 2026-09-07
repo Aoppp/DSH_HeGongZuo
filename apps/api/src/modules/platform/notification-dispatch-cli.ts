@@ -5,7 +5,7 @@ import { DailyReportAnalyticsRepository } from '../employee/work-reports/daily-r
 import { NotificationService } from './notification-service.js'
 
 try {
-  await new NotificationService(database, new PostgresEmployeeRepository(database), new DailyReportAnalyticsRepository(database), new PostgresAttendanceSource(database)).dispatch()
+  await new NotificationService(database, new PostgresEmployeeRepository(database), new DailyReportAnalyticsRepository(database), new PostgresAttendanceSource(database)).dispatch({ resolveSyncFailures: true })
   console.log('站内通知生成完成。')
 } finally {
   await database.end()
