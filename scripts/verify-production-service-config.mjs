@@ -14,6 +14,8 @@ const requiredTemplates = [
   'deploy/systemd/hegongzuo-work-daily-sync.path.template',
   'deploy/systemd/hegongzuo-checkin-sync.service.template',
   'deploy/systemd/hegongzuo-checkin-sync.timer.template',
+  'deploy/systemd/hegongzuo-notification-dispatch.service.template',
+  'deploy/systemd/hegongzuo-notification-dispatch.timer.template',
   'deploy/systemd/hegongzuo-alert@.service.template',
   'deploy/systemd/hegongzuo-agent-sync.service.template',
   'deploy/systemd/hegongzuo-agent-sync.path.template',
@@ -43,4 +45,7 @@ if (!workDailySyncPathTemplate.includes('manual-sync.request') || !workDailySync
 const checkinSyncTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-checkin-sync.service.template'), 'utf8')
 const checkinSyncTimerTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-checkin-sync.timer.template'), 'utf8')
 if (!checkinSyncTemplate.includes('checkin-sync-cli.js sync') || !checkinSyncTemplate.includes('TZ=Asia/Shanghai') || !checkinSyncTimerTemplate.includes('Asia/Shanghai')) throw new Error('企业微信打卡同步服务模板配置不完整。')
+const notificationDispatchTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-notification-dispatch.service.template'), 'utf8')
+const notificationDispatchTimerTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-notification-dispatch.timer.template'), 'utf8')
+if (!notificationDispatchTemplate.includes('notification-dispatch-cli.js') || !notificationDispatchTimerTemplate.includes('09:00:00 Asia/Shanghai')) throw new Error('站内通知定时生成模板配置不完整。')
 console.log('生产 systemd 模板检查通过。')

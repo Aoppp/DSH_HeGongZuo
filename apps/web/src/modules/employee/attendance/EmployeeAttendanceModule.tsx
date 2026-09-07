@@ -23,15 +23,18 @@ function shiftDate(date: string, days: number): string {
 
 export function EmployeeAttendanceModule(_props: ModuleProps) {
   const latestDate = shiftDate(localDate(), -1)
+  const route = new URLSearchParams(window.location.search)
+  const requestedDate = route.get('date') ?? latestDate
+  const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) && requestedDate <= latestDate ? requestedDate : latestDate
   const [view, setView] = useState<'daily' | 'monthly'>('daily')
-  const [date, setDate] = useState(latestDate)
+  const [date, setDate] = useState(initialDate)
   const [snapshot, setSnapshot] = useState<EmployeeAttendanceSnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [department, setDepartment] = useState('')
   const [status, setStatus] = useState<'' | AttendanceStatus>('')
-  const [onlyAnomalies, setOnlyAnomalies] = useState(false)
+  const [onlyAnomalies, setOnlyAnomalies] = useState(route.get('onlyAnomalies') === '1')
   const [overviewOpen, setOverviewOpen] = useState<OverviewKind | null>(null)
   const [historyEmployee, setHistoryEmployee] = useState<{ readonly id: string; readonly name: string; readonly month: string } | null>(null)
   const [anomaliesOpen, setAnomaliesOpen] = useState(false)

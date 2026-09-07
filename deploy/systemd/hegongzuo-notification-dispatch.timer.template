@@ -1,0 +1,10 @@
+[Unit]
+Description=每日生成和工作站内通知
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Asia/Shanghai
+Persistent=true
+Unit=hegongzuo-notification-dispatch.service
+
+[Install]
+WantedBy=timers.target
