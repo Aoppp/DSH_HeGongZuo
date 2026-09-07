@@ -17,6 +17,7 @@ import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js
 import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtime-change.js'
 import { registeredAgentPermissionIds, registeredAgentPermissions } from './modules/accounts/agent-runtime-permissions.js'
 import { PlatformManagementError, PlatformManagementService } from './modules/platform/platform-management.js'
+import { NotificationService } from './modules/platform/notification-service.js'
 import { ManagementCockpitService } from './modules/management/management-cockpit.js'
 import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/mock-work-records-source.js'
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
@@ -57,9 +58,11 @@ const recruitment = new RecruitmentRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
 const dailyReports = new DailyReportService(new DailyReportRepository(database))
 const dailyReportAnalytics = new DailyReportAnalyticsService(new DailyReportAnalyticsRepository(database))
+const notificationService = new NotificationService(database, repository, new DailyReportAnalyticsRepository(database), employeeAttendance)
 const workDailyManualSync = new WorkDailyManualSync(database, process.env.WECOM_WORK_DAILY_SYNC_REQUEST_PATH ?? '')
 const reportAnalysis = new ReportAnalysisService(new DailyReportRepository(database))
 const reportAnalysisSnapshots = new ReportAnalysisSnapshotRepository(database)
+void notificationService.dispatch().catch((error: unknown) => console.error('通知补发失败：', error))
 
 function accountAuditDetail(before: AccountRecord | null, after: AccountRecord): Record<string, unknown> {
   const fields: readonly [keyof Pick<AccountRecord, 'accountId' | 'displayName' | 'position' | 'permissions'>, string][] = [['accountId', '登录名'], ['displayName', '显示名称'], ['position', '岗位'], ['permissions', '功能权限']]
@@ -374,6 +377,11 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     sendJson(response, 200, await platformManagement.notificationSettings())
     return
   }
+
+  if (url.pathname === '/api/notifications' && request.method === 'GET') { sendJson(response, 200, await notificationService.list(currentUser.id)); return }
+  if (url.pathname === '/api/notifications/read-all' && request.method === 'POST') { await notificationService.markAllRead(currentUser.id); sendJson(response, 200, { success: true }); return }
+  const notificationId = url.pathname.match(/^\/api\/notifications\/(\d+)\/read$/)?.[1]
+  if (notificationId && request.method === 'POST') { await notificationService.markRead(currentUser.id, notificationId); sendJson(response, 200, { success: true }); return }
 
   if (url.pathname === '/api/platform/meeting-upload-credentials' && request.method === 'GET') {
     requirePlatformAdministration(currentUser)

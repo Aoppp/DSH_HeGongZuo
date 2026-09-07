@@ -4,6 +4,7 @@ import { useState, type FormEvent } from 'react'
 import { apiChangePassword } from '../app/auth-client'
 import type { AuthenticatedUser, PlatformModule } from '../app/types'
 import { ContractExpiryNotice } from '../modules/employee/contract-alerts/ContractExpiryNotice'
+import { NotificationBell } from './NotificationBell'
 
 interface TopbarProps {
   readonly activeModule: PlatformModule
@@ -68,6 +69,7 @@ export function Topbar({ activeModule, user, onNavigateToEmployeeData, onExit }:
           </span>
         </div>
         <ContractExpiryNotice user={user} onNavigateToEmployeeData={onNavigateToEmployeeData} />
+        <NotificationBell />
         <button type="button" className="icon-button" onClick={() => { setPasswordOpen(true); setFormError(null) }} title="修改密码" aria-label="修改密码"><KeyRound size={17} /></button>
         <button type="button" className="icon-button" onClick={onExit} title="退出登录" aria-label="退出登录"><LogOut size={18} /></button>
       </div>
