@@ -220,6 +220,8 @@
   background: linear-gradient(135deg, #f8fbfa 0%, #ffffff 68%);
 }
 
+.account-admin__header-actions { display: flex; align-items: center; gap: 8px; }
+
 .account-admin__heading {
   display: flex;
   align-items: center;
@@ -277,6 +279,10 @@
   color: var(--ink-700);
   font-size: 13px;
 }
+
+.account-admin__permissions .account-admin__permission-row { justify-content: space-between; }
+.account-admin__permission-row > span { display: inline-flex; align-items: center; gap: 8px; }
+.account-admin__notification-toggle { color: var(--ink-500); font-size: 12px; white-space: nowrap; }
 
 .platform-management {
   margin-bottom: 18px;

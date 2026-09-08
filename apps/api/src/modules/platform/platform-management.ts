@@ -20,6 +20,7 @@ export type ManagedModuleId = typeof managedModuleIds[number]
 export const notificationTypes = ['contract', 'daily_report', 'attendance'] as const
 export type NotificationType = typeof notificationTypes[number]
 const notificationLabels: Record<NotificationType, string> = { contract: '合同提醒', daily_report: '日报提醒', attendance: '考勤提醒' }
+const notificationPermissionByType: Record<NotificationType, string> = { contract: 'employee-data', daily_report: 'employee-reports', attendance: 'employee-attendance' }
 
 function isNotificationType(value: unknown): value is NotificationType { return typeof value === 'string' && notificationTypes.includes(value as NotificationType) }
 
@@ -242,6 +243,29 @@ export class PlatformManagementService {
     const recipientsByType = new Map<NotificationType, string[]>()
     for (const recipient of recipients.rows) recipientsByType.set(recipient.notification_type, [...(recipientsByType.get(recipient.notification_type) ?? []), recipient.account_id])
     return { settings: notificationTypes.map((type) => ({ type, label: notificationLabels[type], enabled: enabledByType.get(type) ?? true, accountIds: recipientsByType.get(type) ?? [] })), accounts: accounts.rows.map((account) => ({ id: account.id, displayName: account.display_name, accountId: account.account_id, position: account.position })) }
+  }
+
+  async accountNotificationPreferences(): Promise<readonly { readonly accountId: string; readonly types: readonly NotificationType[] }[]> {
+    const result = await this.pool.query<{ account_id: string; notification_types: NotificationType[] | null }>(`SELECT account_id,array_agg(notification_type ORDER BY notification_type) FILTER (WHERE enabled) AS notification_types FROM account_notification_preferences GROUP BY account_id ORDER BY account_id`)
+    return result.rows.map((item) => ({ accountId: item.account_id, types: item.notification_types ?? [] }))
+  }
+
+  async replaceAccountNotificationPreferences(accountId: string, permissions: readonly string[], value: unknown, actorAccountId: string, actorDisplayName: string): Promise<void> {
+    const allowed = notificationTypes.filter((type) => permissions.includes(notificationPermissionByType[type]))
+    const requested = value === undefined ? allowed : Array.isArray(value) && value.every(isNotificationType) ? [...new Set(value)] : null
+    if (!requested) throw new PlatformManagementError('通知权限格式无效。')
+    if (requested.some((type) => !allowed.includes(type))) throw new PlatformManagementError('通知权限需要先开通对应功能。')
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      for (const type of notificationTypes) await client.query(
+        `INSERT INTO account_notification_preferences (account_id,notification_type,enabled,updated_at) VALUES ($1,$2,$3,now())
+         ON CONFLICT (account_id,notification_type) DO UPDATE SET enabled=EXCLUDED.enabled,updated_at=now()`,
+        [accountId, type, requested.includes(type)],
+      )
+      await client.query('COMMIT')
+    } catch (error) { await client.query('ROLLBACK'); throw error } finally { client.release() }
+    await this.record(actorAccountId, actorDisplayName, '更新账号通知权限', '账号', accountId, { changes: notificationTypes.map((type) => ({ field: type, label: notificationLabels[type], before: '原设置', after: requested.includes(type) ? '接收通知' : '不接收通知' })) })
   }
 
   async replaceNotificationSettings(value: unknown, actorAccountId: string, actorDisplayName: string): Promise<void> {

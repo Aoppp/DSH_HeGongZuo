@@ -23,6 +23,9 @@ export interface PermissionCatalogEntry {
   readonly group: string
 }
 
+export type AccountNotificationType = 'contract' | 'daily_report' | 'attendance'
+export interface AccountNotificationPreference { readonly accountId: string; readonly types: readonly AccountNotificationType[] }
+
 interface PermissionCatalogResponse {
   readonly permissions: PermissionCatalogEntry[]
 }
@@ -78,11 +81,16 @@ export async function readPermissionCatalog(): Promise<PermissionCatalogEntry[]>
   return (await accountsRequest<PermissionCatalogResponse>('/api/accounts/permission-catalog')).permissions
 }
 
+export async function readAccountNotificationPreferences(): Promise<readonly AccountNotificationPreference[]> {
+  return (await accountsRequest<{ preferences: readonly AccountNotificationPreference[] }>('/api/accounts/notification-preferences')).preferences
+}
+
 export async function createAccount(input: {
   readonly accountId: string
   readonly displayName: string
   readonly position: string
   readonly permissions: readonly AccountPermissionId[]
+  readonly notificationTypes: readonly AccountNotificationType[]
 }): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>('/api/accounts', {
     method: 'POST',
@@ -95,6 +103,7 @@ export async function updateAccount(id: string, input: {
   readonly displayName: string
   readonly position: string
   readonly permissions: readonly AccountPermissionId[]
+  readonly notificationTypes: readonly AccountNotificationType[]
 }): Promise<AccountRecord> {
   return (await accountsRequest<AccountResponse>(`/api/accounts/${encodeURIComponent(id)}`, {
     method: 'PUT',

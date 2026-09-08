@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 
 import type { ModuleId } from '../../../app/types'
 import { SkeletonCards, SkeletonList } from '../../../components/Skeleton'
-import { createMeetingUploadCredential, deleteMeetingUploadCredential, readAuditLogs, readMeetingUploadCredentials, readNotificationSettings, readPlatformStatus, saveNotificationSettings, setPlatformModuleEnabled, type AuditLog, type MeetingUploadCredential, type NotificationSettings, type PlatformStatus } from './platform-api'
+import { createMeetingUploadCredential, deleteMeetingUploadCredential, readAuditLogs, readMeetingUploadCredentials, readPlatformStatus, setPlatformModuleEnabled, type AuditLog, type MeetingUploadCredential, type PlatformStatus } from './platform-api'
 
 interface PlatformManagementProps {
   readonly onModuleSettingsUpdated: (disabledModuleIds: readonly ModuleId[]) => void
@@ -18,7 +18,9 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [changingModuleId, setChangingModuleId] = useState<string | null>(null)
-  const [modulesOpen, setModulesOpen] = useState(true)
+  const [modulesOpen, setModulesOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const [credentialsOpen, setCredentialsOpen] = useState(false)
   const [auditOpen, setAuditOpen] = useState(false)
   const [auditLogs, setAuditLogs] = useState<readonly AuditLog[]>([])
   const [auditCursor, setAuditCursor] = useState<string | null>(null)
@@ -31,17 +33,14 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
   const [newMeetingTokenId, setNewMeetingTokenId] = useState<string | null>(null)
   const [creatingToken, setCreatingToken] = useState(false)
   const [copiedToken, setCopiedToken] = useState(false)
-  const [notificationSettings, setNotificationSettings] = useState<NotificationSettings | null>(null)
-  const [savingNotificationSettings, setSavingNotificationSettings] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [next, credentials, notifications] = await Promise.all([readPlatformStatus(), readMeetingUploadCredentials(), readNotificationSettings()])
+      const [next, credentials] = await Promise.all([readPlatformStatus(), readMeetingUploadCredentials()])
       setStatus(next)
       setMeetingCredentials(credentials)
-      setNotificationSettings(notifications)
       onModuleSettingsUpdated(next.modules.filter((module) => !module.enabled).map((module) => module.id))
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : '无法读取平台状态。')
@@ -130,16 +129,16 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
       <section className="platform-management panel-card">
         <header className="platform-management__header">
           <div><h2>平台运行状态</h2><p>实时检查服务与账号运行空间。</p></div>
-          <button className="employee-data__secondary" type="button" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={15} /> 刷新</button>
+          <div className="platform-management__audit-actions"><button className="employee-data__secondary" type="button" onClick={() => setStatusOpen((value) => !value)} aria-expanded={statusOpen}>{statusOpen ? '收起' : '展开'}<ChevronDown className={statusOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button><button className="employee-data__secondary" type="button" onClick={() => void load()} disabled={loading}><RefreshCw className={loading ? 'spin' : ''} size={15} /> 刷新</button></div>
         </header>
         {error && <div className="account-admin__error"><span>{error}</span><button type="button" onClick={() => void load()}>重新加载</button></div>}
-        {loading && !status ? <SkeletonCards count={3} /> : status && (
+        {statusOpen && (loading && !status ? <SkeletonCards count={3} /> : status && (
           <div className="platform-management__health">
             <article><span><Activity size={19} /></span><div><small>平台 API</small><strong>运行正常</strong></div></article>
             <article><span><Database size={19} /></span><div><small>数据服务</small><strong>{status.database === 'available' ? '连接正常' : '不可用'}</strong></div></article>
             <article><span><Blocks size={19} /></span><div><small>功能运行空间</small><strong>{status.agentRuntimes.running} 个运行中，{status.agentRuntimes.idle} 个待命</strong>{status.agentRuntimes.unavailable.length > 0 && <em>存在不可用运行空间</em>}</div></article>
           </div>
-        )}
+        ))}
       </section>
 
       {status && <section className="platform-management panel-card">
@@ -156,14 +155,9 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
         </div>}
       </section>}
 
-      {notificationSettings && <section className="platform-management panel-card">
-        <header className="platform-management__header"><div><h2>通知设置</h2><p>为合同、日报和考勤提醒手动指定接收账号。</p></div><button className="employee-data__primary" type="button" disabled={savingNotificationSettings} onClick={() => void saveNotifications()}>{savingNotificationSettings ? <LoaderCircle className="spin" size={15} /> : '保存设置'}</button></header>
-        <div className="platform-notification-settings">{notificationSettings.settings.map((setting) => <article key={setting.type}><div><strong>{setting.label}</strong><small>{setting.type === 'contract' ? '合同到期与逾期提醒' : setting.type === 'daily_report' ? '未提交、延后提交与同步异常' : '缺卡、迟到与同步异常'}</small></div><label className="platform-notification-settings__enabled"><input type="checkbox" checked={setting.enabled} onChange={(event) => updateNotificationSetting(setting.type, { enabled: event.target.checked })} />启用</label><fieldset disabled={!setting.enabled}><legend>接收账号</legend>{notificationSettings.accounts.map((account) => <label key={account.id}><input type="checkbox" checked={setting.accountIds.includes(account.id)} onChange={(event) => updateNotificationSetting(setting.type, { accountIds: event.target.checked ? [...setting.accountIds, account.id] : setting.accountIds.filter((id) => id !== account.id) })} /><span>{account.displayName}<small>{account.position || account.accountId}</small></span></label>)}</fieldset></article>)}</div>
-      </section>}
-
       {status && <section className="platform-management panel-card">
-        <header className="platform-management__header"><div><h2>会议上传凭证</h2><p>供线下会议电脑上传会议记录，只具备上传能力。</p></div><button className="employee-data__secondary" type="button" onClick={openCredentialEditor}><KeyRound size={15} />生成凭证</button></header>
-        <div className="platform-management__credential">{newMeetingToken && <div className="platform-management__token"><p>请立即复制，刷新或离开页面后不再完整显示。</p><code>{newMeetingToken}</code><button type="button" onClick={() => void copyToken()}>{copiedToken ? <Check size={14} /> : <Copy size={14} />}{copiedToken ? '已复制' : '复制'}</button></div>}<div className="platform-management__credential-list">{meetingCredentials.length === 0 ? <p>尚未创建会议上传凭证。</p> : meetingCredentials.map((credential) => <article key={credential.id}><div><strong>{credential.name}</strong><small>{credential.tokenHint} · 创建于 {formatTime(credential.createdAt)}{credential.lastUsedAt ? ` · 最后使用 ${formatTime(credential.lastUsedAt)}` : ' · 尚未使用'}</small></div><button className="developer-console__danger-action" type="button" title="删除凭证" onClick={() => void removeToken(credential)}><Trash2 size={14} />删除</button></article>)}</div></div>
+        <header className="platform-management__header"><div><h2>会议上传凭证</h2><p>供线下会议电脑上传会议记录，只具备上传能力。</p></div><div className="platform-management__audit-actions"><button className="employee-data__secondary" type="button" onClick={() => setCredentialsOpen((value) => !value)} aria-expanded={credentialsOpen}>{credentialsOpen ? '收起' : '展开'}<ChevronDown className={credentialsOpen ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button><button className="employee-data__secondary" type="button" onClick={openCredentialEditor}><KeyRound size={15} />生成凭证</button></div></header>
+        {credentialsOpen && <div className="platform-management__credential">{newMeetingToken && <div className="platform-management__token"><p>请立即复制，刷新或离开页面后不再完整显示。</p><code>{newMeetingToken}</code><button type="button" onClick={() => void copyToken()}>{copiedToken ? <Check size={14} /> : <Copy size={14} />}{copiedToken ? '已复制' : '复制'}</button></div>}<div className="platform-management__credential-list">{meetingCredentials.length === 0 ? <p>尚未创建会议上传凭证。</p> : meetingCredentials.map((credential) => <article key={credential.id}><div><strong>{credential.name}</strong><small>{credential.tokenHint} · 创建于 {formatTime(credential.createdAt)}{credential.lastUsedAt ? ` · 最后使用 ${formatTime(credential.lastUsedAt)}` : ' · 尚未使用'}</small></div><button className="developer-console__danger-action" type="button" title="删除凭证" onClick={() => void removeToken(credential)}><Trash2 size={14} />删除</button></article>)}</div></div>}
       </section>}
 
       {credentialEditorOpen && <div className="platform-management__credential-dialog" role="dialog" aria-modal="true" aria-label="命名会议上传凭证"><button className="platform-management__credential-backdrop" type="button" aria-label="取消生成" onClick={closeCredentialEditor} /><form onSubmit={(event) => { event.preventDefault(); void createToken() }}><header><div><small>会议上传凭证</small><strong>为新凭证命名</strong></div><button type="button" title="关闭" onClick={closeCredentialEditor}><span aria-hidden="true">×</span></button></header><label>凭证名称<input autoFocus value={credentialName} maxLength={80} placeholder="如：会议室电脑" onChange={(event) => setCredentialName(event.target.value)} /></label><p>名称仅用于区分不同设备，不会影响上传接口。</p>{credentialFormError && <div className="platform-management__credential-error">{credentialFormError}</div>}<footer><button className="employee-data__secondary" type="button" onClick={closeCredentialEditor} disabled={creatingToken}>取消</button><button className="employee-data__primary" type="submit" disabled={creatingToken || !credentialName.trim()}>{creatingToken ? <LoaderCircle className="spin" size={15} /> : <KeyRound size={15} />}生成</button></footer></form></div>}
@@ -177,17 +171,6 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
     </>
   )
 
-  function updateNotificationSetting(type: NotificationSettings['settings'][number]['type'], patch: Partial<Pick<NotificationSettings['settings'][number], 'enabled' | 'accountIds'>>) {
-    setNotificationSettings((current) => current ? { ...current, settings: current.settings.map((item) => item.type === type ? { ...item, ...patch } : item) } : current)
-  }
-
-  async function saveNotifications() {
-    if (!notificationSettings) return
-    setSavingNotificationSettings(true)
-    try { setNotificationSettings(await saveNotificationSettings(notificationSettings.settings)) }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '通知设置保存失败。') }
-    finally { setSavingNotificationSettings(false) }
-  }
 }
 
 function auditFields(detail: unknown): string | null {

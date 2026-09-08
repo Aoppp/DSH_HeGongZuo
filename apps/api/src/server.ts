@@ -494,6 +494,12 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/accounts/notification-preferences' && request.method === 'GET') {
+    requirePlatformAdministration(currentUser)
+    sendJson(response, 200, { preferences: await platformManagement.accountNotificationPreferences() })
+    return
+  }
+
   if (url.pathname === '/api/accounts' && request.method === 'POST') {
     requirePlatformAdministration(currentUser)
     const body = await readJson(request)
@@ -512,6 +518,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       throw error
     }
     accountRuntimeTasks.enqueue(created, { transitionStatus: true, provision: true })
+    await platformManagement.replaceAccountNotificationPreferences(created.id, created.permissions, record.notificationTypes, currentUser.id, currentUser.displayName)
     await platformManagement.record(currentUser.id, currentUser.displayName, '新增账号', '账号', created.id, accountAuditDetail(null, created))
     sendJson(response, 202, { account: created })
     return
@@ -533,6 +540,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       permissions: record.permissions,
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
+    await platformManagement.replaceAccountNotificationPreferences(updated.id, updated.permissions, record.notificationTypes, currentUser.id, currentUser.displayName)
     const runtimeChange = runtimeChangeForAccountUpdate(existing, updated, agentPermissionIds)
     if (runtimeChange.sync) accountRuntimeTasks.enqueue(updated, { transitionStatus: false, provision: runtimeChange.provision || existing.accountId !== updated.accountId })
     await platformManagement.record(currentUser.id, currentUser.displayName, '更新账号', '账号', updated.id, accountAuditDetail(existing, updated))

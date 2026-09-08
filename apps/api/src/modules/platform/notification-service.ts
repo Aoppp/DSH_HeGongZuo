@@ -15,7 +15,7 @@ export class NotificationService {
   constructor(private readonly pool: Pool, private readonly employees: PostgresEmployeeRepository, private readonly reports: DailyReportAnalyticsRepository, private readonly attendance: PostgresAttendanceSource) {}
 
   async dispatch(options: { readonly resolveSyncFailures?: boolean } = {}): Promise<void> {
-    const recipients = await this.pool.query<{ notification_type: NotificationType; account_id: string }>(`SELECT r.notification_type, r.account_id FROM platform_notification_recipients r JOIN platform_notification_settings s ON s.notification_type=r.notification_type WHERE s.enabled=true`)
+    const recipients = await this.pool.query<{ notification_type: NotificationType; account_id: string }>(`SELECT p.notification_type, p.account_id FROM account_notification_preferences p JOIN accounts a ON a.id=p.account_id WHERE p.enabled=true AND a.status='active'`)
     const byType = new Map<NotificationType, string[]>()
     for (const row of recipients.rows) byType.set(row.notification_type, [...(byType.get(row.notification_type) ?? []), row.account_id])
     const send = async (type: NotificationType, sourceKey: string, title: string, content: string, targetPath: string) => {
@@ -34,7 +34,7 @@ export class NotificationService {
   async notifySyncFailure(failedUnit: string): Promise<void> {
     const type = failedUnit.includes('work-daily-sync') ? 'daily_report' : failedUnit.includes('checkin-sync') ? 'attendance' : null
     if (!type) return
-    const recipients = await this.pool.query<{ account_id: string }>('SELECT r.account_id FROM platform_notification_recipients r JOIN platform_notification_settings s ON s.notification_type=r.notification_type WHERE r.notification_type=$1 AND s.enabled=true', [type])
+    const recipients = await this.pool.query<{ account_id: string }>("SELECT p.account_id FROM account_notification_preferences p JOIN accounts a ON a.id=p.account_id WHERE p.notification_type=$1 AND p.enabled=true AND a.status='active'", [type])
     const sourceKey = `sync-failure:${failedUnit}`
     for (const { account_id: accountId } of recipients.rows) await this.pool.query(
       `INSERT INTO platform_notifications (account_id,notification_type,source_key,title,content,target_path,resolved_at)

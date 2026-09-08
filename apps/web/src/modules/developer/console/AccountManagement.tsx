@@ -1,5 +1,5 @@
 // 开发控制台 / 账号管理。
-import { KeyRound, LoaderCircle, Pencil, Plus, Trash2, UserCog, X } from 'lucide-react'
+import { ChevronDown, KeyRound, LoaderCircle, Pencil, Plus, Trash2, UserCog, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { AuthenticatedUser } from '../../../app/types'
 import { SkeletonTable } from '../../../components/Skeleton'
@@ -7,12 +7,14 @@ import {
   createAccount,
   deleteAccount,
   readAccounts,
+  readAccountNotificationPreferences,
   readPermissionCatalog,
   resetAccountPassword,
   retryAccountInitialization,
   updateAccount,
   type AccountRecord,
   type AccountPermissionId,
+  type AccountNotificationType,
   type PermissionCatalogEntry,
 } from './accounts-api'
 
@@ -54,25 +56,29 @@ const accountPermissionLabels: Record<string, string> = {
   'management-cockpit': '管理驾驶舱',
   'platform-administration': '平台管理与账号管理',
 }
+const notificationPermission: Partial<Record<AccountPermissionId, AccountNotificationType>> = { 'employee-data': 'contract', 'employee-reports': 'daily_report', 'employee-attendance': 'attendance' }
 
 export function AccountManagement({ user, onCurrentUserProfileUpdated }: AccountManagementProps) {
   const [accounts, setAccounts] = useState<AccountRecord[]>([])
   const [permissionCatalog, setPermissionCatalog] = useState<PermissionCatalogEntry[]>([])
+  const [notificationPreferences, setNotificationPreferences] = useState<readonly { readonly accountId: string; readonly types: readonly AccountNotificationType[] }[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editorMode, setEditorMode] = useState<EditorMode>(null)
-  const [draft, setDraft] = useState<{ id?: string; accountId: string; displayName: string; position: string; permissions: AccountPermissionId[] } | null>(null)
+  const [draft, setDraft] = useState<{ id?: string; accountId: string; displayName: string; position: string; permissions: AccountPermissionId[]; notificationTypes: AccountNotificationType[] } | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [permissionPreview, setPermissionPreview] = useState<{ accountName: string; labels: string[]; left: number; top: number; above: boolean } | null>(null)
+  const [open, setOpen] = useState(false)
 
   const loadAccounts = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [nextAccounts, nextCatalog] = await Promise.all([readAccounts(), readPermissionCatalog()])
+      const [nextAccounts, nextCatalog, nextPreferences] = await Promise.all([readAccounts(), readPermissionCatalog(), readAccountNotificationPreferences()])
       setAccounts(nextAccounts)
       setPermissionCatalog(nextCatalog)
+      setNotificationPreferences(nextPreferences)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError))
     } finally {
@@ -85,13 +91,14 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
   }, [loadAccounts])
 
   function openCreate() {
-    setDraft({ accountId: '', displayName: '', position: '', permissions: [] })
+    setDraft({ accountId: '', displayName: '', position: '', permissions: [], notificationTypes: [] })
     setEditorMode('create')
     setFormError(null)
   }
 
   function openEdit(account: AccountRecord) {
-    setDraft({ id: account.id, accountId: account.accountId, displayName: account.displayName, position: account.position, permissions: [...account.permissions] })
+    const types = notificationPreferences.find((item) => item.accountId === account.id)?.types ?? account.permissions.map((permission) => notificationPermission[permission]).filter((type): type is AccountNotificationType => Boolean(type))
+    setDraft({ id: account.id, accountId: account.accountId, displayName: account.displayName, position: account.position, permissions: [...account.permissions], notificationTypes: [...types] })
     setEditorMode('edit')
     setFormError(null)
   }
@@ -113,12 +120,14 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           displayName: draft.displayName.trim(),
           position: draft.position.trim(),
           permissions: draft.permissions,
+          notificationTypes: draft.notificationTypes,
         })
         : draft.id ? await updateAccount(draft.id, {
           accountId: draft.accountId.trim(),
           displayName: draft.displayName.trim(),
           position: draft.position.trim(),
           permissions: draft.permissions,
+          notificationTypes: draft.notificationTypes,
         }) : null
       if (saved?.id === user.id) {
         onCurrentUserProfileUpdated?.({
@@ -171,7 +180,13 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
     setDraft({
       ...draft,
       permissions: checked ? [...new Set([...draft.permissions, permission])] : draft.permissions.filter((item) => item !== permission),
+      notificationTypes: (() => { const type = notificationPermission[permission]; if (!type) return draft.notificationTypes; return checked ? [...new Set([...draft.notificationTypes, type])] : draft.notificationTypes.filter((item) => item !== type) })(),
     })
+  }
+
+  function toggleNotification(type: AccountNotificationType, checked: boolean) {
+    if (!draft) return
+    setDraft({ ...draft, notificationTypes: checked ? [...new Set([...draft.notificationTypes, type])] : draft.notificationTypes.filter((item) => item !== type) })
   }
 
   const catalogLabels = new Map(permissionCatalog.map((permission) => [permission.id, permission.label]))
@@ -210,10 +225,10 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
             <p>新增、编辑、删除账号与分配功能权限。</p>
           </div>
         </div>
-        <button className="employee-data__primary" type="button" onClick={openCreate}><Plus size={16} /> 新增账号</button>
+        <div className="account-admin__header-actions"><button className="employee-data__secondary" type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open}>{open ? '收起' : '展开'}<ChevronDown className={open ? 'platform-management__audit-chevron platform-management__audit-chevron--open' : 'platform-management__audit-chevron'} size={15} /></button><button className="employee-data__primary" type="button" onClick={openCreate}><Plus size={16} /> 新增账号</button></div>
       </header>
 
-      {error && <div className="account-admin__error"><span>{error}</span><button type="button" onClick={() => void loadAccounts()}>重新加载</button></div>}
+      {open && <>{error && <div className="account-admin__error"><span>{error}</span><button type="button" onClick={() => void loadAccounts()}>重新加载</button></div>}
 
       <div className="account-admin__table-wrap">
         <table className="account-admin__table">
@@ -242,7 +257,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           </tbody>
         </table>
         {loading && <SkeletonTable columns={7} rows={6} header={false} />}
-      </div>
+      </div></>}
 
       {permissionPreview && <div className={`account-admin__permission-tooltip${permissionPreview.above ? ' account-admin__permission-tooltip--above' : ''}`} role="tooltip" style={{ left: permissionPreview.left, top: permissionPreview.top }}><strong>{permissionPreview.accountName}的权限</strong><div>{permissionPreview.labels.map((label) => <span key={label}>{label}</span>)}</div></div>}
 
@@ -270,7 +285,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
                   {(catalogGroups.length > 0 ? catalogGroups : permissionGroups).map((group) => (
                     <fieldset className="account-admin__permissions" key={group.label}>
                       <legend>{group.label}</legend>
-                      {group.permissions.map((permission) => <label key={permission}><input type="checkbox" checked={draft.permissions.includes(permission)} onChange={(event) => togglePermission(permission, event.target.checked)} />{catalogLabels.get(permission) ?? employeePermissionLabels[permission] ?? permission}</label>)}
+                      {group.permissions.map((permission) => { const type = notificationPermission[permission]; const enabled = draft.permissions.includes(permission); return <label className="account-admin__permission-row" key={permission}><span><input type="checkbox" checked={enabled} onChange={(event) => togglePermission(permission, event.target.checked)} />{catalogLabels.get(permission) ?? employeePermissionLabels[permission] ?? permission}</span>{type && <span className="account-admin__notification-toggle"><input type="checkbox" disabled={!enabled} checked={enabled && draft.notificationTypes.includes(type)} onChange={(event) => toggleNotification(type, event.target.checked)} />通知</span>}</label> })}
                     </fieldset>
                   ))}
                 </div>
