@@ -313,7 +313,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           </section>
         </div>
       )}
-      {discardConfirmOpen && <div className="account-admin__discard-dialog" role="dialog" aria-modal="true" aria-label="未保存更改提醒"><button type="button" className="account-admin__discard-backdrop" aria-label="继续编辑" onClick={() => setDiscardConfirmOpen(false)} /><section><strong>尚未保存更改</strong><p>当前账号信息或通知权限已修改，关闭后本次更改将不会保存。</p><footer><button className="employee-data__secondary" type="button" onClick={() => setDiscardConfirmOpen(false)}>继续编辑</button><button className="developer-console__danger-action" type="button" onClick={discardEditor}>放弃更改</button></footer></section></div>}
+      {discardConfirmOpen && <div className="account-admin__discard-dialog" role="dialog" aria-modal="true" aria-label="未保存更改提醒"><button type="button" className="account-admin__discard-backdrop" aria-label="继续编辑" onClick={() => setDiscardConfirmOpen(false)} /><section><strong>尚未保存更改</strong><p>当前账号信息或通知权限已修改，关闭后本次更改将不会保存。</p><footer><button className="employee-data__secondary account-admin__discard-action" type="button" onClick={() => setDiscardConfirmOpen(false)}><Pencil size={14} />继续编辑</button><button className="account-admin__discard-action account-admin__discard-action--danger" type="button" onClick={discardEditor}><X size={14} />放弃更改</button></footer></section></div>}
     </section>
   )
 }
