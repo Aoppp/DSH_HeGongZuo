@@ -66,10 +66,12 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
   const [error, setError] = useState<string | null>(null)
   const [editorMode, setEditorMode] = useState<EditorMode>(null)
   const [draft, setDraft] = useState<{ id?: string; accountId: string; displayName: string; position: string; permissions: AccountPermissionId[]; notificationTypes: AccountNotificationType[] } | null>(null)
+  const [initialDraft, setInitialDraft] = useState<{ id?: string; accountId: string; displayName: string; position: string; permissions: AccountPermissionId[]; notificationTypes: AccountNotificationType[] } | null>(null)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [permissionPreview, setPermissionPreview] = useState<{ accountName: string; labels: string[]; left: number; top: number; above: boolean } | null>(null)
   const [open, setOpen] = useState(false)
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
 
   const loadAccounts = useCallback(async () => {
     setLoading(true)
@@ -91,22 +93,33 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
   }, [loadAccounts])
 
   function openCreate() {
-    setDraft({ accountId: '', displayName: '', position: '', permissions: [], notificationTypes: [] })
+    const next = { accountId: '', displayName: '', position: '', permissions: [] as AccountPermissionId[], notificationTypes: [] as AccountNotificationType[] }
+    setDraft(next)
+    setInitialDraft(next)
     setEditorMode('create')
     setFormError(null)
   }
 
   function openEdit(account: AccountRecord) {
     const types = notificationPreferences.find((item) => item.accountId === account.id)?.types ?? account.permissions.map((permission) => notificationPermission[permission]).filter((type): type is AccountNotificationType => Boolean(type))
-    setDraft({ id: account.id, accountId: account.accountId, displayName: account.displayName, position: account.position, permissions: [...account.permissions], notificationTypes: [...types] })
+    const next = { id: account.id, accountId: account.accountId, displayName: account.displayName, position: account.position, permissions: [...account.permissions], notificationTypes: [...types] }
+    setDraft(next)
+    setInitialDraft(next)
     setEditorMode('edit')
     setFormError(null)
   }
 
   function closeEditor() {
+    if (draft && initialDraft && JSON.stringify({ ...draft, permissions: [...draft.permissions].sort(), notificationTypes: [...draft.notificationTypes].sort() }) !== JSON.stringify({ ...initialDraft, permissions: [...initialDraft.permissions].sort(), notificationTypes: [...initialDraft.notificationTypes].sort() })) { setDiscardConfirmOpen(true); return }
+    discardEditor()
+  }
+
+  function discardEditor() {
     setEditorMode(null)
     setDraft(null)
+    setInitialDraft(null)
     setFormError(null)
+    setDiscardConfirmOpen(false)
   }
 
   async function saveDraft() {
@@ -137,7 +150,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           permissions: saved.permissions,
         })
       }
-      closeEditor()
+      discardEditor()
       await loadAccounts()
     } catch (saveError) {
       setFormError(saveError instanceof Error ? saveError.message : String(saveError))
@@ -300,6 +313,7 @@ export function AccountManagement({ user, onCurrentUserProfileUpdated }: Account
           </section>
         </div>
       )}
+      {discardConfirmOpen && <div className="account-admin__discard-dialog" role="dialog" aria-modal="true" aria-label="未保存更改提醒"><button type="button" className="account-admin__discard-backdrop" aria-label="继续编辑" onClick={() => setDiscardConfirmOpen(false)} /><section><strong>尚未保存更改</strong><p>当前账号信息或通知权限已修改，关闭后本次更改将不会保存。</p><footer><button className="employee-data__secondary" type="button" onClick={() => setDiscardConfirmOpen(false)}>继续编辑</button><button className="developer-console__danger-action" type="button" onClick={discardEditor}>放弃更改</button></footer></section></div>}
     </section>
   )
 }

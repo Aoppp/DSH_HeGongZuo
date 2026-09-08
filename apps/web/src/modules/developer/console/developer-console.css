@@ -284,6 +284,11 @@
 .account-admin__permission-row > span { display: inline-flex; align-items: center; gap: 8px; }
 .account-admin__notification-toggle { color: var(--ink-500); font-size: 12px; white-space: nowrap; }
 
+.account-admin__discard-dialog { position: fixed; z-index: 70; inset: 0; display: grid; place-items: center; padding: 20px; }
+.account-admin__discard-backdrop { position: absolute; inset: 0; border: 0; background: rgba(22, 35, 51, .34); }
+.account-admin__discard-dialog section { position: relative; width: min(410px, 100%); border: 1px solid var(--line); border-radius: 12px; padding: 20px; background: #fff; box-shadow: 0 20px 50px rgba(22, 35, 51, .18); }
+.account-admin__discard-dialog strong { color: var(--ink-800); font-size: 16px; }.account-admin__discard-dialog p { margin: 8px 0 18px; color: var(--ink-500); font-size: 13px; line-height: 1.65; }.account-admin__discard-dialog footer { display: flex; justify-content: flex-end; gap: 8px; }
+
 .platform-management {
   margin-bottom: 18px;
   padding: 20px;
