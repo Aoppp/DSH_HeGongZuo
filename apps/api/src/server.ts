@@ -34,7 +34,7 @@ import { ReportAnalysisService, ReportAnalysisValidationError, parseReportAnalys
 import { ReportAnalysisSnapshotRepository } from './modules/employee/report-analysis/report-analysis-snapshot-repository.js'
 import { MeetingRepository } from './modules/meetings/meeting-repository.js'
 import { MeetingUploadCredentials } from './modules/meetings/meeting-upload-credentials.js'
-import { MeetingValidationError, parseMeetingInput } from './modules/meetings/meeting-input.js'
+import { MeetingValidationError, parseMeetingInput, parseMeetingSummaryUpdate } from './modules/meetings/meeting-input.js'
 import { RecruitmentRepository } from './modules/recruitment/recruitment-repository.js'
 import { RecruitmentValidationError, parseJobInput, parseUploads } from './modules/recruitment/recruitment-input.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
@@ -685,6 +685,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     await platformManagement.assertModuleEnabled('meeting-records')
     const record = await meetings.get(meetingId)
     if (!record) throw new HttpError(404, '会议记录不存在。')
+    sendJson(response, 200, { record })
+    return
+  }
+
+  if (meetingId && request.method === 'PUT') {
+    requirePermission(currentUser, 'meeting-records')
+    await platformManagement.assertModuleEnabled('meeting-records')
+    const existing = await meetings.get(meetingId)
+    if (!existing) throw new HttpError(404, '会议记录不存在。')
+    const summary = parseMeetingSummaryUpdate(await readJson(request))
+    const record = await meetings.updateSummary(meetingId, summary)
+    if (!record) throw new HttpError(404, '会议记录不存在。')
+    await platformManagement.record(currentUser.id, currentUser.displayName, '修改会议摘要', '会议记录', meetingId, { changes: [{ field: 'summary', label: '会议摘要', before: existing.summary ? `${existing.summary.length} 字` : '未填写', after: summary ? `${summary.length} 字` : '已清空' }] })
     sendJson(response, 200, { record })
     return
   }

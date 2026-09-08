@@ -28,3 +28,10 @@ export function readMeetingRecords(input: { query: string; mode: string; date: s
 export function readMeetingRecord(id: string, signal?: AbortSignal) {
   return request<{ record: MeetingRecord }>(`/api/meeting-records/${encodeURIComponent(id)}`, signal).then((result) => result.record)
 }
+
+export async function updateMeetingSummary(id: string, summary: string): Promise<MeetingRecord> {
+  const response = await fetch(`/api/meeting-records/${encodeURIComponent(id)}`, { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ summary }) })
+  const body = await response.json().catch(() => ({})) as { record?: MeetingRecord; error?: string }
+  if (!response.ok || !body.record) throw new Error(body.error ?? '会议摘要保存失败。')
+  return body.record
+}

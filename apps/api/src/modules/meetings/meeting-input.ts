@@ -35,3 +35,12 @@ export function parseMeetingInput(value: unknown): MeetingInput {
   })
   return { title, mode: record.mode, startedAt, endedAt, summary, transcript: record.transcript, participants }
 }
+
+export function parseMeetingSummaryUpdate(value: unknown): string | null {
+  if (!value || typeof value !== 'object') throw new MeetingValidationError('请提交有效的会议摘要。')
+  const summary = (value as Record<string, unknown>).summary
+  if (typeof summary !== 'string') throw new MeetingValidationError('会议摘要格式无效。')
+  const normalized = summary.trim()
+  if (normalized.length > 500_000) throw new MeetingValidationError('会议摘要不能超过 50 万字符。')
+  return normalized || null
+}

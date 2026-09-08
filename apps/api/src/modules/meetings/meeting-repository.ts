@@ -40,6 +40,11 @@ export class MeetingRepository {
     return result.rows[0] ? meeting(result.rows[0]) : null
   }
 
+  async updateSummary(id: string, summary: string | null) {
+    const result = await this.pool.query<MeetingRow>('UPDATE meeting_records SET summary = $2 WHERE id = $1 RETURNING *', [id, summary])
+    return result.rows[0] ? meeting(result.rows[0]) : null
+  }
+
   async list(input: { readonly query: string; readonly mode: string; readonly date: string; readonly page: number; readonly pageSize: number }) {
     const values: unknown[] = []; const where: string[] = []
     if (input.query) { values.push(`%${input.query}%`); where.push(`(title ILIKE $${values.length} OR id ILIKE $${values.length} OR participants::text ILIKE $${values.length})`) }
