@@ -1,7 +1,9 @@
-import { ChevronDown, ChevronUp, FileSearch, LoaderCircle } from 'lucide-react'
+import { ChevronDown, ChevronUp, FileSearch, LoaderCircle, X } from 'lucide-react'
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 
 import { analyzeReports, readReportAnalysisSnapshot, readReportAnalysisVersions, type ReportAnalysisReference, type ReportAnalysisVersion } from './report-analysis-api'
+import { deleteReportAnalysisVersion } from './report-analysis-api'
+import { Pagination } from '../../../components/Pagination'
 
 function inline(value: string, references: readonly ReportAnalysisReference[], onOpenReport: (id: string) => void) {
   return value.split(/(\*\*[^*]+\*\*|【[^｜】]+｜\d{4}-\d{2}-\d{2}｜[^】]+】)/g).map((part, index) => {
@@ -89,7 +91,12 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [queryError, setQueryError] = useState<string | null>(null)
   const [versions, setVersions] = useState<readonly ReportAnalysisVersion[]>([])
-  useEffect(() => { let active = true; setSummary(null); setVersions([]); setSummaryExpanded(true); void Promise.all([readReportAnalysisSnapshot(startDate, endDate), readReportAnalysisVersions()]).then(([snapshot, history]) => { if (!active) return; setVersions(history); if (snapshot) setSummary({ id: snapshot.id, startDate: snapshot.startDate ?? startDate, endDate: snapshot.endDate ?? endDate, content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
+  const [versionsPage, setVersionsPage] = useState(1)
+  const [versionsTotalPages, setVersionsTotalPages] = useState(0)
+  const [versionsTotal, setVersionsTotal] = useState(0)
+  const [versionsBusy, setVersionsBusy] = useState(false)
+  const loadVersions = async (page = versionsPage) => { const result = await readReportAnalysisVersions(page); setVersions(result.versions); setVersionsPage(result.page); setVersionsTotal(result.total); setVersionsTotalPages(result.totalPages); return result }
+  useEffect(() => { let active = true; setSummary(null); setSummaryExpanded(true); void Promise.all([readReportAnalysisSnapshot(startDate, endDate), readReportAnalysisVersions(1)]).then(([snapshot, history]) => { if (!active) return; setVersions(history.versions); setVersionsPage(history.page); setVersionsTotal(history.total); setVersionsTotalPages(history.totalPages); if (snapshot) setSummary({ id: snapshot.id, startDate: snapshot.startDate ?? startDate, endDate: snapshot.endDate ?? endDate, content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
   async function runSummary() {
     if (summary && !window.confirm('已有该时间段报告，是否继续重新生成？')) return
     setSummaryBusy(true)
@@ -97,13 +104,24 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
     try {
       const result = await analyzeReports({ startDate, endDate })
       setSummary({ id: result.id, startDate: result.startDate ?? startDate, endDate: result.endDate ?? endDate, content: result.content, count: result.reportCount, references: result.references, generatedAt: result.generatedAt })
-      setVersions(await readReportAnalysisVersions())
+      await loadVersions(1)
       setSummaryExpanded(true)
     } catch (reason) {
       setSummaryError(reason instanceof Error ? reason.message : '汇总服务暂时不可用。')
     } finally {
       setSummaryBusy(false)
     }
+  }
+  async function removeVersion(id: string) {
+    setVersionsBusy(true)
+    setSummaryError(null)
+    try {
+      await deleteReportAnalysisVersion(id)
+      if (summary?.id === id) setSummary(null)
+      const nextPage = versions.length === 1 && versionsPage > 1 ? versionsPage - 1 : versionsPage
+      await loadVersions(nextPage)
+    } catch (reason) { setSummaryError(reason instanceof Error ? reason.message : '汇总记录删除失败。') }
+    finally { setVersionsBusy(false) }
   }
   async function runQuery() {
     const value = question.trim()
@@ -135,7 +153,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
           {summaryBusy ? '正在生成' : summary ? '重新生成' : '生成汇总'}
         </button>
       </div>
-      {versions.length > 0 && <section className="report-analysis__versions"><header><div><strong>汇总列表</strong><small>已生成的日报汇总，保留最近 50 条</small></div></header><div>{versions.map((version) => <button type="button" key={version.id} className={summary?.id === version.id ? 'active' : ''} onClick={() => { setSummary({ id: version.id, startDate: version.startDate, endDate: version.endDate, content: version.content, count: version.reportCount, references: version.references, generatedAt: version.generatedAt }); setSummaryExpanded(true) }}><span>{version.startDate} 至 {version.endDate}</span><small>{new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(version.generatedAt))} · {version.reportCount} 条日报</small></button>)}</div></section>}
+      {versionsTotal > 0 && <section className="report-analysis__versions"><header><div><strong>汇总列表</strong><small>共 {versionsTotal} 份已生成汇总</small></div></header><div>{versions.map((version) => <article key={version.id} className={summary?.id === version.id ? 'active' : ''}><button type="button" className="report-analysis__version-open" onClick={() => { setSummary({ id: version.id, startDate: version.startDate, endDate: version.endDate, content: version.content, count: version.reportCount, references: version.references, generatedAt: version.generatedAt }); setSummaryExpanded(true) }}><span>{version.startDate} 至 {version.endDate}</span><small>{new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(version.generatedAt))} · {version.reportCount} 条日报</small></button><button type="button" className="report-analysis__version-delete" disabled={versionsBusy} aria-label={`删除 ${version.startDate} 至 ${version.endDate} 的汇总`} onClick={() => void removeVersion(version.id)}><X size={13} /></button></article>)}</div>{versionsTotalPages > 1 && <footer><Pagination page={versionsPage} totalPages={versionsTotalPages} onChange={(page) => void loadVersions(page)} label="汇总列表分页" /></footer>}</section>}
     </article>
     {summaryError && <div className="daily-reports__error">{summaryError}</div>}
     {summary && <AnalysisResult title="部门汇总" count={summary.count} content={summary.content} references={summary.references} generatedAt={summary.generatedAt} startDate={summary.startDate} endDate={summary.endDate} onOpenReport={onOpenReport} expanded={summaryExpanded} onToggleExpanded={() => setSummaryExpanded((value) => !value)} />}

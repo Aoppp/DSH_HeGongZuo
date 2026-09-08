@@ -653,7 +653,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (url.pathname === '/api/daily-reports/analysis/versions' && request.method === 'GET') {
     requirePermission(currentUser, 'employee-reports')
     await platformManagement.assertModuleEnabled('employee-reports')
-    sendJson(response, 200, { versions: await reportAnalysisSnapshots.list() })
+    const page = Math.max(1, Number(url.searchParams.get('page') ?? '1') || 1)
+    sendJson(response, 200, await reportAnalysisSnapshots.list(page, 8))
+    return
+  }
+
+  const reportAnalysisVersion = url.pathname.match(/^\/api\/daily-reports\/analysis\/versions\/(\d+)$/)
+  if (reportAnalysisVersion && request.method === 'DELETE') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    const id = reportAnalysisVersion[1]!
+    if (!await reportAnalysisSnapshots.delete(id)) throw new HttpError(404, '汇总记录不存在或已删除。')
+    await platformManagement.record(currentUser.id, currentUser.displayName, '删除日报汇总', '日报汇总', id, { changes: [{ field: 'summary', label: '汇总记录', before: '已保存', after: '已删除' }] })
+    sendJson(response, 200, { success: true })
     return
   }
 
