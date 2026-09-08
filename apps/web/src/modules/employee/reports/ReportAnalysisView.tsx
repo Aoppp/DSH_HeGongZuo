@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, FileSearch, LoaderCircle } from 'lucide-react'
 import { Fragment, useEffect, useState, type ReactNode } from 'react'
 
-import { analyzeReports, readReportAnalysisSnapshot, type ReportAnalysisReference } from './report-analysis-api'
+import { analyzeReports, readReportAnalysisSnapshot, readReportAnalysisVersions, type ReportAnalysisReference, type ReportAnalysisVersion } from './report-analysis-api'
 
 function inline(value: string, references: readonly ReportAnalysisReference[], onOpenReport: (id: string) => void) {
   return value.split(/(\*\*[^*]+\*\*|【[^｜】]+｜\d{4}-\d{2}-\d{2}｜[^】]+】)/g).map((part, index) => {
@@ -81,21 +81,23 @@ function markdownToPrintHtml(content: string) {
 
 export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
   const [question, setQuestion] = useState('')
-  const [summary, setSummary] = useState<{ readonly content: string; readonly count: number; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined } | null>(null)
+  const [summary, setSummary] = useState<{ readonly id: string | undefined; readonly content: string; readonly count: number; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined } | null>(null)
   const [query, setQuery] = useState<{ readonly content: string; readonly count: number; readonly question: string; readonly references: readonly ReportAnalysisReference[] } | null>(null)
   const [summaryBusy, setSummaryBusy] = useState(false)
   const [summaryExpanded, setSummaryExpanded] = useState(true)
   const [queryBusy, setQueryBusy] = useState(false)
   const [summaryError, setSummaryError] = useState<string | null>(null)
   const [queryError, setQueryError] = useState<string | null>(null)
-  useEffect(() => { let active = true; setSummary(null); setSummaryExpanded(true); void readReportAnalysisSnapshot(startDate, endDate).then((snapshot) => { if (active && snapshot) setSummary({ content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
+  const [versions, setVersions] = useState<readonly ReportAnalysisVersion[]>([])
+  useEffect(() => { let active = true; setSummary(null); setVersions([]); setSummaryExpanded(true); void Promise.all([readReportAnalysisSnapshot(startDate, endDate), readReportAnalysisVersions(startDate, endDate)]).then(([snapshot, history]) => { if (!active) return; setVersions(history); if (snapshot) setSummary({ id: snapshot.id, content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
   async function runSummary() {
     if (summary && !window.confirm('已有该时间段报告，是否继续重新生成？')) return
     setSummaryBusy(true)
     setSummaryError(null)
     try {
       const result = await analyzeReports({ startDate, endDate })
-      setSummary({ content: result.content, count: result.reportCount, references: result.references, generatedAt: result.generatedAt })
+      setSummary({ id: result.id, content: result.content, count: result.reportCount, references: result.references, generatedAt: result.generatedAt })
+      setVersions(await readReportAnalysisVersions(startDate, endDate))
       setSummaryExpanded(true)
     } catch (reason) {
       setSummaryError(reason instanceof Error ? reason.message : '汇总服务暂时不可用。')
@@ -135,6 +137,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
       </div>
     </article>
     {summaryError && <div className="daily-reports__error">{summaryError}</div>}
+    {versions.length > 0 && <section className="report-analysis__versions"><header><div><strong>报告版本</strong><small>保留同一日期范围最近 20 次生成结果</small></div></header><div>{versions.map((version, index) => <button type="button" key={version.id} className={summary?.id === version.id ? 'active' : ''} onClick={() => { setSummary({ id: version.id, content: version.content, count: version.reportCount, references: version.references, generatedAt: version.generatedAt }); setSummaryExpanded(true) }}><span>版本 {versions.length - index}</span><small>{new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(version.generatedAt))} · {version.reportCount} 条日报</small></button>)}</div></section>}
     {summary && <AnalysisResult title="部门汇总" count={summary.count} content={summary.content} references={summary.references} generatedAt={summary.generatedAt} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} expanded={summaryExpanded} onToggleExpanded={() => setSummaryExpanded((value) => !value)} />}
 
     <article className="report-analysis__card report-analysis__question">

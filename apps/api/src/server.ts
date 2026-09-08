@@ -650,6 +650,14 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/daily-reports/analysis/versions' && request.method === 'GET') {
+    requirePermission(currentUser, 'employee-reports')
+    await platformManagement.assertModuleEnabled('employee-reports')
+    const input = parseReportAnalysisInput({ startDate: url.searchParams.get('startDate'), endDate: url.searchParams.get('endDate') })
+    sendJson(response, 200, { versions: await reportAnalysisSnapshots.versions(input.startDate, input.endDate) })
+    return
+  }
+
   const reportId = dailyReportId(url.pathname)
   if (reportId && request.method === 'GET') {
     requirePermission(currentUser, 'employee-reports')
