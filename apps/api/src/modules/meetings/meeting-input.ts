@@ -20,7 +20,8 @@ export function parseMeetingInput(value: unknown): MeetingInput {
   const record = value as Record<string, unknown>
   const title = typeof record.title === 'string' ? record.title.trim() : ''
   if (!title || title.length > 200) throw new MeetingValidationError('会议标题不能为空且不能超过 200 个字符。')
-  if (record.mode !== 'chinese' && record.mode !== 'bilingual') throw new MeetingValidationError('会议模式仅支持 chinese 或 bilingual。')
+  // 上传方不再需要传递会议模式；为兼容既有非空字段，新记录统一以中文模式保存。
+  const mode: MeetingInput['mode'] = 'chinese'
   const startedAt = timestamp(record.started_at, '开始时间')
   const endedAt = timestamp(record.ended_at, '结束时间')
   if (Date.parse(endedAt) <= Date.parse(startedAt)) throw new MeetingValidationError('结束时间必须晚于开始时间。')
@@ -33,7 +34,7 @@ export function parseMeetingInput(value: unknown): MeetingInput {
     if (!name || name.length > 80) throw new MeetingValidationError('参会人员姓名不能为空且不能超过 80 个字符。')
     return { name }
   })
-  return { title, mode: record.mode, startedAt, endedAt, summary, transcript: record.transcript, participants }
+  return { title, mode, startedAt, endedAt, summary, transcript: record.transcript, participants }
 }
 
 export function parseMeetingSummaryUpdate(value: unknown): string | null {
