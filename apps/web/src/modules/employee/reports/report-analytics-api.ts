@@ -10,7 +10,7 @@ export interface SubmissionDashboard {
   readonly departments: readonly { name: string; expected: number; submitted: number; missing: number; delayed: number }[]
   readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' }[]
 }
-export interface CalendarDay { readonly date: string; readonly expected: number; readonly submitted: number; readonly missing: number; readonly delayed: number; readonly status: 'complete' | 'delayed' | 'missing' | 'empty' }
+export interface SubmissionTrendDay { readonly date: string; readonly expected: number; readonly submitted: number; readonly missing: number; readonly delayed: number }
 export interface EmployeeReportProfile { readonly id: string; readonly name: string; readonly department: string; readonly departmentLevel2: string | null; readonly submittedDays: number; readonly delayedDays: number; readonly missingDays: number }
 export type EmployeeReportProfileScope = 'active' | 'departed'
 export interface IndividualReporter { readonly name: string; readonly linked: boolean }
@@ -29,7 +29,7 @@ function query(view: string, parameters: Record<string, string>): Promise<unknow
 }
 
 export const readSubmissionDashboard = (date: string) => query('dashboard', { date }) as Promise<SubmissionDashboard>
-export const readReportCalendar = (month: string) => query('calendar', { month }) as Promise<readonly CalendarDay[]>
+export const readSubmissionTrend = (endDate: string) => query('trend', { endDate }) as Promise<readonly SubmissionTrendDay[]>
 export const readEmployeeReportProfiles = (scope: EmployeeReportProfileScope = 'active') => query('employees', { scope }) as Promise<readonly EmployeeReportProfile[]>
 export const readIndividualReporters = () => query('individual', {}) as Promise<readonly IndividualReporter[]>
 export const readReportQuality = (startDate: string, endDate: string) => query('quality', { startDate, endDate }) as Promise<readonly QualityFinding[]>

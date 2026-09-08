@@ -7,7 +7,7 @@ import { Pagination } from '../../../components/Pagination'
 import type { DailyReport } from './daily-reports-api'
 import { useDailyReportSync } from './use-daily-report-sync'
 import { useDailyReports } from './use-daily-reports'
-import { CalendarView, DashboardView, EmployeeArchiveView, EmployeeHistoryDialog, IndividualReportersView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
+import { DashboardView, EmployeeArchiveView, EmployeeHistoryDialog, IndividualReportersView, QualityView, type AnalyticsView } from './ReportAnalyticsViews'
 import { ReportAnalysisView } from './ReportAnalysisView'
 import { shanghaiCalendarDate, shiftCalendarDate } from './report-dates'
 import './daily-reports.css'
@@ -85,7 +85,6 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   const requestedDate = route.get('date')
   const [view, setView] = useState<AnalyticsView | 'list' | 'analysis'>(requestedView === 'list' || requestedView === 'dashboard' ? requestedView : 'dashboard')
   const [reportDate, setReportDate] = useState(() => requestedDate && /^\d{4}-\d{2}-\d{2}$/.test(requestedDate) ? requestedDate : shiftCalendarDate(today, -1))
-  const [month, setMonth] = useState(today.slice(0, 7))
   const [startDate, setStartDate] = useState(`${today.slice(0, 7)}-01`)
   const [endDate, setEndDate] = useState(today)
   const [analyticsRevision, setAnalyticsRevision] = useState(0)
@@ -103,12 +102,8 @@ export function EmployeeReportsModule(_props: ModuleProps) {
   }
   function submit(event: FormEvent) { event.preventDefault(); management.applyFilters() }
   const pages = Math.max(1, management.totalPages)
-  function openDate(dateValue: string) {
-    management.showReports({ startDate: dateValue, endDate: dateValue, department: '', employee: '', keyword: '' })
-    setView('list')
-  }
   const views: readonly { id: AnalyticsView | 'list' | 'analysis'; label: string }[] = [
-    { id: 'dashboard', label: '提交看板' }, { id: 'calendar', label: '日历' }, { id: 'list', label: '日报列表' },
+    { id: 'dashboard', label: '提交看板' }, { id: 'list', label: '日报列表' },
     { id: 'employees', label: '离职归档' }, { id: 'analysis', label: '汇总分析' }, { id: 'quality', label: '数据检查' }, { id: 'individual', label: '单独汇报' },
   ]
 
@@ -117,15 +112,13 @@ export function EmployeeReportsModule(_props: ModuleProps) {
 
     <nav className="report-tabs" aria-label="日报功能">{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => selectView(item.id)}>{item.label}</button>)}</nav>
 
-    {['dashboard','calendar','quality','analysis'].includes(view) && <div className={view === 'analysis' ? 'report-scope report-scope--analysis' : 'report-scope'}>
+    {['dashboard','quality','analysis'].includes(view) && <div className={view === 'analysis' ? 'report-scope report-scope--analysis' : 'report-scope'}>
       {view === 'dashboard' && <><label>统计日期<input type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} /></label><div className="report-scope__presets"><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, -1))}>前一天</button><button type="button" onClick={() => setReportDate((value) => shiftCalendarDate(value, 1))}>下一天</button></div></>}
-      {view === 'calendar' && <label>月份<input type="month" value={month} onChange={(event) => setMonth(event.target.value)} /></label>}
       {view === 'quality' && <><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></>}
       {view === 'analysis' && <><div className="report-scope__analysis-dates"><label>开始日期<input type="date" value={startDate} max={endDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} min={startDate} onChange={(event) => setEndDate(event.target.value)} /></label></div><div className="report-scope__analysis-presets"><button type="button" onClick={() => setAnalysisRange('today')}>今天</button><button type="button" onClick={() => setAnalysisRange('week')}>本周</button><button type="button" onClick={() => setAnalysisRange('month')}>本月</button></div></>}
     </div>}
 
     {view === 'dashboard' && <DashboardView date={reportDate} revision={analyticsRevision} />}
-    {view === 'calendar' && <CalendarView month={month} onSelectDate={openDate} revision={analyticsRevision} />}
     {view === 'employees' && <EmployeeArchiveView revision={analyticsRevision} scope="departed" />}
     {view === 'individual' && <IndividualReportersView revision={analyticsRevision} />}
     {view === 'analysis' && <ReportAnalysisView startDate={startDate} endDate={endDate} onOpenReport={(id) => void management.openDetail(id)} />}

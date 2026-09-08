@@ -134,6 +134,13 @@ export class DailyReportAnalyticsRepository {
     }
   }
 
+  async trend(endDate: string): Promise<readonly Pick<SubmissionDashboard, 'date' | 'expected' | 'submitted' | 'missing' | 'delayed'>[]> {
+    const end = new Date(`${endDate}T12:00:00Z`)
+    const dates = Array.from({ length: 14 }, (_, index) => { const value = new Date(end); value.setUTCDate(value.getUTCDate() - 13 + index); return value.toISOString().slice(0, 10) })
+    const days = await Promise.all(dates.map((date) => this.dashboard(date)))
+    return days.map(({ date, expected, submitted, missing, delayed }) => ({ date, expected, submitted, missing, delayed }))
+  }
+
   async calendar(month: string): Promise<readonly CalendarDay[]> {
     const result = await this.pool.query<{
       date: string | Date; expected: string; submitted: string; delayed: string

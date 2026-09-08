@@ -21,6 +21,7 @@ export class DailyReportAnalyticsService {
   async read(parameters: URLSearchParams): Promise<unknown> {
     const view = parameters.get('view')
     if (view === 'dashboard') return this.repository.dashboard(date(parameters.get('date'), 'date'))
+    if (view === 'trend') return this.repository.trend(date(parameters.get('endDate'), 'endDate'))
     if (view === 'calendar') {
       const month = parameters.get('month') ?? ''
       if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new DailyReportAnalyticsValidationError('month 格式无效。')
