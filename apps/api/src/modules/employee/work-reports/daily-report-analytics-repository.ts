@@ -21,7 +21,11 @@ export interface SubmissionDashboard {
   readonly delayed: number
   readonly employees: readonly SubmissionEmployee[]
   readonly departments: readonly { name: string; expected: number; submitted: number; missing: number; delayed: number }[]
-  readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' | '不参与统计' }[]
+  readonly excluded: readonly {
+    readonly name: string
+    readonly reason: '请假' | '未排班' | '单独汇报' | '不参与统计'
+    readonly leaveDetails: readonly { readonly type: string | null; readonly reason: string | null; readonly startTime: string; readonly endTime: string }[]
+  }[]
 }
 
 export interface CalendarDay {
@@ -110,16 +114,29 @@ export class DailyReportAnalyticsRepository {
     })
     const groups = new Map<string, SubmissionEmployee[]>()
     for (const employee of employees) groups.set(employee.department, [...(groups.get(employee.department) ?? []), employee])
-    const excludedResult = await this.pool.query<{ display_name: string; reason: '请假' | '未排班' | '单独汇报' | '不参与统计' }>(`SELECT employee.display_name, '请假'::text AS reason FROM employees employee
+    const excludedResult = await this.pool.query<{
+      display_name: string
+      reason: '请假' | '未排班' | '单独汇报' | '不参与统计'
+      leave_details: readonly { type: string | null; reason: string | null; startTime: string; endTime: string }[]
+    }>(`SELECT employee.display_name, '请假'::text AS reason,
+        coalesce((SELECT jsonb_agg(jsonb_build_object(
+          'type', leave_record.leave_type, 'reason', leave_record.reason,
+          'startTime', leave_record.start_time, 'endTime', leave_record.end_time
+        ) ORDER BY leave_record.start_time)
+        FROM employee_wecom_leaves leave_record
+        WHERE leave_record.employee_id=employee.id AND leave_record.sp_status=2
+          AND leave_record.start_time < (($1::date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
+          AND leave_record.end_time >= ($1::date::timestamp AT TIME ZONE 'Asia/Shanghai')), '[]'::jsonb) AS leave_details
+      FROM employees employee
       WHERE employee.hire_date <= $1::date AND (employee.departure_date IS NULL OR employee.departure_date >= $1::date)
         AND (employee.status='on_leave' OR ${approvedLeaveSql('employee', '$1')})
         AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope individual WHERE individual.employee_id=employee.id)
-      UNION ALL SELECT employee.display_name, '未排班'::text FROM employees employee WHERE employee.status <> 'inactive' AND employee.status <> 'on_leave'
+      UNION ALL SELECT employee.display_name, '未排班'::text, '[]'::jsonb FROM employees employee WHERE employee.status <> 'inactive' AND employee.status <> 'on_leave'
         AND NOT ${approvedLeaveSql('employee', '$1')}
         AND NOT EXISTS (SELECT 1 FROM employee_wecom_schedules schedule WHERE schedule.employee_id=employee.id AND schedule.schedule_date=$1::date)
         AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope individual WHERE individual.employee_id=employee.id)
       UNION ALL SELECT individual.display_name,
-        CASE individual.exclusion_type WHEN 'statistics_excluded' THEN '不参与统计' ELSE '单独汇报' END::text
+        CASE individual.exclusion_type WHEN 'statistics_excluded' THEN '不参与统计' ELSE '单独汇报' END::text, '[]'::jsonb
         FROM employee_daily_report_individual_scope individual
       ORDER BY reason, display_name`, [date])
     return {
@@ -132,7 +149,7 @@ export class DailyReportAnalyticsRepository {
         missing: items.filter((item) => item.state === 'missing').length,
         delayed: items.filter((item) => item.state === 'delayed').length,
       })),
-      excluded: excludedResult.rows.filter((row) => row.reason === '请假' || row.reason === '未排班' || row.reason === '单独汇报' || row.reason === '不参与统计').map((row) => ({ name: row.display_name, reason: row.reason })),
+      excluded: excludedResult.rows.filter((row) => row.reason === '请假' || row.reason === '未排班' || row.reason === '单独汇报' || row.reason === '不参与统计').map((row) => ({ name: row.display_name, reason: row.reason, leaveDetails: row.leave_details })),
     }
   }
 

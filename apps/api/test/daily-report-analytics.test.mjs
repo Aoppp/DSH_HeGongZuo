@@ -59,6 +59,8 @@ test('异常的未来汇报日期按实际提交日期参与看板统计', async
   assert.match(statements[0], /employee_daily_report_individual_scope/)
   assert.match(statements[0], /employee_wecom_leaves/)
   assert.match(statements[1], /employee_wecom_leaves/)
+  assert.match(statements[1], /leave_record\.reason/)
+  assert.match(statements[1], /leave_record\.start_time/)
 })
 
 test('单独汇报列表不包含固定排除的日报人员', async () => {
