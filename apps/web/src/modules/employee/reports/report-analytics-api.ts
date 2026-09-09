@@ -8,7 +8,7 @@ export interface SubmissionDashboard {
   readonly date: string; readonly expected: number; readonly submitted: number; readonly missing: number; readonly delayed: number
   readonly employees: readonly SubmissionEmployee[]
   readonly departments: readonly { name: string; expected: number; submitted: number; missing: number; delayed: number }[]
-  readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' }[]
+  readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' | '不参与统计' }[]
 }
 export interface SubmissionTrendDay { readonly date: string; readonly expected: number; readonly submitted: number; readonly missing: number; readonly delayed: number }
 export interface EmployeeReportProfile { readonly id: string; readonly name: string; readonly department: string; readonly departmentLevel2: string | null; readonly submittedDays: number; readonly delayedDays: number; readonly missingDays: number }

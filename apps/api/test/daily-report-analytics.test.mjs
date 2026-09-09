@@ -61,6 +61,13 @@ test('异常的未来汇报日期按实际提交日期参与看板统计', async
   assert.match(statements[1], /employee_wecom_leaves/)
 })
 
+test('单独汇报列表不包含固定排除的日报人员', async () => {
+  let statement = ''
+  const pool = { query: async (sql) => { statement = sql; return { rows: [] } } }
+  await new DailyReportAnalyticsRepository(pool).individualReporters()
+  assert.match(statement, /exclusion_type = 'individual_report'/)
+})
+
 test('统计服务校验视图所需日期、月份和员工范围参数', async () => {
   const repository = { dashboard: async (date) => ({ date }), calendar: async (month) => ({ month }), employeeProfiles: async (scope) => [scope] }
   const service = new DailyReportAnalyticsService(repository)

@@ -21,7 +21,7 @@ export interface SubmissionDashboard {
   readonly delayed: number
   readonly employees: readonly SubmissionEmployee[]
   readonly departments: readonly { name: string; expected: number; submitted: number; missing: number; delayed: number }[]
-  readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' }[]
+  readonly excluded: readonly { readonly name: string; readonly reason: '请假' | '未排班' | '单独汇报' | '不参与统计' }[]
 }
 
 export interface CalendarDay {
@@ -110,7 +110,7 @@ export class DailyReportAnalyticsRepository {
     })
     const groups = new Map<string, SubmissionEmployee[]>()
     for (const employee of employees) groups.set(employee.department, [...(groups.get(employee.department) ?? []), employee])
-    const excludedResult = await this.pool.query<{ display_name: string; reason: '请假' | '未排班' | '单独汇报' }>(`SELECT employee.display_name, '请假'::text AS reason FROM employees employee
+    const excludedResult = await this.pool.query<{ display_name: string; reason: '请假' | '未排班' | '单独汇报' | '不参与统计' }>(`SELECT employee.display_name, '请假'::text AS reason FROM employees employee
       WHERE employee.hire_date <= $1::date AND (employee.departure_date IS NULL OR employee.departure_date >= $1::date)
         AND (employee.status='on_leave' OR ${approvedLeaveSql('employee', '$1')})
         AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope individual WHERE individual.employee_id=employee.id)
@@ -118,7 +118,9 @@ export class DailyReportAnalyticsRepository {
         AND NOT ${approvedLeaveSql('employee', '$1')}
         AND NOT EXISTS (SELECT 1 FROM employee_wecom_schedules schedule WHERE schedule.employee_id=employee.id AND schedule.schedule_date=$1::date)
         AND NOT EXISTS (SELECT 1 FROM employee_daily_report_individual_scope individual WHERE individual.employee_id=employee.id)
-      UNION ALL SELECT individual.display_name, '单独汇报'::text FROM employee_daily_report_individual_scope individual
+      UNION ALL SELECT individual.display_name,
+        CASE individual.exclusion_type WHEN 'statistics_excluded' THEN '不参与统计' ELSE '单独汇报' END::text
+        FROM employee_daily_report_individual_scope individual
       ORDER BY reason, display_name`, [date])
     return {
       date, expected: employees.length, submitted: employees.filter((item) => item.state !== 'missing').length,
@@ -130,7 +132,7 @@ export class DailyReportAnalyticsRepository {
         missing: items.filter((item) => item.state === 'missing').length,
         delayed: items.filter((item) => item.state === 'delayed').length,
       })),
-      excluded: excludedResult.rows.filter((row) => row.reason === '请假' || row.reason === '未排班' || row.reason === '单独汇报').map((row) => ({ name: row.display_name, reason: row.reason })),
+      excluded: excludedResult.rows.filter((row) => row.reason === '请假' || row.reason === '未排班' || row.reason === '单独汇报' || row.reason === '不参与统计').map((row) => ({ name: row.display_name, reason: row.reason })),
     }
   }
 
@@ -207,7 +209,7 @@ export class DailyReportAnalyticsRepository {
   }
 
   async individualReporters(): Promise<readonly IndividualReporter[]> {
-    const result = await this.pool.query<{ display_name: string; employee_id: string | null }>('SELECT display_name, employee_id FROM employee_daily_report_individual_scope ORDER BY display_name')
+    const result = await this.pool.query<{ display_name: string; employee_id: string | null }>("SELECT display_name, employee_id FROM employee_daily_report_individual_scope WHERE exclusion_type = 'individual_report' ORDER BY display_name")
     return result.rows.map((row) => ({ name: row.display_name, linked: row.employee_id !== null }))
   }
 
