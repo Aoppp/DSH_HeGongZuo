@@ -2,6 +2,7 @@ import { Activity, Blocks, Check, ChevronDown, Copy, Database, Download, History
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ModuleId } from '../../../app/types'
+import { DataSyncPanel } from '../data-sync/DataSyncPanel'
 import { SkeletonCards, SkeletonList } from '../../../components/Skeleton'
 import { createMeetingUploadCredential, deleteMeetingUploadCredential, readAuditLogs, readMeetingUploadCredentials, readPlatformStatus, setPlatformModuleEnabled, type AuditLog, type MeetingUploadCredential, type PlatformStatus } from './platform-api'
 
@@ -126,6 +127,7 @@ export function PlatformManagement({ onModuleSettingsUpdated }: PlatformManageme
 
   return (
     <>
+      <DataSyncPanel />
       <section className="platform-management panel-card">
         <header className="platform-management__header">
           <div><h2>平台运行状态</h2><p>实时检查服务与账号运行空间。</p></div>

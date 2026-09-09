@@ -18,6 +18,7 @@ import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtim
 import { registeredAgentPermissionIds, registeredAgentPermissions } from './modules/accounts/agent-runtime-permissions.js'
 import { PlatformManagementError, PlatformManagementService } from './modules/platform/platform-management.js'
 import { NotificationService } from './modules/platform/notification-service.js'
+import { readDataSync } from './modules/platform/data-sync.js'
 import { ManagementCockpitService } from './modules/management/management-cockpit.js'
 import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/mock-work-records-source.js'
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
@@ -358,6 +359,19 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return
   }
 
+  if (url.pathname === '/api/platform/data-sync' && request.method === 'GET') {
+    requirePlatformAdministration(currentUser)
+    sendJson(response, 200, { sources: await readDataSync(database) })
+    return
+  }
+  if (url.pathname === '/api/platform/data-sync/daily' && request.method === 'POST') {
+    requirePlatformAdministration(currentUser)
+    await platformManagement.assertModuleEnabled('employee-reports')
+    const result = await workDailyManualSync.trigger()
+    await platformManagement.record(currentUser.id, currentUser.displayName, '手动同步日报', '数据同步', 'daily', { accepted: result.accepted })
+    sendJson(response, 202, result)
+    return
+  }
   if (url.pathname === '/api/platform/status' && request.method === 'GET') {
     requirePlatformAdministration(currentUser)
     sendJson(response, 200, await platformManagement.status())

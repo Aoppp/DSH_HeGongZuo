@@ -1,0 +1,13 @@
+.platform-data-sync { display: grid; gap: 12px; }
+.platform-data-sync article { border: 1px solid #e1e7ed; border-radius: 10px; padding: 14px 16px; background: #fff; }
+.platform-data-sync article header { display: flex; align-items: center; gap: 12px; }
+.platform-data-sync strong { font-size: 14px; color: #283c4c; }
+.platform-data-sync__status { border-radius: 6px; padding: 3px 8px; font-size: 12px; background: #edf2f7; color: #52667b; }
+.platform-data-sync__status--succeeded { background: #edf7f2; color: #39715d; }
+.platform-data-sync__status--failed,.platform-data-sync__status--partial { background: #fff1ee; color: #a45b50; }
+.platform-data-sync dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 14px 0; }
+.platform-data-sync dt,.platform-data-sync small,.platform-data-sync p { font-size: 12px; color: #758394; }
+.platform-data-sync dd { margin: 5px 0 0; font-size: 13px; color: #34495b; }
+.platform-data-sync__advice { margin-top: 10px; padding: 10px; border-radius: 7px; background: #fff7ee; color: #896138; font-size: 13px; }
+.platform-data-sync footer { display: flex; justify-content: flex-end; margin-top: 12px; }
+@media(max-width:720px) { .platform-data-sync dl { grid-template-columns: 1fr; } }
