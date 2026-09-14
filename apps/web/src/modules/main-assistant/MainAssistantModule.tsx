@@ -1,5 +1,5 @@
 import type { ModuleProps } from '../../app/types'
-import { WorkspaceAssistant } from '../work-assistant'
+import { WorkspaceAssistant } from './WorkspaceAssistant'
 
 export function MainAssistantModule(_props: ModuleProps) {
   return <WorkspaceAssistant

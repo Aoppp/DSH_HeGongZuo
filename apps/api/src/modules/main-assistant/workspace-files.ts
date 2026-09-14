@@ -6,7 +6,7 @@ import { pipeline } from 'node:stream/promises'
 
 import { HttpError } from '../../http/http.js'
 
-export const workAssistantQuotaBytes = 3 * 1024 * 1024 * 1024
+export const mainAssistantQuotaBytes = 3 * 1024 * 1024 * 1024
 export const workAssistantMaximumFileBytes = 200 * 1024 * 1024
 
 const supportedExtensions = new Set(['csv', 'tsv', 'xls', 'xlsx', 'doc', 'docx', 'md', 'txt', 'pdf', 'rtf'])
@@ -86,8 +86,8 @@ function contentLength(request: IncomingMessage): number | null {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
 }
 
-export class WorkAssistantWorkspaceFiles {
-  constructor(private readonly projectRoot: string, private readonly agentId = 'work-assistant') {
+export class AssistantWorkspaceFiles {
+  constructor(private readonly projectRoot: string, private readonly agentId = 'main-assistant') {
     if (!/^[a-z][a-z0-9-]{1,62}$/.test(agentId)) throw new Error('工作区能力标识无效。')
   }
 
@@ -118,7 +118,7 @@ export class WorkAssistantWorkspaceFiles {
     const workspace = await this.prepareWorkspace(accountId)
     const files = await this.visibleFiles(workspace)
     const usedBytes = files.reduce((total, file) => total + file.size, 0)
-    return { files: files.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)), usedBytes, quotaBytes: workAssistantQuotaBytes }
+    return { files: files.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)), usedBytes, quotaBytes: mainAssistantQuotaBytes }
   }
 
   async upload(accountId: string, request: IncomingMessage): Promise<WorkspaceFile> {
@@ -134,7 +134,7 @@ export class WorkAssistantWorkspaceFiles {
       directorySize(path.join(workspace, outputDirectory)),
     ])
     const usedBytes = uploadBytes + outputBytes
-    if (usedBytes - previousSize + (declaredLength ?? 0) > workAssistantQuotaBytes) throw new HttpError(413, '个人工作区空间不足，请删除不再需要的文件后再上传。')
+    if (usedBytes - previousSize + (declaredLength ?? 0) > mainAssistantQuotaBytes) throw new HttpError(413, '个人工作区空间不足，请删除不再需要的文件后再上传。')
 
     const temporary = path.join(workspace, internalDirectory, `.upload-${crypto.randomUUID()}`)
     let received = 0
@@ -142,7 +142,7 @@ export class WorkAssistantWorkspaceFiles {
       for await (const chunk of request) {
         const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
         received += bytes.length
-        if (received > workAssistantMaximumFileBytes || usedBytes - previousSize + received > workAssistantQuotaBytes) throw new HttpError(413, received > workAssistantMaximumFileBytes ? '单个表格文件不能超过 200MB。' : '个人工作区空间不足，请删除不再需要的文件后再上传。')
+        if (received > workAssistantMaximumFileBytes || usedBytes - previousSize + received > mainAssistantQuotaBytes) throw new HttpError(413, received > workAssistantMaximumFileBytes ? '单个表格文件不能超过 200MB。' : '个人工作区空间不足，请删除不再需要的文件后再上传。')
         yield bytes
       }
     }

@@ -36,7 +36,7 @@ function uploadRequest(apiBasePath: string, file: File, onProgress: (progress: n
   })
 }
 
-export function useWorkspaceFiles(apiBasePath = '/api/work-assistant/files') {
+export function useWorkspaceFiles(apiBasePath = '/api/main-assistant/files') {
   const [files, setFiles] = useState<readonly WorkspaceFile[]>([])
   const [usedBytes, setUsedBytes] = useState(0)
   const [quotaBytes, setQuotaBytes] = useState(3 * 1024 * 1024 * 1024)

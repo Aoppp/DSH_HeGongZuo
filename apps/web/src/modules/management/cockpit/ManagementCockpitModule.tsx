@@ -1,5 +1,5 @@
 // 管理 / 驾驶舱模块入口。
-import { Activity, Bell, CalendarCheck, ChevronRight, CircleUserRound, Clock3, FileSpreadsheet, RefreshCw, Search, Settings, UserMinus, Users } from 'lucide-react'
+import { Activity, Bell, CalendarCheck, ChevronRight, CircleUserRound, FileSpreadsheet, RefreshCw, Search, Settings, UserMinus, Users } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { ModuleId, ModuleProps } from '../../../app/types'
@@ -80,7 +80,6 @@ export function ManagementCockpitModule({ user, onNavigate }: ModuleProps) {
     { id: 'employee-agent', label: '员工查询', detail: '查询人员与组织信息', icon: Search, permission: 'employee-query' },
     { id: 'employee-attendance', label: '考勤管理', detail: '查看打卡与异常情况', icon: CalendarCheck, permission: 'employee-attendance' },
     { id: 'employee-reports', label: '日报管理', detail: '查询已同步的员工日报', icon: FileSpreadsheet, permission: 'employee-reports' },
-    { id: 'work-assistant', label: '工作文件', detail: '处理个人工作区文件', icon: Clock3, permission: null },
     { id: 'developer-console', label: '平台管理', detail: '账号、权限与服务状态', icon: Settings, permission: 'platform-administration' },
   ].filter((action) => !action.permission || user.permissions.includes(action.permission)) as readonly { id: ModuleId; label: string; detail: string; icon: typeof Users }[]
 

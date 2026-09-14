@@ -1,12 +1,11 @@
 import { Download, FileSpreadsheet, LoaderCircle, RotateCcw, Send, Square, Trash2, Upload } from 'lucide-react'
 import { type ChangeEvent, type DragEvent, type KeyboardEvent, useEffect, useRef, useState } from 'react'
 
-import type { ModuleProps } from '../../../app/types'
-import { shouldSubmitOnEnter } from '../../../shared/forms/submit-on-enter'
-import { useWorkspaceFiles, type WorkspaceFile } from '../files/use-workspace-files'
-import { useWorkAssistantSession } from '../session/use-work-assistant-session'
+import { shouldSubmitOnEnter } from '../../shared/forms/submit-on-enter'
+import { useWorkspaceFiles, type WorkspaceFile } from './files/use-workspace-files'
+import { useMainAssistantSession } from './session/use-main-assistant-session'
 import { parseMarkdownTable } from './conversation'
-import './work-assistant.css'
+import './main-assistant.css'
 
 function formatBytes(value: number) {
   if (value < 1024 * 1024) return `${Math.ceil(value / 1024)} KB`
@@ -47,7 +46,7 @@ interface WorkspaceAssistantProps {
 }
 
 export function WorkspaceAssistant({ title, description, agentApiBasePath, filesApiBasePath, runtimeId, emptyPrompt, inputPlaceholder }: WorkspaceAssistantProps) {
-  const session = useWorkAssistantSession(agentApiBasePath, runtimeId)
+  const session = useMainAssistantSession(agentApiBasePath, runtimeId)
   const workspaceFiles = useWorkspaceFiles(filesApiBasePath)
   const [draft, setDraft] = useState('')
   const [draggingFiles, setDraggingFiles] = useState(false)
@@ -142,8 +141,4 @@ export function WorkspaceAssistant({ title, description, agentApiBasePath, files
 
 function FileList({ files, filesApiBasePath, onRemove }: { readonly files: readonly WorkspaceFile[]; readonly filesApiBasePath: string; readonly onRemove: (file: WorkspaceFile) => void }) {
   return <div className="work-assistant__file-list">{files.map((file) => <article key={file.path}><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{formatBytes(file.size)} · {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.updatedAt))}</small></div><a href={`${filesApiBasePath}/download?path=${encodeURIComponent(file.path)}`} title="下载"><Download size={16} /></a><button type="button" onClick={() => onRemove(file)} title="删除"><Trash2 size={16} /></button></article>)}</div>
-}
-
-export function WorkAssistantModule(_props: ModuleProps) {
-  return <WorkspaceAssistant title="工作助理" description="上传表格或文档，在个人工作区内完成整理、归类、合并和汇总。" agentApiBasePath="/api/agents/work-assistant" filesApiBasePath="/api/work-assistant/files" runtimeId="work-assistant" emptyPrompt="例如：将“销售数据.xlsx”按客户汇总，或将“会议纪要.docx”整理为一份新的行动清单。" inputPlaceholder="描述你希望如何整理当前工作区的文件或文档…" />
 }

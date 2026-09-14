@@ -12,7 +12,7 @@ import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/
 import { PostgresEmployeeRepository } from './modules/employee/employee-repository.js'
 import { employeeAuditDetail } from './modules/employee/employee-audit.js'
 import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
-import { WorkAssistantWorkspaceFiles } from './modules/work-assistant/workspace-files.js'
+import { AssistantWorkspaceFiles } from './modules/main-assistant/workspace-files.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
 import { runtimeChangeForAccountUpdate } from './modules/accounts/account-runtime-change.js'
 import { registeredAgentPermissionIds, registeredAgentPermissions } from './modules/accounts/agent-runtime-permissions.js'
@@ -53,8 +53,7 @@ const employeeWorkRecords = new MockEmployeeWorkRecordsSource()
 const employeeAttendance = new PostgresAttendanceSource(database)
 const wecomDirectory = new WeComDirectoryRepository(database)
 const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
-const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
-const mainAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot, 'main-assistant')
+const mainAssistantFiles = new AssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
 const recruitment = new RecruitmentRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
@@ -435,29 +434,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (url.pathname === '/api/platform/audit-logs/export' && request.method === 'GET') {
     requirePlatformAdministration(currentUser)
     await platformManagement.exportAuditCsv(response)
-    return
-  }
-
-  if (url.pathname === '/api/work-assistant/files' && request.method === 'GET') {
-    sendJson(response, 200, await workAssistantFiles.list(currentUser.accountId))
-    return
-  }
-
-  if (url.pathname === '/api/work-assistant/files' && request.method === 'POST') {
-    const file = await workAssistantFiles.upload(currentUser.accountId, request)
-    sendJson(response, 201, { file })
-    return
-  }
-
-  if (url.pathname === '/api/work-assistant/files/download' && request.method === 'GET') {
-    await workAssistantFiles.download(currentUser.accountId, url.searchParams.get('path'), response)
-    return
-  }
-
-  if (url.pathname === '/api/work-assistant/files' && request.method === 'DELETE') {
-    const filePath = url.searchParams.get('path')
-    await workAssistantFiles.remove(currentUser.accountId, filePath)
-    sendJson(response, 200, { ok: true })
     return
   }
 

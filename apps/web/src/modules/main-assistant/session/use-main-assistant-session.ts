@@ -2,10 +2,10 @@ import type { HistoryEntry, SessionId, SessionEvent, WorkspaceView } from '@deep
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { AccountDshApiClient, unwrapDshResponse } from '../../../shared/dsh/client'
-import { appendSessionEvents, hasPendingInteractiveTool, latestTurnFinished, mergeHistoryEntries, messagesFromHistory, type AssistantMessage } from '../main/conversation'
+import { appendSessionEvents, hasPendingInteractiveTool, latestTurnFinished, mergeHistoryEntries, messagesFromHistory, type AssistantMessage } from '../conversation'
 
-export type WorkAssistantConnection = 'connecting' | 'connected' | 'reconnecting' | 'failed'
-export type WorkAssistantTask = 'idle' | 'submitting' | 'running' | 'stopping'
+export type MainAssistantConnection = 'connecting' | 'connected' | 'reconnecting' | 'failed'
+export type MainAssistantTask = 'idle' | 'submitting' | 'running' | 'stopping'
 
 const noProgressTimeoutMs = 2 * 60_000
 
@@ -16,10 +16,10 @@ function isAbortReason(reason: unknown): boolean {
 
 function reconnectDelay(attempt: number): number { return Math.min(5_000, 500 * 2 ** Math.min(attempt, 4)) }
 
-export function useWorkAssistantSession(apiBasePath = '/api/agents/work-assistant', runtimeId = 'work-assistant') {
+export function useMainAssistantSession(apiBasePath = '/api/agents/main-assistant', runtimeId = 'main-assistant') {
   const client = useMemo(() => new AccountDshApiClient(apiBasePath), [apiBasePath])
-  const [connection, setConnection] = useState<WorkAssistantConnection>('connecting')
-  const [task, setTask] = useState<WorkAssistantTask>('idle')
+  const [connection, setConnection] = useState<MainAssistantConnection>('connecting')
+  const [task, setTask] = useState<MainAssistantTask>('idle')
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null)
   const [sessionId, setSessionId] = useState<SessionId | null>(null)
   const [history, setHistory] = useState<readonly HistoryEntry[]>([])
@@ -28,12 +28,12 @@ export function useWorkAssistantSession(apiBasePath = '/api/agents/work-assistan
   const [settledRevision, setSettledRevision] = useState(0)
   const activeSessionRef = useRef<SessionId | null>(null)
   const workspaceRef = useRef<WorkspaceView | null>(null)
-  const taskRef = useRef<WorkAssistantTask>('idle')
+  const taskRef = useRef<MainAssistantTask>('idle')
   const lastProgressAt = useRef(Date.now())
   const pendingEvents = useRef(new Map<number, SessionEvent>())
   const flushTimer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
 
-  const transitionTask = useCallback((next: WorkAssistantTask) => {
+  const transitionTask = useCallback((next: MainAssistantTask) => {
     taskRef.current = next
     setTask(next)
   }, [])

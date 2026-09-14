@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarCheck, ClipboardList, Code2, Files, Gauge, Landmark, LayoutDashboard, MessageSquareText, Presentation, Users } from 'lucide-react'
+import { BriefcaseBusiness, CalendarCheck, ClipboardList, Code2, Gauge, Landmark, LayoutDashboard, MessageSquareText, Presentation, Users } from 'lucide-react'
 
 import { DeveloperConsoleModule } from '../modules/developer/console/DeveloperConsoleModule'
 import { EmployeeAgentModule } from '../modules/employee/agent/EmployeeAgentModule'
@@ -10,7 +10,6 @@ import { FinanceManagementModule } from '../modules/finance/management/FinanceMa
 import { ProjectManagementModule } from '../modules/project/management/ProjectManagementModule'
 import { OverviewModule } from '../modules/overview/main/OverviewModule'
 import { MainAssistantModule } from '../modules/main-assistant/MainAssistantModule'
-import { WorkAssistantModule } from '../modules/work-assistant/main/WorkAssistantModule'
 import { MeetingRecordsModule } from '../modules/meetings/records/MeetingRecordsModule'
 import { RecruitmentManagementModule } from '../modules/recruitment/RecruitmentManagementModule'
 import type { AuthenticatedUser, ModuleId, PlatformModule } from './types'
@@ -42,14 +41,6 @@ export const platformModules: readonly PlatformModule[] = [
     description: '查询已授权的业务信息并处理工作文件',
     icon: MessageSquareText,
     component: MainAssistantModule,
-  },
-  {
-    id: 'work-assistant',
-    path: '/work-assistant',
-    label: '工作助理',
-    description: '整理个人工作区中的表格文件',
-    icon: Files,
-    component: WorkAssistantModule,
   },
   {
     id: 'employee-data',

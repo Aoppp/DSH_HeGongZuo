@@ -5,7 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { Readable } from 'node:stream'
 
-import { WorkAssistantWorkspaceFiles, workAssistantQuotaBytes } from '../dist/modules/work-assistant/workspace-files.js'
+import { AssistantWorkspaceFiles, mainAssistantQuotaBytes } from '../dist/modules/main-assistant/workspace-files.js'
 
 function uploadRequest(name, content) {
   const request = Readable.from([Buffer.from(content)])
@@ -13,10 +13,10 @@ function uploadRequest(name, content) {
   return request
 }
 
-test('工作助理将表格上传到账号隔离目录并统计空间', async () => {
+test('和工作助手将文件上传到账号隔离目录并统计空间', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'hegongzuo-workspace-'))
   try {
-    const files = new WorkAssistantWorkspaceFiles(root)
+    const files = new AssistantWorkspaceFiles(root)
     const uploaded = await files.upload('liuao', uploadRequest('销售 数据.csv', '名称,金额\n甲,100\n'))
     assert.equal(uploaded.name, '销售 数据.csv')
     assert.equal(uploaded.path, 'uploads/销售 数据.csv')
@@ -24,7 +24,7 @@ test('工作助理将表格上传到账号隔离目录并统计空间', async ()
     assert.equal(listed.files.length, 1)
     assert.equal(listed.files[0].path, 'uploads/销售 数据.csv')
     assert.equal(listed.usedBytes, Buffer.byteLength('名称,金额\n甲,100\n'))
-    assert.equal(listed.quotaBytes, workAssistantQuotaBytes)
+    assert.equal(listed.quotaBytes, mainAssistantQuotaBytes)
     const document = await files.upload('liuao', uploadRequest('会议纪要.docx', 'document fixture'))
     assert.equal(document.name, '会议纪要.docx')
     const workspace = files.workspacePath('liuao')
@@ -41,11 +41,9 @@ test('工作助理将表格上传到账号隔离目录并统计空间', async ()
   }
 })
 
-test('不同助手和账号使用相互隔离的工作区', () => {
+test('不同账号使用相互隔离的主助手工作区', () => {
   const root = '/opt/hegongzuo'
-  const workAssistant = new WorkAssistantWorkspaceFiles(root)
-  const mainAssistant = new WorkAssistantWorkspaceFiles(root, 'main-assistant')
-  assert.equal(workAssistant.workspacePath('test2'), path.join(root, '.runtime', 'agent-sandboxes', 'work-assistant--test2', 'workspace'))
+  const mainAssistant = new AssistantWorkspaceFiles(root)
   assert.equal(mainAssistant.workspacePath('test2'), path.join(root, '.runtime', 'agent-sandboxes', 'main-assistant--test2', 'workspace'))
   assert.notEqual(mainAssistant.workspacePath('test2'), mainAssistant.workspacePath('test3'))
 })
