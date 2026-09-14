@@ -32,6 +32,12 @@ export const employmentTypes = [
 
 export type EmploymentType = (typeof employmentTypes)[number]
 
+export const maritalStatuses = ['未婚', '已婚', '离异'] as const
+export type MaritalStatus = (typeof maritalStatuses)[number]
+
+export const childbearingStatuses = ['未育', '已育'] as const
+export type ChildbearingStatus = (typeof childbearingStatuses)[number]
+
 /** 中国大陆手机号码或固定电话号码（固定电话可带区号及连字符）。 */
 export function isValidChinesePhone(value: string): boolean {
   const normalized = value.replace(/[\s-]/g, '')

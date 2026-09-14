@@ -36,3 +36,11 @@ test('试用期时长接受0至12的整数或留空', () => {
     assert.throws(() => parseEmployeeInput(employee({ probationMonths })), EmployeeValidationError)
   }
 })
+
+test('婚否和育否仅接受规定值或留空', () => {
+  assert.equal(parseEmployeeInput(employee({ maritalStatus: '离异' })).maritalStatus, '离异')
+  assert.equal(parseEmployeeInput(employee({ hasChildren: '未育' })).hasChildren, '未育')
+  assert.equal(parseEmployeeInput(employee({ maritalStatus: '', hasChildren: null })).maritalStatus, null)
+  assert.throws(() => parseEmployeeInput(employee({ maritalStatus: '未知' })), /婚否只能填写未婚、已婚、离异/)
+  assert.throws(() => parseEmployeeInput(employee({ hasChildren: '否' })), /育否只能填写未育、已育/)
+})

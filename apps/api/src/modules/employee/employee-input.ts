@@ -1,9 +1,11 @@
 // 员工模块输入校验。
 import {
+  childbearingStatuses,
   employeeStatuses,
   employmentTypes,
   isValidChineseIdNumber,
   isValidChinesePhone,
+  maritalStatuses,
   type EmployeeStatus,
   type EmploymentType,
 } from '@hegongzuo/employee-domain'
@@ -136,6 +138,14 @@ export function parseEmployeeInput(value: unknown): EmployeeInput {
   const emergencyContactPhone = optionalString(record, 'emergencyContactPhone')
   if (emergencyContactPhone && !isValidChinesePhone(emergencyContactPhone)) throw new EmployeeValidationError('emergencyContactPhone 格式无效。')
   if (idNumber && !isValidChineseIdNumber(idNumber)) throw new EmployeeValidationError('idNumber 格式无效。')
+  const maritalStatus = optionalString(record, 'maritalStatus')
+  if (maritalStatus && !maritalStatuses.includes(maritalStatus as typeof maritalStatuses[number])) {
+    throw new EmployeeValidationError('婚否只能填写未婚、已婚、离异，或留空。')
+  }
+  const hasChildren = optionalString(record, 'hasChildren')
+  if (hasChildren && !childbearingStatuses.includes(hasChildren as typeof childbearingStatuses[number])) {
+    throw new EmployeeValidationError('育否只能填写未育、已育，或留空。')
+  }
 
   return {
     displayName: requiredString(record, 'displayName'),
@@ -158,8 +168,8 @@ export function parseEmployeeInput(value: unknown): EmployeeInput {
     major: optionalString(record, 'major'),
     school: optionalString(record, 'school'),
     graduationDate: optionalDate(record, 'graduationDate'),
-    maritalStatus: optionalString(record, 'maritalStatus'),
-    hasChildren: optionalString(record, 'hasChildren'),
+    maritalStatus,
+    hasChildren,
     hometown: optionalString(record, 'hometown'),
     emergencyContact: optionalString(record, 'emergencyContact'),
     emergencyContactPhone,

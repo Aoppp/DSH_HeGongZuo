@@ -1,3 +1,5 @@
+import { childbearingStatuses, maritalStatuses } from '@hegongzuo/employee-domain'
+
 import type { EmployeeRecord, EmploymentType } from './employee-data'
 
 export const employeePasteColumns = [
@@ -39,6 +41,12 @@ function employmentType(value: string, errors: string[]): EmploymentType {
   const types: Record<string, EmploymentType> = { '': 'full_time', '全职': 'full_time', '合同工': 'full_time', '正式': 'full_time', '正式员工': 'full_time', 'full_time': 'full_time', '兼职': 'part_time', 'part_time': 'part_time', '外包': 'contractor', '劳务': 'contractor', 'contractor': 'contractor', '实习': 'intern', '实习生': 'intern', 'intern': 'intern' }
   const result = types[key]
   if (!result) { errors.push(`无法识别用工类型“${value.trim()}”。`); return 'full_time' }
+  return result
+}
+
+function limitedOptional(value: string, allowed: readonly string[], label: string, errors: string[]): string | null {
+  const result = optional(value)
+  if (result && !allowed.includes(result)) errors.push(`${label}只能填写${allowed.join('、')}，或留空。`)
   return result
 }
 
@@ -95,8 +103,8 @@ export function parseEmployeePaste(text: string, now = new Date()): EmployeePast
     expectedRegularDate, actualRegularDate, contractEndDate, departmentName: cells[8]!, departmentLevel2: optional(cells[9]!),
     jobTitle: cells[10]!, employmentType: employmentType(cells[11]!, errors), gender: optional(cells[12]!), idNumber: optional(cells[13]!)?.toUpperCase() ?? null,
     birthDate, workPhone: cells[17]!, personalEmail: optional(cells[18]!), workEmail: optional(cells[19]!), education: optional(cells[20]!),
-    major: optional(cells[21]!), school: optional(cells[22]!), graduationDate, maritalStatus: optional(cells[24]!),
-    hasChildren: optional(cells[25]!), hometown: optional(cells[26]!), emergencyContact: optional(cells[27]!),
+    major: optional(cells[21]!), school: optional(cells[22]!), graduationDate, maritalStatus: limitedOptional(cells[24]!, maritalStatuses, '婚否', errors),
+    hasChildren: limitedOptional(cells[25]!, childbearingStatuses, '育否', errors), hometown: optional(cells[26]!), emergencyContact: optional(cells[27]!),
     emergencyContactPhone: optional(cells[28]!), residentialAddress: optional(cells[29]!), idAddress: optional(cells[30]!),
     bankAccount: optional(cells[31]!), bankName: optional(cells[32]!),
   }

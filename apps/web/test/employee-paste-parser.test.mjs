@@ -60,6 +60,22 @@ test('试用期时长支持0至12的整数或留空', () => {
   }
 })
 
+test('婚否和育否仅接受规定值或留空', () => {
+  const invalidMarital = [...row]
+  invalidMarital[24] = '未知'
+  assert.equal(parseEmployeePaste(invalidMarital.join('\t')).errors[0], '婚否只能填写未婚、已婚、离异，或留空。')
+  const invalidChildbearing = [...row]
+  invalidChildbearing[25] = '否'
+  assert.equal(parseEmployeePaste(invalidChildbearing.join('\t')).errors[0], '育否只能填写未育、已育，或留空。')
+  const blank = [...row]
+  blank[24] = ''
+  blank[25] = ''
+  const result = parseEmployeePaste(blank.join('\t'))
+  assert.deepEqual(result.errors, [])
+  assert.equal(result.values?.maritalStatus, null)
+  assert.equal(result.values?.hasChildren, null)
+})
+
 test('年龄、工龄和合同剩余天数只用于核对', () => {
   const changed = [...row]
   changed[15] = '99'
