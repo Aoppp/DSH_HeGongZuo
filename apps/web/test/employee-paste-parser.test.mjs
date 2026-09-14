@@ -44,6 +44,22 @@ test('将合同工识别为全职', () => {
   assert.deepEqual(result.errors, [])
 })
 
+test('试用期时长支持0至12的整数或留空', () => {
+  for (const [raw, expected] of [['0', 0], ['12', 12], ['', null]]) {
+    const changed = [...row]
+    changed[3] = raw
+    if (raw === '0') changed[4] = changed[2]
+    const result = parseEmployeePaste(changed.join('\t'))
+    assert.deepEqual(result.errors, [])
+    assert.equal(result.values?.probationMonths, expected)
+  }
+  for (const raw of ['-1', '13', '1.5']) {
+    const changed = [...row]
+    changed[3] = raw
+    assert.match(parseEmployeePaste(changed.join('\t')).errors[0], /0至12之间的整数/)
+  }
+})
+
 test('年龄、工龄和合同剩余天数只用于核对', () => {
   const changed = [...row]
   changed[15] = '99'

@@ -71,7 +71,7 @@ export function parseEmployeePaste(text: string, now = new Date()): EmployeePast
   const graduationDate = date(cells[23]!, '毕业时间', errors)
   const probationText = cells[3]!
   const probation = probationText ? Number(probationText) : null
-  if (probation !== null && (!Number.isInteger(probation) || probation < 1 || probation > 12)) errors.push('试用期时长必须是1至12之间的整数。')
+  if (probation !== null && (!Number.isInteger(probation) || probation < 0 || probation > 12)) errors.push('试用期时长必须留空或填写0至12之间的整数。')
 
   if (birthDate) {
     const birth = new Date(`${birthDate}T00:00:00`)
@@ -85,7 +85,7 @@ export function parseEmployeePaste(text: string, now = new Date()): EmployeePast
     const end = new Date(`${contractEndDate}T00:00:00`)
     numericCheck(cells[7]!, Math.round((end.getTime() - today.getTime()) / 86_400_000), '合同剩余天数', warnings)
   }
-  if (hireDate && probation && expectedRegularDate) {
+  if (hireDate && probation !== null && expectedRegularDate) {
     const expected = new Date(`${hireDate}T00:00:00Z`); expected.setUTCMonth(expected.getUTCMonth() + probation)
     if (expected.toISOString().slice(0, 10) !== expectedRegularDate) warnings.push('预计转正日期与入职时间、试用期计算结果不一致，请确认。')
   }

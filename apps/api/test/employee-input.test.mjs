@@ -27,3 +27,12 @@ test('员工联系方式和身份证号拒绝无效格式', () => {
     assert.throws(() => parseEmployeeInput(employee(overrides)), EmployeeValidationError)
   }
 })
+
+test('试用期时长接受0至12的整数或留空', () => {
+  assert.equal(parseEmployeeInput(employee({ probationMonths: 0 })).probationMonths, 0)
+  assert.equal(parseEmployeeInput(employee({ probationMonths: 12 })).probationMonths, 12)
+  assert.equal(parseEmployeeInput(employee({ probationMonths: null })).probationMonths, null)
+  for (const probationMonths of [-1, 13, 1.5]) {
+    assert.throws(() => parseEmployeeInput(employee({ probationMonths })), EmployeeValidationError)
+  }
+})

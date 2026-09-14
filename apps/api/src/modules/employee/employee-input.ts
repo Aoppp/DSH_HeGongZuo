@@ -170,7 +170,7 @@ export function parseEmployeeInput(value: unknown): EmployeeInput {
     archiveNo: optionalString(record, 'archiveNo'),
     notes: optionalString(record, 'notes'),
     departmentLevel2: optionalString(record, 'departmentLevel2'),
-    probationMonths: optionalInteger(record, 'probationMonths', 1, 12),
+    probationMonths: optionalInteger(record, 'probationMonths', 0, 12),
     expectedRegularDate: optionalDate(record, 'expectedRegularDate'),
     actualRegularDate: optionalDate(record, 'actualRegularDate'),
     contractEndDate: optionalDate(record, 'contractEndDate'),
