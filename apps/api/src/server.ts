@@ -54,6 +54,7 @@ const employeeAttendance = new PostgresAttendanceSource(database)
 const wecomDirectory = new WeComDirectoryRepository(database)
 const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
 const workAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot)
+const mainAssistantFiles = new WorkAssistantWorkspaceFiles(projectRoot, 'main-assistant')
 const meetings = new MeetingRepository(database)
 const recruitment = new RecruitmentRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
@@ -456,6 +457,28 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (url.pathname === '/api/work-assistant/files' && request.method === 'DELETE') {
     const filePath = url.searchParams.get('path')
     await workAssistantFiles.remove(currentUser.accountId, filePath)
+    sendJson(response, 200, { ok: true })
+    return
+  }
+
+  if (url.pathname === '/api/main-assistant/files' && request.method === 'GET') {
+    sendJson(response, 200, await mainAssistantFiles.list(currentUser.accountId))
+    return
+  }
+
+  if (url.pathname === '/api/main-assistant/files' && request.method === 'POST') {
+    const file = await mainAssistantFiles.upload(currentUser.accountId, request)
+    sendJson(response, 201, { file })
+    return
+  }
+
+  if (url.pathname === '/api/main-assistant/files/download' && request.method === 'GET') {
+    await mainAssistantFiles.download(currentUser.accountId, url.searchParams.get('path'), response)
+    return
+  }
+
+  if (url.pathname === '/api/main-assistant/files' && request.method === 'DELETE') {
+    await mainAssistantFiles.remove(currentUser.accountId, url.searchParams.get('path'))
     sendJson(response, 200, { ok: true })
     return
   }

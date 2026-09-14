@@ -87,11 +87,13 @@ function contentLength(request: IncomingMessage): number | null {
 }
 
 export class WorkAssistantWorkspaceFiles {
-  constructor(private readonly projectRoot: string) {}
+  constructor(private readonly projectRoot: string, private readonly agentId = 'work-assistant') {
+    if (!/^[a-z][a-z0-9-]{1,62}$/.test(agentId)) throw new Error('工作区能力标识无效。')
+  }
 
   workspacePath(accountId: string): string {
     if (!/^[a-z][a-z0-9]{1,31}$/.test(accountId)) throw new HttpError(400, '账号标识无效。')
-    return path.join(this.projectRoot, '.runtime', 'agent-sandboxes', `work-assistant--${accountId}`, 'workspace')
+    return path.join(this.projectRoot, '.runtime', 'agent-sandboxes', `${this.agentId}--${accountId}`, 'workspace')
   }
 
   private async prepareWorkspace(accountId: string): Promise<string> {

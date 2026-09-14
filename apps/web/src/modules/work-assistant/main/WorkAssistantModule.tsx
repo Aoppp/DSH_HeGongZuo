@@ -36,9 +36,19 @@ function MarkdownMessage({ text }: { readonly text: string }) {
   })}</>
 }
 
-export function WorkAssistantModule(_props: ModuleProps) {
-  const session = useWorkAssistantSession()
-  const workspaceFiles = useWorkspaceFiles()
+interface WorkspaceAssistantProps {
+  readonly title: string
+  readonly description: string
+  readonly agentApiBasePath: string
+  readonly filesApiBasePath: string
+  readonly runtimeId: string
+  readonly emptyPrompt: string
+  readonly inputPlaceholder: string
+}
+
+export function WorkspaceAssistant({ title, description, agentApiBasePath, filesApiBasePath, runtimeId, emptyPrompt, inputPlaceholder }: WorkspaceAssistantProps) {
+  const session = useWorkAssistantSession(agentApiBasePath, runtimeId)
+  const workspaceFiles = useWorkspaceFiles(filesApiBasePath)
   const [draft, setDraft] = useState('')
   const [draggingFiles, setDraggingFiles] = useState(false)
   const [clearing, setClearing] = useState(false)
@@ -102,34 +112,38 @@ export function WorkAssistantModule(_props: ModuleProps) {
 
   return <div className="work-assistant module-page">
     <section className="work-assistant__heading">
-      <div><h1>工作助理</h1><p>上传表格或文档，在个人工作区内完成整理、归类、合并和汇总。</p></div>
+      <div><h1>{title}</h1><p>{description}</p></div>
       <span className={session.connection === 'connected' && session.workspace ? 'work-assistant__status' : 'work-assistant__status is-loading'}>{connectionText}</span>
     </section>
     {error && <div className="work-assistant__error">{error}</div>}
     <div className="work-assistant__layout">
       <section className="work-assistant__files panel-card">
-        <header><div><h2>工作区文件</h2><p>输入区用于提交原始文件；输出区仅保留你明确要求生成的结果。</p></div></header>
+        <header><div><h2>工作区文件</h2><p>输入区用于提交原始文件；输出区展示处理结果。</p></div></header>
         <section className={`work-assistant__zone work-assistant__zone--input${draggingFiles ? ' is-dragging' : ''}`} onDragEnter={dragEnter} onDragOver={(event) => event.preventDefault()} onDragLeave={dragLeave} onDrop={dropFile}>
-          <header><div><h3>输入区</h3><p>上传需要处理的表格或文档，支持拖拽，单个文件不超过 200MB。</p></div><button className="work-assistant__upload" type="button" onClick={() => fileInput.current?.click()} disabled={workspaceFiles.uploading || initializing}><Upload size={16} />{workspaceFiles.uploading ? `正在上传${workspaceFiles.uploadProgress === null ? '' : ` ${workspaceFiles.uploadProgress}%`}` : '上传文件'}</button><input ref={fileInput} type="file" accept=".csv,.tsv,.xls,.xlsx,.doc,.docx,.md,.txt,.pdf,.rtf" onChange={selectFile} /></header>
+          <header><div><h3>输入区</h3><p>上传需要处理的表格或文档，单个文件不超过 200MB。</p></div><button className="work-assistant__upload" type="button" onClick={() => fileInput.current?.click()} disabled={workspaceFiles.uploading || initializing}><Upload size={16} />{workspaceFiles.uploading ? `正在上传${workspaceFiles.uploadProgress === null ? '' : ` ${workspaceFiles.uploadProgress}%`}` : '上传文件'}</button><input ref={fileInput} type="file" accept=".csv,.tsv,.xls,.xlsx,.doc,.docx,.md,.txt,.pdf,.rtf" onChange={selectFile} /></header>
           {draggingFiles && <div className="work-assistant__drop-hint">松开以上传到输入区</div>}
           {workspaceFiles.uploading && <div className="work-assistant__upload-progress" aria-label="上传进度"><i><b style={{ width: `${workspaceFiles.uploadProgress ?? 0}%` }} /></i><span>{workspaceFiles.uploadProgress ?? 0}%</span></div>}
-          {inputFiles.length === 0 ? <div className="work-assistant__zone-empty">尚未提交输入文件。</div> : <FileList files={inputFiles} onRemove={removeFile} />}
+          {inputFiles.length === 0 ? <div className="work-assistant__zone-empty">尚未提交输入文件。</div> : <FileList files={inputFiles} filesApiBasePath={filesApiBasePath} onRemove={removeFile} />}
         </section>
         <section className="work-assistant__zone work-assistant__zone--output">
-          <header><div><h3>输出区</h3><p>仅显示明确要求生成、导出或保存的结果文件。</p></div></header>
-          {outputFiles.length === 0 ? <div className="work-assistant__zone-empty">暂无输出文件。</div> : <FileList files={outputFiles} onRemove={removeFile} />}
+          <header><div><h3>输出区</h3><p>展示生成、导出或保存的文件。</p></div></header>
+          {outputFiles.length === 0 ? <div className="work-assistant__zone-empty">暂无输出文件。</div> : <FileList files={outputFiles} filesApiBasePath={filesApiBasePath} onRemove={removeFile} />}
         </section>
         <div className="work-assistant__quota"><span>已使用 {formatBytes(workspaceFiles.usedBytes)} / {formatBytes(workspaceFiles.quotaBytes)}</span><i><b style={{ width: `${Math.min(100, workspaceFiles.usedBytes / workspaceFiles.quotaBytes * 100)}%` }} /></i></div>
       </section>
       <section className="work-assistant__conversation panel-card">
         <header><div><h2>任务处理</h2><p>分析结果会直接回复；如需生成文件，请明确说明文件类型和内容。</p></div><button className="work-assistant__clear" type="button" onClick={() => void clearConversation()} disabled={!session.sessionId || session.busy || clearing}>{clearing ? <LoaderCircle className="spin" size={15} /> : <RotateCcw size={15} />}清空对话</button></header>
-        <div className="work-assistant__messages">{initializing ? <div className="work-assistant__empty"><LoaderCircle className="spin" size={22} />正在连接工作空间…</div> : session.messages.length === 0 ? <div className="work-assistant__empty">例如：将“销售数据.xlsx”按客户汇总，或将“会议纪要.docx”整理为一份新的行动清单。</div> : session.messages.map((message) => <article className={`work-assistant__message work-assistant__message--${message.kind}`} key={message.id}>{message.kind === 'assistant' ? <MarkdownMessage text={message.text} /> : message.text}{message.state === 'running' && session.busy && <span className="work-assistant__message-progress"><LoaderCircle className="spin" size={13} />正在生成</span>}</article>)}{session.busy && <div className="work-assistant__working"><LoaderCircle className="spin" size={15} />正在处理，长时间无进展会自动停止。</div>}</div>
-        <div className="work-assistant__composer"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={keyDown} disabled={!session.sessionId || session.busy} placeholder="描述你希望如何整理当前工作区的文件或文档…" rows={3} />{session.busy ? <button className="work-assistant__cancel" type="button" onClick={() => void session.stop()}><Square size={16} />停止处理</button> : <button type="button" onClick={submit} disabled={!draft.trim() || !session.sessionId}><Send size={18} />发送</button>}</div>
+        <div className="work-assistant__messages">{initializing ? <div className="work-assistant__empty"><LoaderCircle className="spin" size={22} />正在连接工作空间…</div> : session.messages.length === 0 ? <div className="work-assistant__empty">{emptyPrompt}</div> : session.messages.map((message) => <article className={`work-assistant__message work-assistant__message--${message.kind}`} key={message.id}>{message.kind === 'assistant' ? <MarkdownMessage text={message.text} /> : message.text}{message.state === 'running' && session.busy && <span className="work-assistant__message-progress"><LoaderCircle className="spin" size={13} />正在生成</span>}</article>)}{session.busy && <div className="work-assistant__working"><LoaderCircle className="spin" size={15} />正在处理，长时间无进展会自动停止。</div>}</div>
+        <div className="work-assistant__composer"><textarea value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={keyDown} disabled={!session.sessionId || session.busy} placeholder={inputPlaceholder} rows={3} />{session.busy ? <button className="work-assistant__cancel" type="button" onClick={() => void session.stop()}><Square size={16} />停止处理</button> : <button type="button" onClick={submit} disabled={!draft.trim() || !session.sessionId}><Send size={18} />发送</button>}</div>
       </section>
     </div>
   </div>
 }
 
-function FileList({ files, onRemove }: { readonly files: readonly WorkspaceFile[]; readonly onRemove: (file: WorkspaceFile) => void }) {
-  return <div className="work-assistant__file-list">{files.map((file) => <article key={file.path}><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{formatBytes(file.size)} · {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.updatedAt))}</small></div><a href={`/api/work-assistant/files/download?path=${encodeURIComponent(file.path)}`} title="下载"><Download size={16} /></a><button type="button" onClick={() => onRemove(file)} title="删除"><Trash2 size={16} /></button></article>)}</div>
+function FileList({ files, filesApiBasePath, onRemove }: { readonly files: readonly WorkspaceFile[]; readonly filesApiBasePath: string; readonly onRemove: (file: WorkspaceFile) => void }) {
+  return <div className="work-assistant__file-list">{files.map((file) => <article key={file.path}><FileSpreadsheet size={18} /><div><strong>{file.name}</strong><small>{formatBytes(file.size)} · {new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(file.updatedAt))}</small></div><a href={`${filesApiBasePath}/download?path=${encodeURIComponent(file.path)}`} title="下载"><Download size={16} /></a><button type="button" onClick={() => onRemove(file)} title="删除"><Trash2 size={16} /></button></article>)}</div>
+}
+
+export function WorkAssistantModule(_props: ModuleProps) {
+  return <WorkspaceAssistant title="工作助理" description="上传表格或文档，在个人工作区内完成整理、归类、合并和汇总。" agentApiBasePath="/api/agents/work-assistant" filesApiBasePath="/api/work-assistant/files" runtimeId="work-assistant" emptyPrompt="例如：将“销售数据.xlsx”按客户汇总，或将“会议纪要.docx”整理为一份新的行动清单。" inputPlaceholder="描述你希望如何整理当前工作区的文件或文档…" />
 }

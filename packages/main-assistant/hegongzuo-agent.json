@@ -1,0 +1,8 @@
+{
+  "id": "main-assistant",
+  "permissionId": "main-assistant",
+  "access": "base",
+  "label": "和工作助手",
+  "runtime": "dsh-web",
+  "apiBasePath": "/api/agents/main-assistant"
+}

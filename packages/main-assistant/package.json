@@ -1,0 +1,32 @@
+{
+  "name": "@hegongzuo/main-assistant",
+  "version": "0.0.0",
+  "private": true,
+  "description": "和工作统一业务与文件处理入口",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "cordis.patch.yml"],
+  "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@hegongzuo/agent-runtime-contract": "workspace:*",
+    "@hegongzuo/employee-agent": "workspace:*",
+    "@hegongzuo/work-assistant": "workspace:*",
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-system-prompt": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-workspace": "0.1.0-rc.6",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": { "@types/pg": "^8.21.0" }
+}

@@ -1,0 +1,4 @@
+# 和工作统一入口：基础文件处理与按权限开放的业务查询。
+- insert:
+    - id: hegongzuo-main-assistant
+      name: '@hegongzuo/main-assistant'

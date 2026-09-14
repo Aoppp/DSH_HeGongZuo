@@ -6,6 +6,8 @@ import { publishAgentRuntimeReadiness } from '@hegongzuo/agent-runtime-contract'
 
 import { registerSessionDeletionRoute } from './session-deletion.js'
 
+export { registerSessionDeletionRoute } from './session-deletion.js'
+
 export const name = 'hegongzuo-work-assistant'
 export const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'webServer', 'agents', 'sessions', 'sessionPersistence', 'storageDomain']
 

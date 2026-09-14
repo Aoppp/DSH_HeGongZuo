@@ -40,3 +40,12 @@ test('工作助理将表格上传到账号隔离目录并统计空间', async ()
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test('不同助手和账号使用相互隔离的工作区', () => {
+  const root = '/opt/hegongzuo'
+  const workAssistant = new WorkAssistantWorkspaceFiles(root)
+  const mainAssistant = new WorkAssistantWorkspaceFiles(root, 'main-assistant')
+  assert.equal(workAssistant.workspacePath('test2'), path.join(root, '.runtime', 'agent-sandboxes', 'work-assistant--test2', 'workspace'))
+  assert.equal(mainAssistant.workspacePath('test2'), path.join(root, '.runtime', 'agent-sandboxes', 'main-assistant--test2', 'workspace'))
+  assert.notEqual(mainAssistant.workspacePath('test2'), mainAssistant.workspacePath('test3'))
+})

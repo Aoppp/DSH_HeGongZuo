@@ -80,6 +80,7 @@ export async function apply(ctx: Context): Promise<void> {
 
 export { loadEmployeeDataset } from './data.js'
 export { EmployeeRepository } from './repository.js'
+export type { EmployeeDataSource } from './repository.js'
 export { PostgresEmployeeRepository } from './postgres-repository.js'
 export { permanentlyDeleteSession, registerSessionDeletionRoute } from './session-deletion.js'
 export { createEmployeeTools } from './tools.js'

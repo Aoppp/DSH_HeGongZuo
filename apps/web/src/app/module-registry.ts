@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarCheck, ClipboardList, Code2, Files, Gauge, Landmark, LayoutDashboard, Presentation, Users } from 'lucide-react'
+import { BriefcaseBusiness, CalendarCheck, ClipboardList, Code2, Files, Gauge, Landmark, LayoutDashboard, MessageSquareText, Presentation, Users } from 'lucide-react'
 
 import { DeveloperConsoleModule } from '../modules/developer/console/DeveloperConsoleModule'
 import { EmployeeAgentModule } from '../modules/employee/agent/EmployeeAgentModule'
@@ -9,6 +9,7 @@ import { ManagementCockpitModule } from '../modules/management/cockpit/Managemen
 import { FinanceManagementModule } from '../modules/finance/management/FinanceManagementModule'
 import { ProjectManagementModule } from '../modules/project/management/ProjectManagementModule'
 import { OverviewModule } from '../modules/overview/main/OverviewModule'
+import { MainAssistantModule } from '../modules/main-assistant/MainAssistantModule'
 import { WorkAssistantModule } from '../modules/work-assistant/main/WorkAssistantModule'
 import { MeetingRecordsModule } from '../modules/meetings/records/MeetingRecordsModule'
 import { RecruitmentManagementModule } from '../modules/recruitment/RecruitmentManagementModule'
@@ -33,6 +34,14 @@ export const platformModules: readonly PlatformModule[] = [
     description: '当前角色的工作入口',
     icon: LayoutDashboard,
     component: OverviewModule,
+  },
+  {
+    id: 'main-assistant',
+    path: '/assistant',
+    label: '和工作助手',
+    description: '查询已授权的业务信息并处理工作文件',
+    icon: MessageSquareText,
+    component: MainAssistantModule,
   },
   {
     id: 'work-assistant',

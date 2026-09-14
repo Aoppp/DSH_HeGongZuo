@@ -16,8 +16,8 @@ function isAbortReason(reason: unknown): boolean {
 
 function reconnectDelay(attempt: number): number { return Math.min(5_000, 500 * 2 ** Math.min(attempt, 4)) }
 
-export function useWorkAssistantSession() {
-  const client = useMemo(() => new AccountDshApiClient('/api/agents/work-assistant'), [])
+export function useWorkAssistantSession(apiBasePath = '/api/agents/work-assistant', runtimeId = 'work-assistant') {
+  const client = useMemo(() => new AccountDshApiClient(apiBasePath), [apiBasePath])
   const [connection, setConnection] = useState<WorkAssistantConnection>('connecting')
   const [task, setTask] = useState<WorkAssistantTask>('idle')
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null)
@@ -192,7 +192,7 @@ export function useWorkAssistantSession() {
         try {
           const workspaceResponse = unwrapDshResponse(await client.workspace.list({}, controller.signal))
           const items = workspaceResponse.items
-          const targetWorkspace = items.find((item) => item.path.includes('/.runtime/agent-sandboxes/work-assistant--') && item.path.endsWith('/workspace')) ?? items[0]
+          const targetWorkspace = items.find((item) => item.path.includes(`/.runtime/agent-sandboxes/${runtimeId}--`) && item.path.endsWith('/workspace')) ?? items[0]
           if (!targetWorkspace) throw new Error('工作空间正在准备。')
           const sessions = unwrapDshResponse(await client.sessions.list({}, controller.signal))
           const existing = sessions.items.find((item) => item.cwd === targetWorkspace.path && item.origin !== 'subagent')
@@ -264,7 +264,7 @@ export function useWorkAssistantSession() {
       activeSessionRef.current = null
       workspaceRef.current = null
     }
-  }, [clearEventQueue, client, loadHistory, queueEvent, reconcile, settleTask, transitionTask])
+  }, [clearEventQueue, client, loadHistory, queueEvent, reconcile, runtimeId, settleTask, transitionTask])
 
   useEffect(() => {
     if (task === 'idle' || task === 'stopping' || !sessionId) return

@@ -16,10 +16,10 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   return body
 }
 
-function uploadRequest(file: File, onProgress: (progress: number) => void): Promise<void> {
+function uploadRequest(apiBasePath: string, file: File, onProgress: (progress: number) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
-    request.open('POST', '/api/work-assistant/files')
+    request.open('POST', apiBasePath)
     request.timeout = 5 * 60_000
     request.setRequestHeader('content-type', file.type || 'application/octet-stream')
     request.setRequestHeader('x-workspace-file-name', encodeURIComponent(file.name))
@@ -36,7 +36,7 @@ function uploadRequest(file: File, onProgress: (progress: number) => void): Prom
   })
 }
 
-export function useWorkspaceFiles() {
+export function useWorkspaceFiles(apiBasePath = '/api/work-assistant/files') {
   const [files, setFiles] = useState<readonly WorkspaceFile[]>([])
   const [usedBytes, setUsedBytes] = useState(0)
   const [quotaBytes, setQuotaBytes] = useState(3 * 1024 * 1024 * 1024)
@@ -46,31 +46,31 @@ export function useWorkspaceFiles() {
 
   const refresh = useCallback(async () => {
     try {
-      const result = await apiRequest<{ files: readonly WorkspaceFile[]; usedBytes: number; quotaBytes: number }>('/api/work-assistant/files')
+      const result = await apiRequest<{ files: readonly WorkspaceFile[]; usedBytes: number; quotaBytes: number }>(apiBasePath)
       setFiles(result.files)
       setUsedBytes(result.usedBytes)
       setQuotaBytes(result.quotaBytes)
       setError(null)
     } catch (reason) { setError(reason instanceof Error ? reason.message : '工作区文件加载失败。') }
-  }, [])
+  }, [apiBasePath])
 
   const upload = useCallback(async (file: File) => {
     if (file.size > maximumFileBytes) { setError('单个文件不能超过 200MB。'); return }
     setUploading(true)
     setUploadProgress(0)
     setError(null)
-    try { await uploadRequest(file, setUploadProgress); await refresh() }
+    try { await uploadRequest(apiBasePath, file, setUploadProgress); await refresh() }
     catch (reason) { setError(reason instanceof Error ? reason.message : '文件上传失败。') }
     finally { setUploading(false); setUploadProgress(null) }
-  }, [refresh])
+  }, [apiBasePath, refresh])
 
   const remove = useCallback(async (file: WorkspaceFile) => {
     try {
       setError(null)
-      await apiRequest(`/api/work-assistant/files?path=${encodeURIComponent(file.path)}`, { method: 'DELETE' })
+      await apiRequest(`${apiBasePath}?path=${encodeURIComponent(file.path)}`, { method: 'DELETE' })
       await refresh()
     } catch (reason) { setError(reason instanceof Error ? reason.message : '文件删除失败。') }
-  }, [refresh])
+  }, [apiBasePath, refresh])
 
   return { error, files, quotaBytes, refresh, remove, upload, uploadProgress, uploading, usedBytes }
 }
