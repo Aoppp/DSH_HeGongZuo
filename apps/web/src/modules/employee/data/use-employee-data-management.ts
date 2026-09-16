@@ -81,7 +81,34 @@ export function useEmployeeDataManagement() {
   const selectResume = (file: File | undefined) => { if (!file) { setPendingResume(null); return }; if (file.size > 5 * 1024 * 1024) { setFormError('简历文件不能超过 5 MB。'); return }; if (!['pdf', 'doc', 'docx'].includes(file.name.split('.').at(-1)?.toLocaleLowerCase() ?? '')) { setFormError('简历只支持 PDF、DOC 或 DOCX。'); return }; setPendingResume(file); setResumeRemoved(false); setFormError(null) }
   const removeResume = () => { setPendingResume(null); setResumeRemoved(true); setResumeInputKey((key) => key + 1); setDraft((current) => current ? { ...current, resumeFileName: null, resumeMimeType: null, resumeSize: null } : current); setFormError(null) }
   const refreshAfterMutation = async (message: string) => { pageCache.current.clear(); setLoadedRequestKey(null); closeEditor(); setSuccessMessage(message); await loadEmployees() }
-  const saveEmployee = async (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!draft) return; if (editorMode === 'departure') { const date = draft.departureDate?.trim() ?? ''; const reason = draft.departureReason?.trim() ?? ''; if (!date || !reason) { setFormError('请填写离职日期和离职原因。'); return }; setSaving(true); setFormError(null); try { await departEmployeeRecord(draft.id, date, reason); await refreshAfterMutation(`${draft.displayName}已成功办理离职`) } catch (error) { setFormError(error instanceof Error ? error.message : String(error)) } finally { setSaving(false) }; return }; const departureDate = draft.departureDate?.trim() ?? ''; if (editorMode === 'edit' && draft.status === 'inactive' && (!departureDate || departureDate < draft.hireDate)) { setFormError(!departureDate ? '请填写离职日期。' : '离职日期不能早于入职日期。'); return }; const error = validateEmployee(draft, employees); if (error) { setFormError(error); return }; setSaving(true); setFormError(null); try { const resume = pendingResume ? await resumeUploadPayload(pendingResume) : resumeRemoved ? null : undefined; let saved = editorMode === 'create' ? await createEmployeeRecord(normalizeEmployee(draft), resume) : await updateEmployeeRecord(normalizeEmployee(draft), resume); const previousDepartureDate = employees.find((employee) => employee.id === draft.id)?.departureDate ?? null; if (editorMode === 'edit' && draft.status === 'inactive' && departureDate !== previousDepartureDate) saved = await departEmployeeRecord(draft.id, departureDate, draft.departureReason?.trim() ?? '未填写'); await refreshAfterMutation(editorMode === 'create' ? `${saved.displayName}已成功入职` : `${saved.displayName}的员工信息已保存`) } catch (saveError) { setFormError(saveError instanceof Error ? saveError.message : String(saveError)) } finally { setSaving(false) } }
+  const saveEmployee = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!draft || saving) return
+    const departureDate = draft.departureDate?.trim() ?? ''
+    const departureReason = draft.departureReason?.trim() ?? ''
+    if ((editorMode === 'departure' || draft.status === 'inactive') && (!departureDate || departureDate < draft.hireDate)) {
+      setFormError(!departureDate ? '请填写离职日期。' : '离职日期不能早于入职日期。'); return
+    }
+    if (editorMode === 'departure' && !departureReason) { setFormError('请填写离职原因。'); return }
+    if (editorMode !== 'departure') {
+      const error = validateEmployee(draft, employees)
+      if (error) { setFormError(error); return }
+    }
+    setSaving(true); setFormError(null)
+    try {
+      if (editorMode === 'departure') {
+        await departEmployeeRecord(draft.id, departureDate, departureReason)
+        await refreshAfterMutation(`${draft.displayName}已成功办理离职`)
+      } else {
+        const resume = pendingResume ? await resumeUploadPayload(pendingResume) : resumeRemoved ? null : undefined
+        const saved = editorMode === 'create'
+          ? await createEmployeeRecord(normalizeEmployee(draft), resume)
+          : await updateEmployeeRecord(normalizeEmployee(draft), resume)
+        await refreshAfterMutation(editorMode === 'create' ? `${saved.displayName}已成功入职` : `${saved.displayName}的员工信息已保存`)
+      }
+    } catch (error) { setFormError(error instanceof Error ? error.message : String(error)) }
+    finally { setSaving(false) }
+  }
   const currentEmployees = loadedRequestKey === requestKey ? employees : []
   const currentTotalEmployees = loadedRequestKey === requestKey ? totalEmployees : 0
   const currentLoading = loading || loadedRequestKey !== requestKey

@@ -2,6 +2,8 @@ import type { ServerResponse } from 'node:http'
 import type { Pool } from 'pg'
 
 import { checkConfiguredAgentRuntimeHealth } from '../../agent-runtime-proxy.js'
+import { writeAudit } from './audit-writer.js'
+import { inTransaction } from '../../storage/transaction.js'
 
 export const managedModuleIds = [
   'management-cockpit',
@@ -223,14 +225,17 @@ export class PlatformManagementService {
   async setModuleEnabled(moduleId: string, enabled: unknown, actorAccountId: string, actorDisplayName: string): Promise<void> {
     if (!isManagedModuleId(moduleId)) throw new PlatformManagementError('该模块不支持在平台内调整。')
     if (typeof enabled !== 'boolean') throw new PlatformManagementError('模块状态必须为启用或停用。')
-    const previous = await this.pool.query<{ enabled: boolean }>('SELECT enabled FROM platform_module_settings WHERE module_id = $1', [moduleId])
-    await this.pool.query(
+    await inTransaction(this.pool, async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`platform-module:${moduleId}`])
+    const previous = await client.query<{ enabled: boolean }>('SELECT enabled FROM platform_module_settings WHERE module_id = $1', [moduleId])
+    await client.query(
       `INSERT INTO platform_module_settings (module_id, enabled, updated_by_account_id, updated_at)
        VALUES ($1, $2, $3, now())
        ON CONFLICT (module_id) DO UPDATE SET enabled = EXCLUDED.enabled, updated_by_account_id = EXCLUDED.updated_by_account_id, updated_at = now()`,
       [moduleId, enabled, actorAccountId],
     )
-    await this.record(actorAccountId, actorDisplayName, enabled ? '启用模块' : '停用模块', '模块', moduleId, { changes: [{ field: 'enabled', label: '模块状态', before: previous.rows[0]?.enabled === false ? '已停用' : '已启用', after: enabled ? '已启用' : '已停用' }] })
+    await writeAudit(client, { id: actorAccountId, displayName: actorDisplayName }, enabled ? '启用模块' : '停用模块', '模块', moduleId, { changes: [{ field: 'enabled', label: '模块状态', before: previous.rows[0]?.enabled === false ? '已停用' : '已启用', after: enabled ? '已启用' : '已停用' }] })
+    })
   }
 
   async notificationSettings(): Promise<{ readonly settings: readonly { readonly type: NotificationType; readonly label: string; readonly enabled: boolean; readonly accountIds: readonly string[] }[]; readonly accounts: readonly { readonly id: string; readonly displayName: string; readonly accountId: string; readonly position: string }[] }> {
@@ -296,10 +301,7 @@ export class PlatformManagementService {
   }
 
   async record(actorAccountId: string, actorDisplayName: string, action: string, targetType: string, targetId: string, detail: Record<string, unknown> = {}): Promise<void> {
-    await this.pool.query(
-      'INSERT INTO platform_audit_logs (actor_account_id, actor_display_name, action, target_type, target_id, detail) VALUES ($1, $2, $3, $4, $5, $6::jsonb)',
-      [actorAccountId, actorDisplayName, action, targetType, targetId, JSON.stringify(detail)],
-    )
+    await writeAudit(this.pool, { id: actorAccountId, displayName: actorDisplayName }, action, targetType, targetId, detail)
   }
 
   async recordSystem(actorDisplayName: string, action: string, targetType: string, targetId: string, detail: Record<string, unknown> = {}): Promise<void> {

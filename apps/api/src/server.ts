@@ -10,7 +10,7 @@ import { AuthError, AuthService, LoginRateLimitError } from './auth.js'
 import { database } from './database.js'
 import { EmployeeValidationError, parseEmployeeInput } from './modules/employee/employee-input.js'
 import { PostgresEmployeeRepository } from './modules/employee/employee-repository.js'
-import { employeeAuditDetail } from './modules/employee/employee-audit.js'
+import { EmployeeWriteService } from './modules/employee/employee-write-service.js'
 import { callbackPath, handleWeComCallback, WeComCallbackError } from './modules/employee/wecom/callback.js'
 import { AssistantWorkspaceFiles } from './modules/main-assistant/workspace-files.js'
 import { AccountRuntimeTasks } from './modules/accounts/account-runtime-tasks.js'
@@ -36,6 +36,7 @@ import { ReportAnalysisSnapshotRepository } from './modules/employee/report-anal
 import { MeetingRepository } from './modules/meetings/meeting-repository.js'
 import { MeetingUploadCredentials } from './modules/meetings/meeting-upload-credentials.js'
 import { MeetingValidationError, parseMeetingInput, parseMeetingSummaryUpdate } from './modules/meetings/meeting-input.js'
+import { MeetingWriteService } from './modules/meetings/meeting-write-service.js'
 import { RecruitmentRepository } from './modules/recruitment/recruitment-repository.js'
 import { RecruitmentValidationError, parseJobInput, parseUploads } from './modules/recruitment/recruitment-input.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
@@ -44,6 +45,7 @@ import { revokeAccountConnections } from './modules/accounts/active-connections.
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
 
 const repository = new PostgresEmployeeRepository(database)
+const employeeWrites = new EmployeeWriteService(database)
 const auth = new AuthService(database)
 const accounts = new AccountsService(database)
 const port = Number(process.env.HEGONGZUO_API_PORT ?? 4174)
@@ -60,6 +62,7 @@ const wecomDirectory = new WeComDirectoryRepository(database)
 const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
 const mainAssistantFiles = new AssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
+const meetingWrites = new MeetingWriteService(database)
 const recruitment = new RecruitmentRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
 const dailyReports = new DailyReportService(dailyReportRepository)
@@ -724,12 +727,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (meetingId && request.method === 'PUT') {
     requirePermission(currentUser, 'meeting-records')
     await platformManagement.assertModuleEnabled('meeting-records')
-    const existing = await meetings.get(meetingId)
-    if (!existing) throw new HttpError(404, '会议记录不存在。')
     const summary = parseMeetingSummaryUpdate(await readJson(request))
-    const record = await meetings.updateSummary(meetingId, summary)
-    if (!record) throw new HttpError(404, '会议记录不存在。')
-    await platformManagement.record(currentUser.id, currentUser.displayName, '修改会议摘要', '会议记录', meetingId, { changes: [{ field: 'summary', label: '会议摘要', before: existing.summary ? `${existing.summary.length} 字` : '未填写', after: summary ? `${summary.length} 字` : '已清空' }] })
+    const record = await meetingWrites.updateSummary(meetingId, summary, currentUser)
     sendJson(response, 200, { record })
     return
   }
@@ -769,8 +768,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePermission(currentUser, 'employee-data')
     await platformManagement.assertModuleEnabled('employee-data')
     const input = parseEmployeeInput(await readJson(request))
-    const created = await repository.create(input)
-    await platformManagement.record(currentUser.id, currentUser.displayName, '新增员工档案', '员工', created.id, employeeAuditDetail(null, created, input.resume !== undefined && input.resume !== null))
+    const created = await employeeWrites.create(input, currentUser)
     sendJson(response, 201, { employee: created })
     return
   }
@@ -797,11 +795,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     requirePermission(currentUser, 'employee-data')
     await platformManagement.assertModuleEnabled('employee-data')
     const { departureDate, departureReason } = departureInput(await readJson(request))
-    const previous = await repository.get(departureId)
-    if (!previous) throw new HttpError(404, '员工不存在。')
-    const employee = await repository.depart(departureId, departureDate, departureReason)
-    if (!employee) throw new HttpError(404, '员工不存在。')
-    await platformManagement.record(currentUser.id, currentUser.displayName, '办理员工离职', '员工', employee.id, employeeAuditDetail(previous, employee))
+    const employee = await employeeWrites.depart(departureId, departureDate, departureReason, currentUser)
     sendJson(response, 200, { employee })
     return
   }
@@ -819,13 +813,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (id && request.method === 'PUT') {
     requirePermission(currentUser, 'employee-data')
     await platformManagement.assertModuleEnabled('employee-data')
-    const previous = await repository.get(id)
-    if (!previous) throw new HttpError(404, '员工不存在。')
     const input = parseEmployeeInput(await readJson(request))
-    const employee = await repository.update(id, input)
-    if (!employee) throw new HttpError(404, '员工不存在。')
-    const detail = employeeAuditDetail(previous, employee, input.resume !== undefined)
-    if (detail.changedFields.length > 0) await platformManagement.record(currentUser.id, currentUser.displayName, detail.changedFields.length === 1 && detail.changedFields[0] === '员工简历' ? '更新员工简历' : '编辑员工档案', '员工', employee.id, detail)
+    const employee = await employeeWrites.update(id, input, currentUser)
     sendJson(response, 200, { employee })
     return
   }

@@ -3,6 +3,7 @@ import type { EmployeeRecord } from '@hegongzuo/employee-domain'
 import type { Pool, PoolClient } from 'pg'
 
 import type { EmployeeInput, ResumeUpload } from './employee-input.js'
+import { inTransaction } from '../../storage/transaction.js'
 
 interface EmployeeRow {
   readonly id: string
@@ -213,7 +214,7 @@ function resumeValues(resume: ResumeUpload | null | undefined): readonly unknown
 }
 
 export class PostgresEmployeeRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly transaction?: PoolClient) {}
 
   async list(query = ''): Promise<EmployeeRecord[]> {
     const normalized = query.trim()
@@ -303,15 +304,13 @@ export class PostgresEmployeeRepository {
     }
   }
 
-  async get(id: string): Promise<EmployeeRecord | null> {
-    const result = await this.pool.query<EmployeeRow>(`SELECT ${columns} FROM employees WHERE id = $1`, [id])
+  async get(id: string, lock = false): Promise<EmployeeRecord | null> {
+    const result = await (this.transaction ?? this.pool).query<EmployeeRow>(`SELECT ${columns} FROM employees WHERE id = $1${lock ? ' FOR UPDATE' : ''}`, [id])
     return result.rows[0] ? toEmployee(result.rows[0]) : null
   }
 
   async create(employee: EmployeeInput): Promise<EmployeeRecord> {
-    const client = await this.pool.connect()
-    try {
-      await client.query('BEGIN')
+    return inTransaction(this.pool, async (client) => {
       const id = await this.nextId(client)
       const result = await client.query<EmployeeRow>(
         `INSERT INTO employees (
@@ -325,34 +324,31 @@ export class PostgresEmployeeRepository {
           residential_address, id_address, bank_account, bank_name,
           archive_no, notes, department_level2, probation_months,
           expected_regular_date, actual_regular_date, contract_end_date,
-          resume_file_name, resume_mime_type, resume_data
+          resume_file_name, resume_mime_type, resume_data, departure_date, departure_reason
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
           $12, $13, $14, $15, $16, $17, $18, $19, $20,
           $21, $22, $23, $24, $25, $26, $27, $28, $29,
           $30, $31, $32, $33, $34, $35, $36,
-          $37, $38, $39
+          $37, $38, $39, $40, $41
         )
         RETURNING ${columns}`,
-        [id, ...employeeValues(employee), ...resumeValues(employee.resume)],
+        [id, ...employeeValues(employee), ...resumeValues(employee.resume), employee.status === 'inactive' ? employee.departureDate ?? null : null, employee.status === 'inactive' ? employee.departureReason ?? null : null],
       )
-      await client.query('COMMIT')
       const created = result.rows[0]
       if (!created) throw new Error('新增员工后未返回记录。')
       return toEmployee(created)
-    } catch (error) {
-      await client.query('ROLLBACK')
-      throw error
-    } finally {
-      client.release()
-    }
+    }, this.transaction)
   }
 
   async update(id: string, employee: EmployeeInput): Promise<EmployeeRecord | null> {
+    const values = [id, ...employeeValues(employee), ...(employee.resume === undefined ? [] : resumeValues(employee.resume))]
+    const departureDateParameter = values.push(employee.departureDate ?? null)
+    const departureReasonParameter = values.push(employee.departureReason ?? null)
     const resumeUpdate = employee.resume === undefined
       ? ''
       : ', resume_file_name = $37, resume_mime_type = $38, resume_data = $39'
-    const result = await this.pool.query<EmployeeRow>(
+    const result = await (this.transaction ?? this.pool).query<EmployeeRow>(
       `UPDATE employees SET
         display_name = $2, work_email = $3, work_phone = $4,
         department_name = $5, job_title = $6,
@@ -365,17 +361,17 @@ export class PostgresEmployeeRepository {
         residential_address = $26, id_address = $27, bank_account = $28, bank_name = $29,
         archive_no = $30, notes = $31, department_level2 = $32, probation_months = $33,
         expected_regular_date = $34, actual_regular_date = $35, contract_end_date = $36,
+        departure_date = CASE WHEN $8 <> 'inactive' THEN NULL ELSE coalesce($${departureDateParameter}::date, departure_date) END,
+        departure_reason = CASE WHEN $8 <> 'inactive' THEN NULL ELSE coalesce($${departureReasonParameter}::text, departure_reason) END,
         updated_at = now()${resumeUpdate}
       WHERE id = $1 RETURNING ${columns}`,
-      employee.resume === undefined
-        ? [id, ...employeeValues(employee)]
-        : [id, ...employeeValues(employee), ...resumeValues(employee.resume)],
+      values,
     )
     return result.rows[0] ? toEmployee(result.rows[0]) : null
   }
 
   async depart(id: string, departureDate: string, departureReason: string): Promise<EmployeeRecord | null> {
-    const result = await this.pool.query<EmployeeRow>(
+    const result = await (this.transaction ?? this.pool).query<EmployeeRow>(
       `UPDATE employees SET
         status = 'inactive', departure_date = $2, departure_reason = $3, updated_at = now()
        WHERE id = $1

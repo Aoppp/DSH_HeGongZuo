@@ -1,9 +1,10 @@
 import { ChevronDown, ChevronUp, FileSearch, LoaderCircle, X } from 'lucide-react'
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { analyzeReports, readReportAnalysisSnapshot, readReportAnalysisVersions, type ReportAnalysisReference, type ReportAnalysisVersion } from './report-analysis-api'
 import { deleteReportAnalysisVersion } from './report-analysis-api'
 import { Pagination } from '../../../components/Pagination'
+import { AnalysisRequestState } from './analysis-request-state'
 
 function inline(value: string, references: readonly ReportAnalysisReference[], onOpenReport: (id: string) => void) {
   return value.split(/(\*\*[^*]+\*\*|【[^｜】]+｜\d{4}-\d{2}-\d{2}｜[^】]+】)/g).map((part, index) => {
@@ -82,6 +83,14 @@ function markdownToPrintHtml(content: string) {
 }
 
 export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
+  // 日期范围是结果身份的一部分，切换范围立即隔离旧页面的全部异步响应。
+  return <ReportAnalysisContent key={`${startDate}/${endDate}`} startDate={startDate} endDate={endDate} onOpenReport={onOpenReport} />
+}
+
+function ReportAnalysisContent({ startDate, endDate, onOpenReport }: { readonly startDate: string; readonly endDate: string; readonly onOpenReport: (id: string) => void }) {
+  const summaryRequests = useRef(new AnalysisRequestState())
+  const queryRequests = useRef(new AnalysisRequestState())
+  const versionRequests = useRef(new AnalysisRequestState())
   const [question, setQuestion] = useState('')
   const [summary, setSummary] = useState<{ readonly id: string | undefined; readonly startDate: string; readonly endDate: string; readonly content: string; readonly count: number; readonly references: readonly ReportAnalysisReference[]; readonly generatedAt: string | undefined } | null>(null)
   const [query, setQuery] = useState<{ readonly content: string; readonly count: number; readonly question: string; readonly references: readonly ReportAnalysisReference[] } | null>(null)
@@ -95,20 +104,39 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
   const [versionsTotalPages, setVersionsTotalPages] = useState(0)
   const [versionsTotal, setVersionsTotal] = useState(0)
   const [versionsBusy, setVersionsBusy] = useState(false)
-  const loadVersions = async (page = versionsPage) => { const result = await readReportAnalysisVersions(page); setVersions(result.versions); setVersionsPage(result.page); setVersionsTotal(result.total); setVersionsTotalPages(result.totalPages); return result }
-  useEffect(() => { let active = true; setSummary(null); setSummaryExpanded(true); void Promise.all([readReportAnalysisSnapshot(startDate, endDate), readReportAnalysisVersions(1)]).then(([snapshot, history]) => { if (!active) return; setVersions(history.versions); setVersionsPage(history.page); setVersionsTotal(history.total); setVersionsTotalPages(history.totalPages); if (snapshot) setSummary({ id: snapshot.id, startDate: snapshot.startDate ?? startDate, endDate: snapshot.endDate ?? endDate, content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt }) }).catch(() => undefined); return () => { active = false } }, [startDate, endDate])
+  const loadVersions = async (page = versionsPage) => {
+    const revision = versionRequests.current.replace()
+    try {
+      const result = await readReportAnalysisVersions(page)
+      if (!versionRequests.current.current(revision)) return
+      setVersions(result.versions); setVersionsPage(result.page); setVersionsTotal(result.total); setVersionsTotalPages(result.totalPages)
+    } catch (error) { if (versionRequests.current.current(revision)) setSummaryError(error instanceof Error ? error.message : '汇总列表读取失败。') }
+  }
+  useEffect(() => {
+    const summaries = summaryRequests.current, queries = queryRequests.current, versions = versionRequests.current
+    const revision = summaries.replace()
+    void loadVersions(1)
+    void readReportAnalysisSnapshot(startDate, endDate).then((snapshot) => {
+      if (snapshot && summaries.current(revision)) setSummary({ id: snapshot.id, startDate: snapshot.startDate ?? startDate, endDate: snapshot.endDate ?? endDate, content: snapshot.content, count: snapshot.reportCount, references: snapshot.references, generatedAt: snapshot.generatedAt })
+    }).catch((error) => { if (summaries.current(revision)) setSummaryError(error instanceof Error ? error.message : '汇总读取失败。') })
+    return () => { summaries.invalidate(); queries.invalidate(); versions.invalidate() }
+  }, [startDate, endDate])
   async function runSummary() {
-    if (summary && !window.confirm('已有该时间段报告，是否继续重新生成？')) return
+    if (summary?.startDate === startDate && summary.endDate === endDate && !window.confirm('已有该时间段报告，是否继续重新生成？')) return
+    const revision = summaryRequests.current.start()
+    if (revision === null) return
     setSummaryBusy(true)
     setSummaryError(null)
     try {
       const result = await analyzeReports({ startDate, endDate })
+      if (!summaryRequests.current.current(revision)) return
       setSummary({ id: result.id, startDate: result.startDate ?? startDate, endDate: result.endDate ?? endDate, content: result.content, count: result.reportCount, references: result.references, generatedAt: result.generatedAt })
       await loadVersions(1)
       setSummaryExpanded(true)
     } catch (reason) {
-      setSummaryError(reason instanceof Error ? reason.message : '汇总服务暂时不可用。')
+      if (summaryRequests.current.current(revision)) setSummaryError(reason instanceof Error ? reason.message : '汇总服务暂时不可用。')
     } finally {
+      summaryRequests.current.finish()
       setSummaryBusy(false)
     }
   }
@@ -117,7 +145,8 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
     setSummaryError(null)
     try {
       await deleteReportAnalysisVersion(id)
-      if (summary?.id === id) setSummary(null)
+      summaryRequests.current.invalidate()
+      setSummary((current) => current?.id === id ? null : current)
       const nextPage = versions.length === 1 && versionsPage > 1 ? versionsPage - 1 : versionsPage
       await loadVersions(nextPage)
     } catch (reason) { setSummaryError(reason instanceof Error ? reason.message : '汇总记录删除失败。') }
@@ -126,11 +155,13 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
   async function runQuery() {
     const value = question.trim()
     if (!value) return
+    const revision = queryRequests.current.start()
+    if (revision === null) return
     setQueryBusy(true)
     setQueryError(null)
-    try { const result = await analyzeReports({ startDate, endDate, question: value }); setQuery({ content: result.content, count: result.reportCount, question: value, references: result.references }) }
-    catch (reason) { setQueryError(reason instanceof Error ? reason.message : '查询服务暂时不可用。') }
-    finally { setQueryBusy(false) }
+    try { const result = await analyzeReports({ startDate, endDate, question: value }); if (queryRequests.current.current(revision)) setQuery({ content: result.content, count: result.reportCount, question: value, references: result.references }) }
+    catch (reason) { if (queryRequests.current.current(revision)) setQueryError(reason instanceof Error ? reason.message : '查询服务暂时不可用。') }
+    finally { queryRequests.current.finish(); setQueryBusy(false) }
   }
 
   return <section className="report-analysis">
@@ -153,7 +184,7 @@ export function ReportAnalysisView({ startDate, endDate, onOpenReport }: { reado
           {summaryBusy ? '正在生成' : summary ? '重新生成' : '生成汇总'}
         </button>
       </div>
-      {versionsTotal > 0 && <section className="report-analysis__versions"><header><div><strong>汇总列表</strong><small>共 {versionsTotal} 份已生成汇总</small></div></header><div>{versions.map((version) => <article key={version.id} className={summary?.id === version.id ? 'active' : ''}><button type="button" className="report-analysis__version-open" onClick={() => { setSummary({ id: version.id, startDate: version.startDate, endDate: version.endDate, content: version.content, count: version.reportCount, references: version.references, generatedAt: version.generatedAt }); setSummaryExpanded(true) }}><span>{version.startDate} 至 {version.endDate}</span><small>{new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(version.generatedAt))} · {version.reportCount} 条日报</small></button><button type="button" className="report-analysis__version-delete" disabled={versionsBusy} aria-label={`删除 ${version.startDate} 至 ${version.endDate} 的汇总`} onClick={() => void removeVersion(version.id)}><X size={13} /></button></article>)}</div>{versionsTotalPages > 1 && <footer><Pagination page={versionsPage} totalPages={versionsTotalPages} onChange={(page) => void loadVersions(page)} label="汇总列表分页" /></footer>}</section>}
+      {versionsTotal > 0 && <section className="report-analysis__versions"><header><div><strong>汇总列表</strong><small>共 {versionsTotal} 份已生成汇总</small></div></header><div>{versions.map((version) => <article key={version.id} className={summary?.id === version.id ? 'active' : ''}><button type="button" className="report-analysis__version-open" onClick={() => { summaryRequests.current.invalidate(); setSummary({ id: version.id, startDate: version.startDate, endDate: version.endDate, content: version.content, count: version.reportCount, references: version.references, generatedAt: version.generatedAt }); setSummaryExpanded(true) }}><span>{version.startDate} 至 {version.endDate}</span><small>{new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(version.generatedAt))} · {version.reportCount} 条日报</small></button><button type="button" className="report-analysis__version-delete" disabled={versionsBusy} aria-label={`删除 ${version.startDate} 至 ${version.endDate} 的汇总`} onClick={() => void removeVersion(version.id)}><X size={13} /></button></article>)}</div>{versionsTotalPages > 1 && <footer><Pagination page={versionsPage} totalPages={versionsTotalPages} onChange={(page) => void loadVersions(page)} label="汇总列表分页" /></footer>}</section>}
     </article>
     {summaryError && <div className="daily-reports__error">{summaryError}</div>}
     {summary && <AnalysisResult title="部门汇总" count={summary.count} content={summary.content} references={summary.references} generatedAt={summary.generatedAt} startDate={summary.startDate} endDate={summary.endDate} onOpenReport={onOpenReport} expanded={summaryExpanded} onToggleExpanded={() => setSummaryExpanded((value) => !value)} />}

@@ -9,6 +9,7 @@ import {
   type EmployeeStatus,
   type EmploymentType,
 } from '@hegongzuo/employee-domain'
+import { isCalendarDate } from './work-records/work-records-source.js'
 
 const maximumResumeBytes = 5 * 1024 * 1024
 const allowedResumeTypes = new Set([
@@ -60,6 +61,8 @@ export interface EmployeeInput {
   readonly expectedRegularDate: string | null
   readonly actualRegularDate: string | null
   readonly contractEndDate: string | null
+  readonly departureDate?: string | null
+  readonly departureReason?: string | null
 }
 
 export class EmployeeValidationError extends Error {}
@@ -77,11 +80,9 @@ function optionalString(record: Record<string, unknown>, field: string): string 
   return value.trim() || null
 }
 
-const datePattern = /^\d{4}-\d{2}-\d{2}$/
-
 function optionalDate(record: Record<string, unknown>, field: string): string | null {
   const value = optionalString(record, field)
-  if (value && (!datePattern.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`)))) {
+  if (value && !isCalendarDate(value)) {
     throw new EmployeeValidationError(`${field} 格式无效。`)
   }
   return value
@@ -129,7 +130,7 @@ export function parseEmployeeInput(value: unknown): EmployeeInput {
   const personalEmail = optionalString(record, 'personalEmail')
   if (personalEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmail)) throw new EmployeeValidationError('personalEmail 格式无效。')
   const hireDate = requiredString(record, 'hireDate')
-  if (!datePattern.test(hireDate) || Number.isNaN(Date.parse(`${hireDate}T00:00:00Z`))) {
+  if (!isCalendarDate(hireDate)) {
     throw new EmployeeValidationError('hireDate 格式无效。')
   }
   const idNumber = optionalString(record, 'idNumber')
@@ -184,5 +185,7 @@ export function parseEmployeeInput(value: unknown): EmployeeInput {
     expectedRegularDate: optionalDate(record, 'expectedRegularDate'),
     actualRegularDate: optionalDate(record, 'actualRegularDate'),
     contractEndDate: optionalDate(record, 'contractEndDate'),
+    ...(record.departureDate !== undefined ? { departureDate: optionalDate(record, 'departureDate') } : {}),
+    ...(record.departureReason !== undefined ? { departureReason: optionalString(record, 'departureReason') } : {}),
   }
 }

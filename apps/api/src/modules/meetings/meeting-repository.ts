@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Pool } from 'pg'
+import type { Pool, PoolClient } from 'pg'
 
 import type { MeetingInput } from './meeting-input.js'
 
@@ -13,7 +13,7 @@ function iso(value: string | Date): string { return value instanceof Date ? valu
 function meeting(row: MeetingRow) { return { id: row.id, title: row.title, mode: row.mode, startedAt: iso(row.started_at), endedAt: iso(row.ended_at), summary: row.summary, transcript: row.transcript, participants: row.participants, createdAt: iso(row.created_at) } }
 
 export class MeetingRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly transaction?: PoolClient) {}
 
   async create(input: MeetingInput, idempotencyKey: string): Promise<{ readonly record: ReturnType<typeof meeting>; readonly created: boolean }> {
     const hash = createHash('sha256').update(idempotencyKey).digest('hex')
@@ -35,13 +35,13 @@ export class MeetingRepository {
     } catch (error) { await client.query('ROLLBACK'); throw error } finally { client.release() }
   }
 
-  async get(id: string) {
-    const result = await this.pool.query<MeetingRow>('SELECT * FROM meeting_records WHERE id = $1', [id])
+  async get(id: string, lock = false) {
+    const result = await (this.transaction ?? this.pool).query<MeetingRow>(`SELECT * FROM meeting_records WHERE id = $1${lock ? ' FOR UPDATE' : ''}`, [id])
     return result.rows[0] ? meeting(result.rows[0]) : null
   }
 
   async updateSummary(id: string, summary: string | null) {
-    const result = await this.pool.query<MeetingRow>('UPDATE meeting_records SET summary = $2 WHERE id = $1 RETURNING *', [id, summary])
+    const result = await (this.transaction ?? this.pool).query<MeetingRow>('UPDATE meeting_records SET summary = $2 WHERE id = $1 RETURNING *', [id, summary])
     return result.rows[0] ? meeting(result.rows[0]) : null
   }
 

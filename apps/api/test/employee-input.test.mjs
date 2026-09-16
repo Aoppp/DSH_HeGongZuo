@@ -22,6 +22,15 @@ test('员工联系方式和身份证号通过格式校验，邮箱可留空', ()
   assert.equal(result.personalEmail, null)
 })
 
+test('员工日期拒绝自动进位，离职日期和原因进入同一个保存请求', () => {
+  for (const field of ['hireDate', 'birthDate', 'departureDate', 'contractEndDate']) {
+    assert.throws(() => parseEmployeeInput(employee({ [field]: '2026-02-30' })), /格式无效/)
+  }
+  const input = parseEmployeeInput(employee({ status: 'inactive', departureDate: '2026-09-01', departureReason: '个人原因' }))
+  assert.equal(input.departureDate, '2026-09-01')
+  assert.equal(input.departureReason, '个人原因')
+})
+
 test('员工联系方式和身份证号拒绝无效格式', () => {
   for (const overrides of [{ workPhone: '12345' }, { emergencyContactPhone: '12345' }, { idNumber: '110105194912310021' }]) {
     assert.throws(() => parseEmployeeInput(employee(overrides)), EmployeeValidationError)
