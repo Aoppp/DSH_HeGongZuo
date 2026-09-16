@@ -7,7 +7,7 @@ OnFailure=hegongzuo-alert@%n.service
 [Service]
 Type=simple
 # 每个实例的独立系统用户由协调器写入 drop-in，模板默认不以平台用户运行。
-User=nobody
+User=hegongzuo-unconfigured
 Group=__DEPLOY_USER__
 WorkingDirectory=__PROJECT_DIR__
 EnvironmentFile=__PROJECT_DIR__/.runtime/agent-credentials/%i.env

@@ -30,7 +30,7 @@ const requiredAgentSettings = ['MemoryMax=', 'CPUQuota=', 'TasksMax=', 'LimitNOF
 for (const relativePath of requiredTemplates) await access(path.join(root, relativePath))
 const apiTemplate = await readFile(path.join(root, apiTemplatePath), 'utf8')
 const agentTemplate = await readFile(path.join(root, agentTemplatePath), 'utf8')
-for (const setting of ['User=nobody', 'ProtectProc=invisible', 'TemporaryFileSystem=__PROJECT_DIR__/.runtime', 'agent-credentials/%i.env', 'InaccessiblePaths=__PROJECT_DIR__/.env']) {
+for (const setting of ['User=hegongzuo-unconfigured', 'ProtectProc=invisible', 'TemporaryFileSystem=__PROJECT_DIR__/.runtime', 'agent-credentials/%i.env', 'InaccessiblePaths=__PROJECT_DIR__/.env']) {
   if (!agentTemplate.includes(setting)) throw new Error(`账号运行时隔离模板缺少 ${setting}`)
 }
 if (agentTemplate.includes('EnvironmentFile=__PROJECT_DIR__/.env')) throw new Error('运行时不得继承平台环境文件。')
