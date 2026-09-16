@@ -55,8 +55,8 @@ test('离职日期早于入职或非法日期不会写入，恢复在职清除�
   assert.equal(calls.some((call) => call.sql.startsWith('UPDATE employees')), false)
   await service.update(row.id, parseEmployeeInput(base), actor)
   const update = calls.find((call) => call.sql.startsWith('UPDATE employees'))
-  assert.match(update.sql, /departure_date = CASE WHEN \$8 <> 'inactive' THEN NULL/)
-  assert.match(update.sql, /departure_reason = CASE WHEN \$8 <> 'inactive' THEN NULL/)
+  assert.match(update.sql, /departure_date = CASE WHEN \$8::varchar <> 'inactive' THEN NULL/)
+  assert.match(update.sql, /departure_reason = CASE WHEN \$8::varchar <> 'inactive' THEN NULL/)
 })
 
 test('带简历与不带简历的档案保存都包含离职字段，无参数错位', async () => {

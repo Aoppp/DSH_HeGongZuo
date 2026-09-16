@@ -352,7 +352,7 @@ export class PostgresEmployeeRepository {
       `UPDATE employees SET
         display_name = $2, work_email = $3, work_phone = $4,
         department_name = $5, job_title = $6,
-        employment_type = $7, status = $8, hire_date = $9, work_location = $10,
+        employment_type = $7, status = $8::varchar, hire_date = $9, work_location = $10,
         responsibilities = $11,
         company_name = $12, gender = $13, id_number = $14, birth_date = $15,
         personal_email = $16, education = $17, major = $18, school = $19, graduation_date = $20,
@@ -361,8 +361,8 @@ export class PostgresEmployeeRepository {
         residential_address = $26, id_address = $27, bank_account = $28, bank_name = $29,
         archive_no = $30, notes = $31, department_level2 = $32, probation_months = $33,
         expected_regular_date = $34, actual_regular_date = $35, contract_end_date = $36,
-        departure_date = CASE WHEN $8 <> 'inactive' THEN NULL ELSE coalesce($${departureDateParameter}::date, departure_date) END,
-        departure_reason = CASE WHEN $8 <> 'inactive' THEN NULL ELSE coalesce($${departureReasonParameter}::text, departure_reason) END,
+        departure_date = CASE WHEN $8::varchar <> 'inactive' THEN NULL ELSE coalesce($${departureDateParameter}::date, departure_date) END,
+        departure_reason = CASE WHEN $8::varchar <> 'inactive' THEN NULL ELSE coalesce($${departureReasonParameter}::text, departure_reason) END,
         updated_at = now()${resumeUpdate}
       WHERE id = $1 RETURNING ${columns}`,
       values,
