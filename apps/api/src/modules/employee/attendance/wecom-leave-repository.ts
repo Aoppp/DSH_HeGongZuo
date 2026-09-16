@@ -19,6 +19,13 @@ export class WeComLeaveRepository {
     return value ? (value instanceof Date ? value : new Date(value)).toISOString() : null
   }
 
+  async refreshableApprovalNumbers(): Promise<readonly string[]> {
+    // 审批列表按申请时间筛选，旧申请的批准、撤销不能仅依赖最近 30 天窗口。
+    const result = await this.pool.query<{ sp_no: string }>(`SELECT sp_no FROM employee_wecom_leaves
+      WHERE sp_status=1 OR (sp_status=2 AND end_time >= now() - interval '90 days') ORDER BY sp_no`)
+    return result.rows.map((row) => row.sp_no)
+  }
+
   async startRun(source: LeaveSyncSource, startDate: string, endDate: string, checkpointBefore: string | null): Promise<number> {
     const result = await this.pool.query<{ id: string }>(`INSERT INTO employee_wecom_leave_sync_runs (source,start_date,end_date,checkpoint_before) VALUES ($1,$2,$3,$4) RETURNING id::text`, [source, startDate, endDate, checkpointBefore])
     const id = Number(result.rows[0]?.id); if (!Number.isSafeInteger(id)) throw new Error('请假同步日志创建失败。')
@@ -26,7 +33,10 @@ export class WeComLeaveRepository {
   }
 
   async finishRun(id: number, status: 'succeeded' | 'partial' | 'failed', stats: LeaveSyncStats, checkpointAfter: string | null, error: string | null): Promise<void> {
-    await this.pool.query(`UPDATE employee_wecom_leave_sync_runs SET status=$2,finished_at=now(),approval_count=$3,upserted_count=$4,skipped_count=$5,failed_count=$6,checkpoint_after=$7,error_message=$8 WHERE id=$1`, [id, status, stats.approvals, stats.upserted, stats.skipped, stats.failed, checkpointAfter, error?.slice(0, 8_000) ?? null])
+    await this.pool.query(`WITH completed AS (UPDATE employee_wecom_leave_sync_runs SET status=$2,finished_at=now(),approval_count=$3,upserted_count=$4,skipped_count=$5,failed_count=$6,checkpoint_after=$7,error_message=$8 WHERE id=$1 RETURNING checkpoint_after,status)
+      INSERT INTO employee_wecom_leave_sync_checkpoints (name,checkpoint_at)
+      SELECT 'default',checkpoint_after FROM completed WHERE status='succeeded' AND checkpoint_after IS NOT NULL
+      ON CONFLICT (name) DO UPDATE SET checkpoint_at=GREATEST(employee_wecom_leave_sync_checkpoints.checkpoint_at,EXCLUDED.checkpoint_at),updated_at=now()`, [id, status, stats.approvals, stats.upserted, stats.skipped, stats.failed, checkpointAfter, error?.slice(0, 8_000) ?? null])
   }
 
   async advanceCheckpoint(value: string): Promise<void> {

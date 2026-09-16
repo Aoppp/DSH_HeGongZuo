@@ -10,12 +10,13 @@ function monthDate(yearmonth: unknown, day: unknown): string | null {
   const month = String(yearmonth ?? ''); const date = Number(day)
   if (!/^\d{6}$/.test(month) || !Number.isInteger(date) || date < 1 || date > 31) return null
   const result = `${month.slice(0, 4)}-${month.slice(4)}-${String(date).padStart(2, '0')}`
-  return Number.isNaN(Date.parse(`${result}T00:00:00Z`)) ? null : result
+  const parsed = new Date(`${result}T00:00:00Z`)
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== result ? null : result
 }
 function chunks<T>(items: readonly T[], size: number): readonly T[][] { return Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size)) }
 
-export async function synchronizeWeComSchedules(repository: WeComCheckinRepository, client: WeComCheckinClient, input: { readonly startDate: string; readonly endDate: string }): Promise<{ employees: number; schedules: number }> {
-  const employees = await repository.employees()
+export async function synchronizeWeComSchedules(repository: WeComCheckinRepository, client: WeComCheckinClient, input: { readonly startDate: string; readonly endDate: string; readonly employeeUserId?: string }): Promise<{ employees: number; schedules: number }> {
+  const employees = await repository.employees(input.employeeUserId)
   const byUserId = new Map(employees.map((employee) => [employee.wecomUserId, employee.id]))
   let schedules = 0
   for (const window of checkinWindows(input.startDate, input.endDate)) for (const batch of chunks(employees, 100)) {

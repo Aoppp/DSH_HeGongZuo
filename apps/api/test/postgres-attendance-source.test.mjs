@@ -47,7 +47,7 @@ test('上下班打卡缺失任意一项均为缺卡，实际时间保持空值',
   assert.equal(record.scheduledEnd, '—')
 })
 
-test('未打卡占位时间不作为实际时间，外出打卡仅补充地点和明细', async () => {
+test('未打卡占位时间不作为实际时间，单次下午外出打卡只补齐下班一侧', async () => {
   const rows = [
     { id: '1', schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '张三', department_name: '研发部', checkin_time: new Date('2026-09-03T01:00:00Z'), checkin_type: '上班打卡', exception_type: '未打卡', location_title: null, location_detail: null, lat: 0, lng: 0, standard_checkin_time: null },
     { id: '2', schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '张三', department_name: '研发部', checkin_time: new Date('2026-09-03T10:00:00Z'), checkin_type: '下班打卡', exception_type: '未打卡', location_title: null, location_detail: null, lat: 0, lng: 0, standard_checkin_time: null },
@@ -55,11 +55,32 @@ test('未打卡占位时间不作为实际时间，外出打卡仅补充地点�
   ]
   const [record] = (await new PostgresAttendanceSource({ query: async () => ({ rows }) }).snapshot('2026-09-03')).attendance.records
   assert.equal(record.checkInAt, null)
-  assert.equal(record.checkOutAt, null)
+  assert.equal(record.checkOutAt, '2026-09-03T06:00:00.000Z')
   assert.equal(record.status, 'missing')
   assert.equal(record.location, '湖北省孝感市安陆市')
   assert.equal(record.details.length, 1)
   assert.equal(record.details[0].type, '外出打卡')
+})
+
+test('多次打卡按首次上班和末次下班判断，明细异常不污染日统计和排行', async () => {
+  const rows = [
+    ['08:50', '上班打卡', '正常'], ['09:20', '上班打卡', '迟到'],
+    ['17:00', '下班打卡', '早退'], ['18:10', '下班打卡', '正常'],
+  ].map(([at, type, exception], index) => ({ id: String(index), schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '测试', department_name: '研发部', checkin_time: `2026-09-03T${at}:00+08:00`, checkin_type: type, exception_type: exception }))
+  const source = new PostgresAttendanceSource({ query: async () => ({ rows }) })
+  const [record] = (await source.snapshot('2026-09-03')).attendance.records
+  assert.equal(record.status, 'normal')
+  assert.equal(record.details.length, 4)
+  assert.deepEqual(await source.anomalyRankings('2026-09'), [])
+})
+
+test('缺下班卡时保留实际首次上班迟到，不能把重复上班算作严重迟到', async () => {
+  const rows = ['09:05', '09:30'].map((at, index) => ({ id: String(index), schedule_date: '2026-09-03', employee_id: 'EMP-0001', display_name: '测试', department_name: '研发部', checkin_time: `2026-09-03T${at}:00+08:00`, checkin_type: '上班打卡', exception_type: '迟到' }))
+  const source = new PostgresAttendanceSource({ query: async () => ({ rows }) })
+  const [ranking] = await source.anomalyRankings('2026-09')
+  assert.equal(ranking.missingCount, 1)
+  assert.equal(ranking.lateCount, 1)
+  assert.equal(ranking.severeLateCount, 0)
 })
 
 test('9点01分起至9点15分为普通迟到，超过15分为严重迟到', async () => {

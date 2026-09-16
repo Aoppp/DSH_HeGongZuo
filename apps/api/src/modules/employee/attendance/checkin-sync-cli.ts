@@ -31,12 +31,14 @@ async function main(): Promise<void> {
     if (!lock.rows[0]?.acquired) throw new Error('已有企业微信打卡同步任务正在运行。')
     const employeeUserId = option('--employee')
     const input = command === 'sync'
-      ? await incrementalCheckinInput(repository)
+      ? { ...await incrementalCheckinInput(repository), ...(employeeUserId ? { employeeUserId, advanceCheckpoint: false } : {}) }
       : { source: 'history' as const, startDate: date(option('--start-date'), '--start-date'), endDate: date(option('--end-date'), '--end-date'), ...(employeeUserId ? { employeeUserId } : {}), advanceCheckpoint: false }
     const client = new WeComCheckinClient()
     const directoryResult = await synchronizeWeComDirectory(new WeComDirectoryRepository(database), client)
-    const result = await synchronizeWeComCheckins(repository, client, input)
-    const scheduleResult = await synchronizeWeComSchedules(repository, client, input)
+    let scheduleResult = { employees: 0, schedules: 0 }
+    const result = await synchronizeWeComCheckins(repository, client, input, async () => {
+      scheduleResult = await synchronizeWeComSchedules(repository, client, input)
+    })
     const leaveRepository = new WeComLeaveRepository(database)
     const leaveInput = command === 'sync' ? await incrementalLeaveInput(leaveRepository) : { source: 'history' as const, startDate: input.startDate, endDate: input.endDate, advanceCheckpoint: false }
     const leaveResult = process.env.HEGONGZUO_WECOM_APPROVAL_SECRET?.trim()

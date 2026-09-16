@@ -21,7 +21,8 @@ export class ManagementCockpitService {
   ) {}
 
   async snapshot() {
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date())
+    // 考勤不统计当天，日报看板也默认昨日；统一展示完整自然日。
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai' }).format(new Date(Date.now() - 86_400_000))
     const [employees, contractAlerts, accounts, platform, audit, workRecords] = await Promise.all([
       this.employees.managementSummary(),
       this.employees.listContractExpiryAlerts(7),

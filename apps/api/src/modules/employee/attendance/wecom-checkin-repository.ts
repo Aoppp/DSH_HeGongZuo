@@ -52,9 +52,12 @@ export class WeComCheckinRepository {
   }
 
   async finishRun(id: number, status: CheckinSyncStatus, stats: CheckinSyncStats, checkpointAfter: string | null, errorMessage: string | null): Promise<void> {
-    await this.pool.query(`UPDATE employee_wecom_checkin_sync_runs SET status=$2, finished_at=now(), employee_count=$3,
+    await this.pool.query(`WITH completed AS (UPDATE employee_wecom_checkin_sync_runs SET status=$2, finished_at=now(), employee_count=$3,
       pulled_count=$4, inserted_count=$5, updated_count=$6, unchanged_count=$7, skipped_count=$8, failed_count=$9,
-      checkpoint_after=$10, error_message=$11 WHERE id=$1`, [id, status, stats.employees, stats.pulled, stats.inserted,
+      checkpoint_after=$10, error_message=$11 WHERE id=$1 RETURNING checkpoint_after, status)
+      INSERT INTO employee_wecom_checkin_sync_checkpoints (name, checkpoint_at)
+      SELECT 'default', checkpoint_after FROM completed WHERE status='succeeded' AND checkpoint_after IS NOT NULL
+      ON CONFLICT (name) DO UPDATE SET checkpoint_at=GREATEST(employee_wecom_checkin_sync_checkpoints.checkpoint_at, EXCLUDED.checkpoint_at),updated_at=now()`, [id, status, stats.employees, stats.pulled, stats.inserted,
       stats.updated, stats.unchanged, stats.skipped, stats.failed, checkpointAfter, errorMessage?.slice(0, 8_000) ?? null])
   }
 

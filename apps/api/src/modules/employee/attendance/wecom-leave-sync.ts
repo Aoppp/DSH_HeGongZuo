@@ -56,10 +56,12 @@ export function parseWeComLeave(spNo: string, detail: Record<string, unknown>, e
 
 export async function synchronizeWeComLeaves(repository: WeComLeaveRepository, client: WeComLeaveClient, input: LeaveSyncInput): Promise<LeaveSyncResult> {
   const checkpointBefore = await repository.checkpoint(); const runId = await repository.startRun(input.source, input.startDate, input.endDate, checkpointBefore)
-  const employees = await repository.employees(); const byUserId = new Map(employees.map((employee) => [employee.wecomUserId, employee.id]))
   const stats = { approvals: 0, upserted: 0, skipped: 0, failed: 0 }; const errors: string[] = []
   try {
-    for (const window of checkinWindows(input.startDate, input.endDate)) for (const spNo of await client.approvalNumbers(window.startTime, window.endTime)) {
+    const employees = await repository.employees(); const byUserId = new Map(employees.map((employee) => [employee.wecomUserId, employee.id]))
+    const approvalNumbers = new Set<string>(input.source === 'incremental' ? await repository.refreshableApprovalNumbers() : [])
+    for (const window of checkinWindows(input.startDate, input.endDate)) for (const spNo of await client.approvalNumbers(window.startTime, window.endTime)) approvalNumbers.add(spNo)
+    for (const spNo of approvalNumbers) {
       stats.approvals += 1
       try {
         const detail = await client.approvalDetail(spNo); const userId = text(object(detail.applyer)?.userid); const employeeId = userId ? byUserId.get(userId) : undefined
@@ -69,7 +71,6 @@ export async function synchronizeWeComLeaves(repository: WeComLeaveRepository, c
       } catch (error) { stats.failed += 1; if (errors.length < 20) errors.push(error instanceof Error ? error.message : String(error)) }
     }
     const checkpointAfter = stats.failed === 0 && input.advanceCheckpoint ? new Date().toISOString() : null
-    if (checkpointAfter) await repository.advanceCheckpoint(checkpointAfter)
     const status = stats.failed ? 'partial' as const : 'succeeded' as const
     await repository.finishRun(runId, status, stats, checkpointAfter, errors.join('\n') || null)
     return { runId, ...stats, status, checkpointAfter, errors }

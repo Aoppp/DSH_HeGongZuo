@@ -31,3 +31,29 @@ test('按企业微信 userid 关联员工并保留请假审批状态', async () 
   assert.equal(saved[0].reason, '家庭事务')
   assert.equal(saved[0].spStatus, 1)
 })
+
+test('增量同步复查窗口外的旧审批，列表重复审批只查询一次', async () => {
+  const fetched = [], saved = [], finished = []
+  const repository = {
+    checkpoint: async () => null, startRun: async () => 8,
+    employees: async () => [{ id: 'EMP-1', wecomUserId: 'test' }],
+    refreshableApprovalNumbers: async () => ['old-pending', 'old-approved'],
+    finishRun: async (...args) => finished.push(args),
+    upsert: async (record) => { saved.push(record); return 'updated' },
+  }
+  const detail = { sp_status: 4, applyer: { userid: 'test' }, vacation: { attendance: { type: 1, date_range: { new_begin: 1788426000, new_end: 1788454800, new_duration: 28800 } } } }
+  const client = { approvalNumbers: async () => ['old-approved', 'recent'], approvalDetail: async (id) => { fetched.push(id); return detail } }
+  const result = await synchronizeWeComLeaves(repository, client, { source: 'incremental', startDate: '2026-09-01', endDate: '2026-09-02', advanceCheckpoint: true })
+  assert.deepEqual(fetched, ['old-pending', 'old-approved', 'recent'])
+  assert.equal(saved[0].spStatus, 4)
+  assert.equal(result.approvals, 3)
+  assert.equal(finished[0][3], result.checkpointAfter)
+  assert.ok(result.checkpointAfter)
+})
+
+test('请假同步前置查询失败会记录失败，不留下运行中状态', async () => {
+  const finished = []
+  const repository = { checkpoint: async () => null, startRun: async () => 8, employees: async () => { throw new Error('连接失败') }, finishRun: async (...args) => finished.push(args) }
+  await assert.rejects(synchronizeWeComLeaves(repository, {}, { source: 'history', startDate: '2026-09-01', endDate: '2026-09-02', advanceCheckpoint: false }), /连接失败/)
+  assert.equal(finished[0][1], 'failed')
+})

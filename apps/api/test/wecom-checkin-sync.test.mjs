@@ -22,6 +22,38 @@ test('历史同步日期范围会自动拆成不超过 30 天的窗口', () => {
   assert.equal(windows.length, 2)
   assert.equal(windows[0].endTime - windows[0].startTime, 30 * 24 * 60 * 60)
   assert.ok(windows[1].endTime > windows[1].startTime)
+  assert.throws(() => checkinWindows('2026-02-30', '2026-03-01'), /无效日期/)
+})
+
+test('排班失败整轮考勤同步失败，且不推进断点', async () => {
+  const finished = []
+  const repository = {
+    checkpoint: async () => null, startRun: async () => 9,
+    employees: async () => [], unlinkedEmployeeCount: async () => 0,
+    finishRun: async (...args) => finished.push(args),
+  }
+  await assert.rejects(synchronizeWeComCheckins(repository, {}, { source: 'incremental', startDate: '2026-09-01', endDate: '2026-09-01', advanceCheckpoint: true }, async () => { throw new Error('排班失败') }), /排班失败/)
+  assert.equal(finished[0][1], 'failed')
+  assert.equal(finished[0][3], null)
+})
+
+test('员工列表读取失败也能结束同步日志，避免永久运行中', async () => {
+  const finished = []
+  const repository = { checkpoint: async () => null, startRun: async () => 9, employees: async () => { throw new Error('读取失败') }, finishRun: async (...args) => finished.push(args) }
+  await assert.rejects(synchronizeWeComCheckins(repository, {}, { source: 'incremental', startDate: '2026-09-01', endDate: '2026-09-01', advanceCheckpoint: true }), /读取失败/)
+  assert.equal(finished[0][1], 'failed')
+})
+
+test('先完成排班才原子结束同步，单员工同步不推进全局断点', async () => {
+  const steps = []
+  const repository = { checkpoint: async () => null, startRun: async () => 9, employees: async () => [], unlinkedEmployeeCount: async () => 0, finishRun: async (...args) => steps.push(args) }
+  const input = { source: 'incremental', startDate: '2026-09-01', endDate: '2026-09-01', advanceCheckpoint: true }
+  const result = await synchronizeWeComCheckins(repository, {}, input, async () => { steps.push('schedules') })
+  assert.equal(steps[0], 'schedules')
+  assert.equal(steps[1][1], 'succeeded')
+  assert.ok(result.checkpointAfter)
+  const targeted = await synchronizeWeComCheckins(repository, {}, { ...input, employeeUserId: 'single' })
+  assert.equal(targeted.checkpointAfter, null)
 })
 
 test('存在单条失败时不推进 checkpoint，并记录为部分成功', async () => {

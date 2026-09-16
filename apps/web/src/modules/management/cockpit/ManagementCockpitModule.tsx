@@ -47,8 +47,8 @@ export function ManagementCockpitModule({ user, onNavigate }: ModuleProps) {
     if (snapshot.contracts.upcoming > 0) items.push(`未来 7 天还有 ${snapshot.contracts.upcoming} 份员工合同到期。`)
     if (snapshot.accounts.attention > 0) items.push(`${snapshot.accounts.attention} 个账号正在初始化或初始化失败。`)
     if (snapshot.platform.agentRuntimes.unavailable.length > 0) items.push(`${snapshot.platform.agentRuntimes.unavailable.length} 个功能运行空间当前不可用。`)
-    if (snapshot.workRecords && snapshot.workRecords.reports.missing > 0) items.push(`今日有 ${snapshot.workRecords.reports.missing} 人未提交日报${snapshot.workRecords.connectionStatus === 'demo' ? '（演示数据）' : ''}。`)
-    if (snapshot.workRecords && snapshot.workRecords.attendance.exceptions > 0) items.push(`今日有 ${snapshot.workRecords.attendance.exceptions} 人考勤异常${snapshot.workRecords.connectionStatus === 'demo' ? '（演示数据）' : ''}。`)
+    if (snapshot.workRecords && snapshot.workRecords.reports.missing > 0) items.push(`${snapshot.workRecords.date} 有 ${snapshot.workRecords.reports.missing} 人未提交日报。`)
+    if (snapshot.workRecords && snapshot.workRecords.attendance.exceptions > 0) items.push(`${snapshot.workRecords.date} 有 ${snapshot.workRecords.attendance.exceptions} 人考勤异常。`)
     if (items.length === 0) items.push('当前没有需要立即处理的合同、账号或服务异常。')
     return items
   }, [snapshot])
@@ -70,8 +70,8 @@ export function ManagementCockpitModule({ user, onNavigate }: ModuleProps) {
     { label: '平台账号', value: snapshot.accounts.total, detail: `正常 ${snapshot.accounts.active} · 需关注 ${snapshot.accounts.attention}`, icon: CircleUserRound, tone: 'blue' },
     { label: '运行空间', value: `${snapshot.platform.agentRuntimes.available}/${snapshot.platform.agentRuntimes.expected}`, detail: `运行 ${snapshot.platform.agentRuntimes.running} · 待命 ${snapshot.platform.agentRuntimes.idle}`, icon: Activity, tone: snapshot.platform.agentRuntimes.unavailable.length > 0 ? 'danger' : 'violet' },
     ...(snapshot.workRecords ? [
-      { label: '今日日报', value: `${snapshot.workRecords.reports.submitted}/${snapshot.workRecords.reports.expected}`, detail: `未提交 ${snapshot.workRecords.reports.missing}${snapshot.workRecords.connectionStatus === 'demo' ? ' · 演示' : ''}`, icon: FileSpreadsheet, tone: snapshot.workRecords.reports.missing ? 'amber' : 'green' },
-      { label: '今日考勤', value: snapshot.workRecords.attendance.normal, detail: `异常 ${snapshot.workRecords.attendance.exceptions}${snapshot.workRecords.connectionStatus === 'demo' ? ' · 演示' : ''}`, icon: CalendarCheck, tone: snapshot.workRecords.attendance.exceptions ? 'danger' : 'green' },
+      { label: '昨日日报', value: `${snapshot.workRecords.reports.submitted}/${snapshot.workRecords.reports.expected}`, detail: `${snapshot.workRecords.date} · 未提交 ${snapshot.workRecords.reports.missing}`, icon: FileSpreadsheet, tone: snapshot.workRecords.reports.missing ? 'amber' : 'green' },
+      { label: '昨日考勤', value: snapshot.workRecords.attendance.normal, detail: `${snapshot.workRecords.date} · 异常 ${snapshot.workRecords.attendance.exceptions}`, icon: CalendarCheck, tone: snapshot.workRecords.attendance.exceptions ? 'danger' : 'green' },
     ] as const : []),
   ] as const
 

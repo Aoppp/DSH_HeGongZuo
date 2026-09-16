@@ -11,9 +11,13 @@ function employee(overrides = {}) {
   }
 }
 
-test('员工审计仅记录变更字段名称，不记录敏感字段值', () => {
+test('员工审计记录字段前后变化，敏感字段仅保留脱敏值', () => {
   const detail = employeeAuditDetail(employee(), employee({ workPhone: '13900139000', idNumber: '11010519491231002X', departmentName: '产品部' }))
-  assert.deepEqual(detail, { employeeName: '测试员工', changedFields: ['部门名称', '工作电话', '身份证号'] })
+  assert.equal(detail.employeeName, '测试员工')
+  assert.deepEqual(detail.changedFields, ['部门名称', '工作电话', '身份证号'])
+  assert.deepEqual(detail.changes[0], { field: 'departmentName', label: '部门名称', before: '技术部', after: '产品部' })
+  assert.equal(detail.changes[1].after, '已填写（末四位 9000）')
+  assert.equal(JSON.stringify(detail).includes('11010519491231002X'), false)
   assert.equal(JSON.stringify(detail).includes('13900139000'), false)
 })
 

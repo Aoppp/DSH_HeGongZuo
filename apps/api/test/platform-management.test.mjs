@@ -13,9 +13,11 @@ test('平台模块管理仅允许调整已登记的业务模块，并记录启�
   })
 
   await service.setModuleEnabled('employee-data', false, 'ACC-0001', '管理员')
-  assert.equal(calls.length, 2)
-  assert.deepEqual(calls[0].values, ['employee-data', false, 'ACC-0001'])
-  assert.deepEqual(calls[1].values, ['ACC-0001', '管理员', '停用模块', '模块', 'employee-data', '{"enabled":false}'])
+  assert.equal(calls.length, 3)
+  assert.deepEqual(calls[0].values, ['employee-data'])
+  assert.deepEqual(calls[1].values, ['employee-data', false, 'ACC-0001'])
+  assert.deepEqual(calls[2].values.slice(0, 5), ['ACC-0001', '管理员', '停用模块', '模块', 'employee-data'])
+  assert.deepEqual(JSON.parse(calls[2].values[5]), { changes: [{ field: 'enabled', label: '模块状态', before: '已启用', after: '已停用' }] })
   await assert.rejects(service.setModuleEnabled('overview', false, 'ACC-0001', '管理员'), PlatformManagementError)
 })
 

@@ -25,7 +25,7 @@ export interface CheckinSyncResult extends CheckinSyncStats {
 function dateAtShanghaiMidnight(date: string): number {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('日期必须使用 YYYY-MM-DD 格式。')
   const time = Date.parse(`${date}T00:00:00+08:00`)
-  if (Number.isNaN(time)) throw new Error(`无效日期：${date}`)
+  if (Number.isNaN(time) || shanghaiToday(new Date(time)) !== date) throw new Error(`无效日期：${date}`)
   return time
 }
 
@@ -56,14 +56,16 @@ function chunks<T>(values: readonly T[], size: number): readonly T[][] {
 
 function text(error: unknown): string { return error instanceof Error ? error.message : String(error) }
 
-export async function synchronizeWeComCheckins(repository: WeComCheckinRepository, client: WeComCheckinClient, input: CheckinSyncInput): Promise<CheckinSyncResult> {
+export async function synchronizeWeComCheckins(repository: WeComCheckinRepository, client: WeComCheckinClient, input: CheckinSyncInput, synchronizeSchedules?: () => Promise<void>): Promise<CheckinSyncResult> {
   const checkpointBefore = await repository.checkpoint()
   const runId = await repository.startRun(input.source, input.startDate, input.endDate, checkpointBefore)
-  const employees = await repository.employees(input.employeeUserId)
-  const byUserId = new Map(employees.map((employee) => [employee.wecomUserId, employee]))
-  const stats = { employees: employees.length, pulled: 0, inserted: 0, updated: 0, unchanged: 0, skipped: await repository.unlinkedEmployeeCount(), failed: 0 }
+  const stats = { employees: 0, pulled: 0, inserted: 0, updated: 0, unchanged: 0, skipped: 0, failed: 0 }
   const errors: string[] = []
   try {
+    const employees = await repository.employees(input.employeeUserId)
+    const byUserId = new Map(employees.map((employee) => [employee.wecomUserId, employee]))
+    stats.employees = employees.length
+    stats.skipped = await repository.unlinkedEmployeeCount()
     for (const window of checkinWindows(input.startDate, input.endDate)) {
       for (const batch of chunks(employees, 100)) {
         const values = await client.checkins(batch.map((employee) => employee.wecomUserId), window.startTime, window.endTime)
@@ -78,9 +80,10 @@ export async function synchronizeWeComCheckins(repository: WeComCheckinRepositor
         }
       }
     }
+    // 排班与打卡属于同一轮考勤同步，排班失败不得留下成功状态或推进断点。
+    if (synchronizeSchedules) await synchronizeSchedules()
     const succeeded = stats.failed === 0
-    const checkpointAfter = succeeded && input.advanceCheckpoint ? new Date().toISOString() : null
-    if (checkpointAfter) await repository.advanceCheckpoint(checkpointAfter)
+    const checkpointAfter = succeeded && input.advanceCheckpoint && !input.employeeUserId ? new Date().toISOString() : null
     const status = succeeded ? 'succeeded' : 'partial'
     await repository.finishRun(runId, status, stats, checkpointAfter, errors.length ? errors.join('\n') : null)
     return { runId, status, checkpointBefore, checkpointAfter, ...stats, errors }

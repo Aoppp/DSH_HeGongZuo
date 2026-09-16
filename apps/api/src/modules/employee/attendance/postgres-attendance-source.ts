@@ -123,12 +123,21 @@ function monthRange(month: string): { readonly startDate: string; readonly endDa
 function finalStatus(record: ExtendedAttendanceRecord): ExtendedAttendanceStatus {
   if (record.checkInState === 'leave' || record.checkOutState === 'leave') return 'leave'
   if (!record.checkInAt || !record.checkOutAt) return 'missing'
-  const statuses = record.details.map((detail) => detail.status)
+  const statuses = effectiveStatuses(record)
   if (statuses.includes('missing')) return 'missing'
   if (statuses.includes('late_severe')) return 'late_severe'
   if (statuses.includes('early_leave')) return 'early_leave'
   if (statuses.includes('late')) return 'late'
   return 'normal'
+}
+
+// 明细保留全部原始打卡，但每日判断只使用实际展示的首次上班、末次下班。
+function effectiveStatuses(record: ExtendedAttendanceRecord): readonly ExtendedAttendanceStatus[] {
+  return record.details.filter((detail) =>
+    (type(detail.type) === 'checkin' && detail.time === record.checkInAt)
+    || (type(detail.type) === 'checkout' && detail.time === record.checkOutAt)
+    || (type(detail.type) === 'external' && (detail.time === record.checkInAt || detail.time === record.checkOutAt)),
+  ).map((detail) => detail.status)
 }
 
 function externalCheckinTime(value: string): number {
@@ -182,11 +191,14 @@ export class PostgresAttendanceSource {
       employee.department_name, checkin.checkin_time, checkin.checkin_type, checkin.exception_type,
       checkin.location_title, checkin.location_detail, checkin.lat, checkin.lng, checkin.standard_checkin_time,
       EXISTS (SELECT 1 FROM employee_wecom_leaves leave_record WHERE leave_record.employee_id=employee.id AND leave_record.sp_status=2
-        AND leave_record.duration >= 28800 AND leave_record.start_time < ((schedule.schedule_date + 1)::timestamp AT TIME ZONE 'Asia/Shanghai')
-        AND leave_record.end_time >= (schedule.schedule_date::timestamp AT TIME ZONE 'Asia/Shanghai')) AS leave_full_day,
+        AND ((leave_record.start_time <= ((schedule.schedule_date + time '09:00') AT TIME ZONE 'Asia/Shanghai')
+          AND leave_record.end_time >= ((schedule.schedule_date + time '18:00') AT TIME ZONE 'Asia/Shanghai'))
+          OR (leave_record.duration >= 28800
+            AND (leave_record.start_time AT TIME ZONE 'Asia/Shanghai')::date = schedule.schedule_date
+            AND (leave_record.end_time AT TIME ZONE 'Asia/Shanghai')::date = schedule.schedule_date))) AS leave_full_day,
       EXISTS (SELECT 1 FROM employee_wecom_leaves leave_record WHERE leave_record.employee_id=employee.id AND leave_record.sp_status=2
         AND leave_record.start_time <= ((schedule.schedule_date + time '09:00') AT TIME ZONE 'Asia/Shanghai')
-        AND leave_record.end_time >= ((schedule.schedule_date + time '09:00') AT TIME ZONE 'Asia/Shanghai')) AS leave_at_start,
+        AND leave_record.end_time > ((schedule.schedule_date + time '09:00') AT TIME ZONE 'Asia/Shanghai')) AS leave_at_start,
       EXISTS (SELECT 1 FROM employee_wecom_leaves leave_record WHERE leave_record.employee_id=employee.id AND leave_record.sp_status=2
         AND leave_record.start_time <= ((schedule.schedule_date + time '18:00') AT TIME ZONE 'Asia/Shanghai')
         AND leave_record.end_time >= ((schedule.schedule_date + time '18:00') AT TIME ZONE 'Asia/Shanghai')) AS leave_at_end
@@ -266,9 +278,10 @@ export class PostgresAttendanceSource {
     for (const record of records) {
       if (record.status === 'normal' || record.status === 'leave') continue
       const current = rankings.get(record.externalUserId) ?? { employeeId: record.externalUserId, employeeName: record.employeeName, departmentName: record.departmentName, lateCount: 0, severeLateCount: 0, missingCount: 0, earlyLeaveCount: 0, total: 0 }
-      const late = record.details.some((detail) => detail.status === 'late' || detail.status === 'late_severe')
-      const severeLate = record.details.some((detail) => detail.status === 'late_severe')
-      const earlyLeave = record.details.some((detail) => detail.status === 'early_leave')
+      const statuses = effectiveStatuses(record)
+      const late = statuses.includes('late') || statuses.includes('late_severe')
+      const severeLate = statuses.includes('late_severe')
+      const earlyLeave = statuses.includes('early_leave')
       rankings.set(record.externalUserId, { ...current, lateCount: current.lateCount + Number(late), severeLateCount: current.severeLateCount + Number(severeLate), missingCount: current.missingCount + Number(record.status === 'missing'), earlyLeaveCount: current.earlyLeaveCount + Number(earlyLeave), total: current.total + 1 })
     }
     return [...rankings.values()].sort((left, right) => right.total - left.total || right.lateCount - left.lateCount || right.missingCount - left.missingCount || left.employeeName.localeCompare(right.employeeName, 'zh-CN'))

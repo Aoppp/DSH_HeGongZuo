@@ -20,7 +20,7 @@ import { PlatformManagementError, PlatformManagementService } from './modules/pl
 import { NotificationService } from './modules/platform/notification-service.js'
 import { readDataSync } from './modules/platform/data-sync.js'
 import { ManagementCockpitService } from './modules/management/management-cockpit.js'
-import { MockEmployeeWorkRecordsSource } from './modules/employee/work-records/mock-work-records-source.js'
+import { SyncedWorkRecordsSource } from './modules/employee/work-records/synced-work-records-source.js'
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
 import { PostgresAttendanceSource } from './modules/employee/attendance/postgres-attendance-source.js'
 import { WeComCheckinClient } from './modules/employee/attendance/wecom-checkin-client.js'
@@ -52,19 +52,21 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
 const platformManagement = new PlatformManagementService(database)
 const agentEmployeeGateway = new AgentEmployeeGateway(database, projectRoot, () => platformManagement.assertModuleEnabled('employee-agent'))
-const employeeWorkRecords = new MockEmployeeWorkRecordsSource()
 const employeeAttendance = new PostgresAttendanceSource(database)
+const dailyReportRepository = new DailyReportRepository(database)
+const dailyReportAnalyticsRepository = new DailyReportAnalyticsRepository(database)
+const employeeWorkRecords = new SyncedWorkRecordsSource(dailyReportAnalyticsRepository, dailyReportRepository, employeeAttendance)
 const wecomDirectory = new WeComDirectoryRepository(database)
 const managementCockpit = new ManagementCockpitService(repository, accounts, platformManagement, employeeWorkRecords)
 const mainAssistantFiles = new AssistantWorkspaceFiles(projectRoot)
 const meetings = new MeetingRepository(database)
 const recruitment = new RecruitmentRepository(database)
 const meetingUploadCredentials = new MeetingUploadCredentials(database)
-const dailyReports = new DailyReportService(new DailyReportRepository(database))
-const dailyReportAnalytics = new DailyReportAnalyticsService(new DailyReportAnalyticsRepository(database))
-const notificationService = new NotificationService(database, repository, new DailyReportAnalyticsRepository(database), employeeAttendance)
+const dailyReports = new DailyReportService(dailyReportRepository)
+const dailyReportAnalytics = new DailyReportAnalyticsService(dailyReportAnalyticsRepository)
+const notificationService = new NotificationService(database, repository, dailyReportAnalyticsRepository, employeeAttendance)
 const workDailyManualSync = new WorkDailyManualSync(database, process.env.WECOM_WORK_DAILY_SYNC_REQUEST_PATH ?? '')
-const reportAnalysis = new ReportAnalysisService(new DailyReportRepository(database))
+const reportAnalysis = new ReportAnalysisService(dailyReportRepository)
 const reportAnalysisSnapshots = new ReportAnalysisSnapshotRepository(database)
 void notificationService.dispatch().catch((error: unknown) => console.error('通知补发失败：', error))
 
