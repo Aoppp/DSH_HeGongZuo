@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
+import { parseEnv } from 'node:util'
 
 import { agentPackageRevision, waitForProvisionedPackage } from './agent-package-revision.mjs'
 import { agentSandboxRoot, dshBinPath, projectRoot } from './account-agent-runtime-paths-base.mjs'
@@ -19,7 +20,7 @@ if (!workspace.startsWith(`${agentSandboxRoot}${path.sep}`) || !dshHome.startsWi
 if (!pluginDirectory.startsWith(`${projectRoot}${path.sep}`)) throw new Error('Agent 能力包路径无效。')
 const expectedRevision = await agentPackageRevision(pluginDirectory)
 await waitForProvisionedPackage(path.join(dshHome, '.package-revision'), expectedRevision)
-if (!process.env.HEGONGZUO_RUNTIME_TOKEN) process.loadEnvFile(path.join(projectRoot, '.runtime', 'agent-credentials', `${runtimeId}.env`))
+if (!process.env.HEGONGZUO_RUNTIME_TOKEN) Object.assign(process.env, runtimeEnvironment(parseEnv(await readFile(path.join(projectRoot, '.runtime', 'agent-credentials', `${runtimeId}.env`), 'utf8'))))
 const child = spawn(process.execPath, ['--import', path.join(projectRoot, 'scripts', 'agent-http-guard.mjs'), dshBinPath, '--profile', 'web', '--host', '127.0.0.1', '--port', String(definition.port)], { cwd: workspace, env: { ...runtimeEnvironment(process.env), HOME: path.dirname(workspace), DSH_HOME: dshHome, HEGONGZUO_RUNTIME_ID: runtimeId, HEGONGZUO_RUNTIME_PORT: String(definition.port), HEGONGZUO_ACCOUNT_ID: definition.accountId, HEGONGZUO_AGENT_ID: definition.agentId, HEGONGZUO_AGENT_WORKSPACE: workspace }, stdio: 'inherit' })
 const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })))
 try {

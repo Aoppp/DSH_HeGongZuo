@@ -21,6 +21,8 @@ const requiredTemplates = [
   'deploy/systemd/hegongzuo-agent-sync.path.template',
   'deploy/systemd/hegongzuo-agent-reconcile.service.template',
   'deploy/systemd/hegongzuo-agent-reconcile.timer.template',
+  'deploy/systemd/hegongzuo-service-credentials.service.template',
+  'deploy/systemd/hegongzuo-service-credentials.path.template',
   'deploy/systemd/hegongzuo-sync-agent-units.sh.template',
   'deploy/systemd/journald.conf.d/hegongzuo.conf.template',
 ]
@@ -52,4 +54,8 @@ if (!checkinSyncTemplate.includes('checkin-sync-cli.js sync') || !checkinSyncTem
 const notificationDispatchTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-notification-dispatch.service.template'), 'utf8')
 const notificationDispatchTimerTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-notification-dispatch.timer.template'), 'utf8')
 if (!notificationDispatchTemplate.includes('notification-dispatch-cli.js') || !notificationDispatchTimerTemplate.includes('09:00:00 Asia/Shanghai')) throw new Error('站内通知定时生成模板配置不完整。')
+const serviceCredentialsTemplate = await readFile(path.join(root, 'deploy/systemd/hegongzuo-service-credentials.service.template'), 'utf8')
+const serviceCredentialsPath = await readFile(path.join(root, 'deploy/systemd/hegongzuo-service-credentials.path.template'), 'utf8')
+for (const setting of ['User=__DEPLOY_USER__', 'apply-service-credentials.mjs', 'ReadWritePaths=__PROJECT_DIR__/.runtime', 'ProtectSystem=strict', 'UMask=0077']) if (!serviceCredentialsTemplate.includes(setting)) throw new Error(`服务配置任务缺少 ${setting}`)
+if (!serviceCredentialsPath.includes('service-credential-tasks/apply.request')) throw new Error('服务配置缺少请求监听。')
 console.log('生产 systemd 模板检查通过。')

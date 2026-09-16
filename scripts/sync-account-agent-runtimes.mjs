@@ -7,6 +7,7 @@ import { pool } from '../apps/api/scripts/database.mjs'
 import { projectRoot } from './account-agent-runtime-paths-base.mjs'
 import { agentRuntimeRegistry, runtimeId } from './agent-runtime-registry.mjs'
 import { provisionRuntimeCredentials } from './runtime-security.mjs'
+import { ServiceCredentialStore } from '../apps/api/dist/configuration/service-credentials.js'
 
 const runtimeDirectory = path.join(projectRoot, '.runtime')
 const generatedPath = path.join(runtimeDirectory, 'agent-runtimes.json')
@@ -88,6 +89,12 @@ const previousByRuntimeId = new Map(previous
   .filter((item) => item && typeof item === 'object' && typeof item.runtimeId === 'string')
   .map((item) => [item.runtimeId, item]))
 const relocatedRuntimeIds = []
+// 与管理端保存共用锁，防止较早启动的同步任务覆盖刚保存的新凭证。
+const credentialLock = await pool.connect()
+try {
+await credentialLock.query("SELECT pg_advisory_lock(hashtext('platform-service-credential:assistant'))")
+const serviceCredential = await new ServiceCredentialStore(credentialLock, projectRoot).effective('assistant')
+const credentialEnvironment = { ...process.env, DEEPSEEK_API_KEY: serviceCredential.key, HEGONGZUO_SERVICE_CREDENTIAL_REVISION: serviceCredential.revision }
 for (const definition of definitions) {
   const prior = previousByRuntimeId.get(definition.runtimeId)
   const oldDshDirectory = typeof prior?.dshDirectory === 'string'
@@ -113,7 +120,7 @@ for (const definition of definitions) {
     }
   }
   if (prior && prior.accountId !== definition.accountId) relocatedRuntimeIds.push(definition.runtimeId)
-  await provisionRuntimeCredentials(projectRoot, definition, process.env)
+  await provisionRuntimeCredentials(projectRoot, definition, credentialEnvironment)
 }
 
 // 仅对既有员工 Agent 保持旧配置文件，避免正在使用的前端代理和本地开发命令中断。
@@ -146,4 +153,8 @@ if (relocatedRuntimeIds.length > 0) {
   await appendFile(path.join(runtimeDirectory, 'agent-restart-request'), `${[...new Set(relocatedRuntimeIds)].join('\n')}\n`, 'utf8')
 }
 
-await pool.end()
+} finally {
+  await credentialLock.query("SELECT pg_advisory_unlock(hashtext('platform-service-credential:assistant'))").catch(() => undefined)
+  credentialLock.release()
+  await pool.end()
+}

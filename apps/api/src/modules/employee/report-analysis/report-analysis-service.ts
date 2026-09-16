@@ -63,7 +63,7 @@ function bullets(value: string): string {
 
 export class ReportAnalysisService {
   private readonly requests = new AnalysisRequestQueue()
-  constructor(private readonly reports: DailyReportRepository) {}
+  constructor(private readonly reports: DailyReportRepository, private readonly keyProvider: () => Promise<string> = async () => requiredEnvironment('HEGONGZUO_DAYLYREPORT_DEEPSEEK_API_KEY')) {}
 
   private requestContent(instruction: string, source: string, maxTokens: number, retry = false): Promise<AnalysisCompletion> {
     return this.requests.run(() => this.fetchContent(instruction, source, maxTokens, retry))
@@ -72,7 +72,7 @@ export class ReportAnalysisService {
   private async fetchContent(instruction: string, source: string, maxTokens: number, retry: boolean): Promise<AnalysisCompletion> {
     const response = await fetch('https://api.deepseek.com/chat/completions', {
       method: 'POST',
-      headers: { authorization: `Bearer ${requiredEnvironment('HEGONGZUO_DAYLYREPORT_DEEPSEEK_API_KEY')}`, 'content-type': 'application/json' },
+      headers: { authorization: `Bearer ${await this.keyProvider()}`, 'content-type': 'application/json' },
       body: JSON.stringify({ model: 'deepseek-v4-flash', thinking: { type: 'disabled' }, temperature: 0.2, max_tokens: maxTokens, messages: [{ role: 'system', content: '你是企业内部日报分析工具。不得编造资料中不存在的事实；不得评价员工人格或作出人事决定。' }, { role: 'user', content: `${instruction}${retry ? '\n请直接输出最终 Markdown 正文，不要留空。' : ''}\n\n日报资料：\n${source}` }] }),
       signal: AbortSignal.timeout(90_000),
     })

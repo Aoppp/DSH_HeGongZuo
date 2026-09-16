@@ -19,6 +19,8 @@ import { registeredAgentPermissionIds, registeredAgentPermissions } from './modu
 import { PlatformManagementError, PlatformManagementService } from './modules/platform/platform-management.js'
 import { NotificationService } from './modules/platform/notification-service.js'
 import { readDataSync } from './modules/platform/data-sync.js'
+import { ServiceCredentialsService } from './modules/platform/service-credentials/service.js'
+import { serviceCredentialRoutes } from './modules/platform/service-credentials/routes.js'
 import { ManagementCockpitService } from './modules/management/management-cockpit.js'
 import { SyncedWorkRecordsSource } from './modules/employee/work-records/synced-work-records-source.js'
 import { isCalendarDate } from './modules/employee/work-records/work-records-source.js'
@@ -69,7 +71,12 @@ const dailyReports = new DailyReportService(dailyReportRepository)
 const dailyReportAnalytics = new DailyReportAnalyticsService(dailyReportAnalyticsRepository)
 const notificationService = new NotificationService(database, repository, dailyReportAnalyticsRepository, employeeAttendance)
 const workDailyManualSync = new WorkDailyManualSync(database, process.env.WECOM_WORK_DAILY_SYNC_REQUEST_PATH ?? '')
-const reportAnalysis = new ReportAnalysisService(dailyReportRepository)
+const serviceCredentials = new ServiceCredentialsService(database, projectRoot)
+const reportAnalysis = new ReportAnalysisService(dailyReportRepository, async () => {
+  const credential = await serviceCredentials.store.effective('daily-report')
+  if (!credential.key) throw new ReportAnalysisValidationError('日报分析服务尚未配置。')
+  return credential.key
+})
 const reportAnalysisSnapshots = new ReportAnalysisSnapshotRepository(database)
 void notificationService.dispatch().catch((error: unknown) => console.error('通知补发失败：', error))
 
@@ -287,6 +294,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
   // —— 以下业务接口全部要求登录 ——
   const currentUser = await requireAuth(auth, request)
+
+  if (await serviceCredentialRoutes(request, response, url.pathname, currentUser, serviceCredentials, () => requireAuth(auth, request))) return
 
   if (url.pathname === '/api/recruitment/jobs' && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); sendJson(response, 200, { jobs: await recruitment.jobs() }); return }
   if (url.pathname === '/api/recruitment/candidates' && request.method === 'GET') { requirePermission(currentUser, 'recruitment-management'); await platformManagement.assertModuleEnabled('recruitment-management'); sendJson(response,200,{candidates:await recruitment.candidatePool()});return }

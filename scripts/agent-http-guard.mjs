@@ -20,6 +20,11 @@ function guardedEmit(event, ...args) {
       else response.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
       return true
     }
+    if (event === 'request' && request.method === 'GET' && request.url === '/hegongzuo/api/credential-status') {
+      response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' })
+      response.end(JSON.stringify({ revision: process.env.HEGONGZUO_SERVICE_CREDENTIAL_REVISION ?? 'environment' }))
+      return true
+    }
   }
   return Reflect.apply(emit, this, [event, ...args])
 }

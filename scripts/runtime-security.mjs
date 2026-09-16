@@ -4,7 +4,7 @@ import path from 'node:path'
 
 /** 只允许运行时必需配置，禁止继承数据库、企业微信、日报等业务凭证。 @param {NodeJS.ProcessEnv} environment */
 export function runtimeEnvironment(environment) {
-  const allowed = ['PATH', 'LANG', 'LC_ALL', 'TZ', 'NODE_ENV', 'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'HEGONGZUO_RUNTIME_TOKEN', 'HEGONGZUO_EMPLOYEE_GATEWAY_URL', 'HEGONGZUO_RUNTIME_ID', 'HEGONGZUO_RUNTIME_PORT']
+  const allowed = ['PATH', 'LANG', 'LC_ALL', 'TZ', 'NODE_ENV', 'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'HEGONGZUO_SERVICE_CREDENTIAL_REVISION', 'HEGONGZUO_RUNTIME_TOKEN', 'HEGONGZUO_EMPLOYEE_GATEWAY_URL', 'HEGONGZUO_RUNTIME_ID', 'HEGONGZUO_RUNTIME_PORT']
   return Object.fromEntries(allowed.flatMap((key) => environment[key] === undefined ? [] : [[key, environment[key]]]))
 }
 

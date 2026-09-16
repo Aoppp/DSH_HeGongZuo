@@ -17,6 +17,10 @@ test('运行时所有 HTTP / WebSocket 请求都必须携带本实例凭证', as
     assert.equal((await fetch(url)).status, 401)
     assert.equal((await fetch(url, { headers: { 'x-hegongzuo-runtime-token': 'other' } })).status, 401)
     assert.equal(await (await fetch(url, { headers: { 'x-hegongzuo-runtime-token': token } })).text(), 'ok')
+    assert.equal((await fetch(`${url}/hegongzuo/api/credential-status`)).status,401)
+    const credentialState = await (await fetch(`${url}/hegongzuo/api/credential-status`, { headers: { 'x-hegongzuo-runtime-token': token } })).json()
+    assert.deepEqual(credentialState,{revision:'environment'})
+    assert.ok(!JSON.stringify(credentialState).includes(token))
     const upgraded = await new Promise((resolve, reject) => {
       const req = request(url, { headers: { connection: 'Upgrade', upgrade: 'websocket' } }, (res) => { res.resume(); resolve(res.statusCode) })
       req.on('error', reject)

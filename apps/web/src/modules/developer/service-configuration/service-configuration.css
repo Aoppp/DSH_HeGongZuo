@@ -1,0 +1,23 @@
+.service-credentials { display: grid; gap: 12px; padding: 16px 0 0; }
+.service-credentials article { display: flex; align-items: center; justify-content: space-between; gap: 20px; border: 1px solid #dde8e5; border-radius: 10px; padding: 16px; }
+.service-credentials__info { flex: 1; min-width: 0; }
+.service-credentials__info h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; font-size: 14px; font-weight: 600; color: #172522; }
+.service-credentials__info p, .service-credentials-dialog p { margin: 8px 0; font-size: 13px; line-height: 1.65; color: #60706c; }
+.service-credentials__info small { font-size: 12px; color: #60706c; }
+.service-credentials__badge { padding: 3px 8px; border-radius: 5px; background: #edf7f4; color: #267564; font-size: 11px; font-weight: 500; }
+.service-credentials__badge--failed, .service-credentials__badge--unavailable { background: #fff1f0; color: #ae4444; }
+.service-credentials__badge--waiting, .service-credentials__badge--unknown, .service-credentials__badge--applying { background: #f6f3eb; color: #8a682e; }
+.service-credentials__actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 310px; }
+.service-credentials__error, .service-credentials-dialog .service-credentials__error { color: #ae4444; background: #fff5f4; border-radius: 6px; padding: 9px 12px; font-size: 13px; }
+.service-credentials__success, .service-credentials-dialog .service-credentials__success { color: #267564; background: #edf7f4; border-radius: 6px; padding: 9px 12px; font-size: 13px; }
+.service-credentials__notice, .service-credentials-dialog .service-credentials__notice { color: #8a682e; }
+.service-credentials-dialog { width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); box-sizing: border-box; border: 1px solid #dde8e5; border-radius: 14px; padding: 24px; box-shadow: 0 16px 52px #163f3a24; color: #172522; }
+.service-credentials-dialog::backdrop { background: #152e2a66; }
+.service-credentials-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.service-credentials-dialog h3 { margin: 0; font-size: 17px; }
+.service-credentials-dialog label { display: block; margin: 0 0 8px; font-size: 13px; font-weight: 500; }
+.service-credentials-dialog input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cdded8; border-radius: 7px; font-size: 14px; background: #fff; color: #172522; }
+.service-credentials-dialog input:focus { outline: 2px solid #2f8c7840; border-color: #2f8c78; }
+.service-credentials-dialog footer, .service-credentials__discard div { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
+.service-credentials__discard { margin-top: 16px; border-top: 1px solid #dde8e5; padding-top: 8px; }
+@media (max-width: 700px) { .service-credentials article { align-items: flex-start; flex-direction: column; gap: 12px; } .service-credentials__actions { max-width: none; justify-content: flex-start; } .service-credentials-dialog { padding: 18px; } }
