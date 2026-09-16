@@ -7,6 +7,8 @@ import type { Duplex } from 'node:stream'
 
 import type { AuthUser } from './auth.js'
 import { RuntimeDemand } from './modules/agent-runtime/runtime-demand.js'
+import { runtimeCredential } from './modules/agent-runtime/credentials.js'
+import { trackAccountConnection } from './modules/accounts/active-connections.js'
 
 const legacyEmployeeAgentPathPrefix = '/api/employee-agent'
 const genericAgentPathPrefix = '/api/agents/'
@@ -23,6 +25,7 @@ const allRuntimeConfigPath = process.env.HEGONGZUO_ALL_AGENT_RUNTIME_CONFIG
 
 interface AccountAgentRuntime {
   readonly accountId: string
+  readonly accountKey?: string
   readonly agentId?: string
   readonly runtimeId?: string
   readonly port: number
@@ -110,7 +113,7 @@ async function runtimeFor(user: AuthUser, agentId: string): Promise<RegisteredAc
     && 'permissionId' in candidate
     && 'runtimeId' in candidate
     && 'workspaceDirectory' in candidate
-    && candidate.accountId === user.accountId
+    && 'accountKey' in candidate && candidate.accountKey === user.runtimeKey
     && candidate.agentId === agentId
     && typeof candidate.port === 'number'
     && typeof candidate.agentId === 'string'
@@ -149,9 +152,11 @@ async function configuredRuntimes(): Promise<readonly AccountAgentRuntime[]> {
 async function probeRuntime(runtime: AccountAgentRuntime): Promise<boolean> {
   const rpcId = randomUUID()
   try {
+    const id = runtime.runtimeId ?? `employee-query--${runtime.accountKey}`
+    const { token } = await runtimeCredential(projectRoot, id)
     const response = await fetch(`http://127.0.0.1:${runtime.port}/api/workspace.list`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', 'x-hegongzuo-runtime-token': token },
       body: JSON.stringify({ type: 'client-request', rpcId, method: 'workspace.list', payload: {} }),
       signal: AbortSignal.timeout(2_000),
     })
@@ -164,7 +169,7 @@ async function probeRuntime(runtime: AccountAgentRuntime): Promise<boolean> {
     const workspaceAvailable = record.rpcId === rpcId && record.result?.ok === true && Array.isArray(items)
       && items.some((item) => typeof item === 'object' && item !== null && 'path' in item && item.path === expectedWorkspace)
     if (!workspaceAvailable || !runtime.agentId) return workspaceAvailable
-    const readiness = await fetch(`http://127.0.0.1:${runtime.port}/hegongzuo/api/readiness`, { signal: AbortSignal.timeout(2_000) })
+    const readiness = await fetch(`http://127.0.0.1:${runtime.port}/hegongzuo/api/readiness`, { signal: AbortSignal.timeout(2_000), headers: { 'x-hegongzuo-runtime-token': token } })
     if (!readiness.ok) return false
     const identity: unknown = await readiness.json()
     return typeof identity === 'object' && identity !== null
@@ -214,10 +219,10 @@ function continueRuntimeActivity(runtimeId: string): void {
   void runtimeDemand.touch(runtimeId).catch((error: unknown) => console.error(`[和工作] 运行时 ${runtimeId} 活动状态写入失败：`, error))
 }
 
-function proxyHeaders(headers: IncomingHttpHeaders, runtime: AccountAgentRuntime): IncomingHttpHeaders {
+function proxyHeaders(headers: IncomingHttpHeaders, runtime: AccountAgentRuntime, token: string): IncomingHttpHeaders {
   const { authorization: _authorization, cookie: _cookie, host: _host, origin: _origin, ...forwarded } = headers
   const target = `127.0.0.1:${runtime.port}`
-  return { ...forwarded, host: target, origin: `http://${target}` }
+  return { ...forwarded, host: target, origin: `http://${target}`, 'x-hegongzuo-runtime-token': token }
 }
 
 function unavailable(response: ServerResponse): void {
@@ -234,16 +239,21 @@ export async function proxyAgentRequest(
   response: ServerResponse,
   user: AuthUser,
   agent: AgentRuntimeRequest,
+  isAuthorized: () => Promise<boolean>,
 ): Promise<void> {
   const runtime = await runtimeFor(user, agent.agentId)
+  const { token } = await runtimeCredential(projectRoot, runtime.runtimeId)
+  const untrack = trackAccountConnection(user.id, () => response.destroy())
+  response.once('close', untrack)
   await ensureRuntimeAvailable(runtime)
   if (request.destroyed || response.destroyed) return
+  if (!await isAuthorized()) { untrack(); throw new AgentRuntimeProxyError(401, '登录状态已失效，请重新登录。') }
   const upstream = createRequest({
     host: '127.0.0.1',
     port: runtime.port,
     method: request.method,
     path: upstreamPath(request.url, agent.pathPrefix),
-    headers: proxyHeaders(request.headers, runtime),
+    headers: proxyHeaders(request.headers, runtime, token),
   }, (upstreamResponse) => {
     response.writeHead(upstreamResponse.statusCode ?? 502, upstreamResponse.headers)
     upstreamResponse.once('error', () => unavailable(response))
@@ -296,11 +306,18 @@ export async function proxyAgentUpgrade(
   head: Buffer,
   user: AuthUser,
   agent: AgentRuntimeRequest,
+  isAuthorized: () => Promise<boolean>,
 ): Promise<void> {
   const runtime = await runtimeFor(user, agent.agentId)
+  const { token } = await runtimeCredential(projectRoot, runtime.runtimeId)
+  const untrack = trackAccountConnection(user.id, () => socket.destroy())
+  socket.once('close', untrack)
   await ensureRuntimeAvailable(runtime)
   if (socket.destroyed) return
-  const activityTimer = setInterval(() => continueRuntimeActivity(runtime.runtimeId), 60_000)
+  if (!await isAuthorized()) { untrack(); throw new AgentRuntimeProxyError(401, '登录状态已失效，请重新登录。') }
+  const activityTimer = setInterval(() => {
+    void isAuthorized().then((allowed) => { if (!allowed) socket.destroy(); else continueRuntimeActivity(runtime.runtimeId) }).catch(() => socket.destroy())
+  }, 20_000)
   activityTimer.unref()
   const stopActivityTimer = () => clearInterval(activityTimer)
   const upstream = createRequest({
@@ -308,7 +325,7 @@ export async function proxyAgentUpgrade(
     port: runtime.port,
     method: request.method,
     path: upstreamPath(request.url, agent.pathPrefix),
-    headers: proxyHeaders(request.headers, runtime),
+    headers: proxyHeaders(request.headers, runtime, token),
   })
   const upgradeTimer = setTimeout(() => upstream.destroy(new Error('功能服务实时连接建立超时。')), 10_000)
   upgradeTimer.unref()

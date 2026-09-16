@@ -5,6 +5,7 @@ import path from 'node:path'
 import { agentPackageRevision, waitForProvisionedPackage } from './agent-package-revision.mjs'
 import { agentSandboxRoot, dshBinPath, projectRoot } from './account-agent-runtime-paths-base.mjs'
 import { ensureRuntimeWorkspace } from './agent-runtime-workspace.mjs'
+import { runtimeEnvironment } from './runtime-security.mjs'
 
 const runtimeId = process.argv[2]?.trim() ?? ''
 if (!/^[a-z][a-z0-9-]{1,62}--[a-z][a-z0-9]{1,31}$/.test(runtimeId)) throw new Error('必须指定有效 Agent 运行时标识。')
@@ -18,7 +19,8 @@ if (!workspace.startsWith(`${agentSandboxRoot}${path.sep}`) || !dshHome.startsWi
 if (!pluginDirectory.startsWith(`${projectRoot}${path.sep}`)) throw new Error('Agent 能力包路径无效。')
 const expectedRevision = await agentPackageRevision(pluginDirectory)
 await waitForProvisionedPackage(path.join(dshHome, '.package-revision'), expectedRevision)
-const child = spawn(process.execPath, [dshBinPath, '--profile', 'web', '--host', '127.0.0.1', '--port', String(definition.port)], { cwd: workspace, env: { ...process.env, DSH_HOME: dshHome, HEGONGZUO_ACCOUNT_ID: definition.accountId, HEGONGZUO_AGENT_ID: definition.agentId, HEGONGZUO_AGENT_WORKSPACE: workspace }, stdio: 'inherit' })
+if (!process.env.HEGONGZUO_RUNTIME_TOKEN) process.loadEnvFile(path.join(projectRoot, '.runtime', 'agent-credentials', `${runtimeId}.env`))
+const child = spawn(process.execPath, ['--import', path.join(projectRoot, 'scripts', 'agent-http-guard.mjs'), dshBinPath, '--profile', 'web', '--host', '127.0.0.1', '--port', String(definition.port)], { cwd: workspace, env: { ...runtimeEnvironment(process.env), HOME: path.dirname(workspace), DSH_HOME: dshHome, HEGONGZUO_RUNTIME_ID: runtimeId, HEGONGZUO_RUNTIME_PORT: String(definition.port), HEGONGZUO_ACCOUNT_ID: definition.accountId, HEGONGZUO_AGENT_ID: definition.agentId, HEGONGZUO_AGENT_WORKSPACE: workspace }, stdio: 'inherit' })
 const exited = new Promise((resolve) => child.once('exit', (code, signal) => resolve({ code, signal })))
 try {
   await ensureRuntimeWorkspace({ port: definition.port, workspacePath: workspace, agentId: definition.agentId, accountId: definition.accountId })

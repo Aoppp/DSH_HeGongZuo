@@ -11,6 +11,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./data-source": { "types": "./dist/postgres-repository.d.ts", "import": "./dist/postgres-repository.js" },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },

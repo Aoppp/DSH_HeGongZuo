@@ -3,11 +3,9 @@ import '@deepseek-ai/dsh-system-prompt'
 import '@deepseek-ai/dsh-tools'
 import '@deepseek-ai/dsh-workspace'
 import { publishAgentRuntimeReadiness } from '@hegongzuo/agent-runtime-contract'
-import { createEmployeeTools, PostgresEmployeeRepository } from '@hegongzuo/employee-agent'
+import { createEmployeeTools, remoteEmployeeSource } from '@hegongzuo/employee-agent'
 import { registerSessionDeletionRoute } from '@hegongzuo/work-assistant'
-import pg from 'pg'
 
-import { permissionGuardedEmployeeSource } from './permission-source.js'
 
 export { permissionGuardedEmployeeSource } from './permission-source.js'
 
@@ -17,13 +15,7 @@ export const inject = ['tools', 'systemPrompt', 'workspaceRegistry', 'webServer'
 export async function apply(ctx: Context): Promise<void> {
   const workspacePath = process.env.HEGONGZUO_AGENT_WORKSPACE?.trim()
   const accountId = process.env.HEGONGZUO_ACCOUNT_ID?.trim()
-  const databaseUrl = process.env.DATABASE_URL?.trim()
   if (!workspacePath || !accountId) throw new Error('和工作助手缺少账号工作区。')
-  if (!databaseUrl) throw new Error('和工作助手缺少业务数据连接。')
-  const database = new pg.Pool({ connectionString: databaseUrl, max: 4, ...(process.env.DATABASE_SSL === 'require' ? { ssl: { rejectUnauthorized: false } } : {}) })
-  const employeeRepository = new PostgresEmployeeRepository(database)
-  await employeeRepository.verifyConnection()
-  ctx.effect(() => async () => { await database.end() }, 'hegongzuo.main-assistant.postgresql')
 
   ctx.systemPrompt.section({
     name: 'hegongzuo:main-assistant', order: 120,
@@ -38,7 +30,7 @@ export async function apply(ctx: Context): Promise<void> {
       '不添加 emoji 或颜文字，使用中性、清晰的办公语言。',
     ].join('\n'),
   })
-  for (const tool of createEmployeeTools(permissionGuardedEmployeeSource(database, accountId, employeeRepository))) ctx.tools.register(tool)
+  for (const tool of createEmployeeTools(remoteEmployeeSource())) ctx.tools.register(tool)
   registerSessionDeletionRoute(ctx)
   await ctx.workspaceRegistry.create(workspacePath, '和工作助手')
   publishAgentRuntimeReadiness(ctx, 'main-assistant')

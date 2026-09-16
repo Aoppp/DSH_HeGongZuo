@@ -5,7 +5,7 @@ async function runtimeRequest(port, method, payload, fetchImpl) {
   const rpcId = randomUUID()
   const response = await fetchImpl(`http://127.0.0.1:${port}/api/${method}`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', 'x-hegongzuo-runtime-token': process.env.HEGONGZUO_RUNTIME_TOKEN ?? '' },
     body: JSON.stringify({ type: 'client-request', rpcId, method, payload }),
     signal: AbortSignal.timeout(3_000),
   })
@@ -29,7 +29,7 @@ export async function runtimeHasWorkspace(port, workspacePath, fetchImpl = fetch
 
 /** @param {number} port @param {string} agentId @param {string} accountId @param {typeof fetch} fetchImpl */
 async function runtimePublishesIdentity(port, agentId, accountId, fetchImpl) {
-  const response = await fetchImpl(`http://127.0.0.1:${port}/hegongzuo/api/readiness`, { signal: AbortSignal.timeout(3_000) })
+  const response = await fetchImpl(`http://127.0.0.1:${port}/hegongzuo/api/readiness`, { signal: AbortSignal.timeout(3_000), headers: { 'x-hegongzuo-runtime-token': process.env.HEGONGZUO_RUNTIME_TOKEN ?? '' } })
   if (!response.ok) return false
   const value = await response.json()
   return value?.ok === true && value.agentId === agentId && value.accountId === accountId

@@ -55,6 +55,25 @@ done
 
 for runtime in $desired_runtimes; do
   unit="hegongzuo-agent@${runtime}.service"
+  # 独立 UID 隔离 /proc 与进程访问；平台组只用于后台管理当前实例的文件。
+  runtime_user="hga$(printf '%s' "$runtime" | sha256sum | cut -c1-20)"
+  if ! id "$runtime_user" >/dev/null 2>&1; then
+    useradd --system --no-create-home --shell /usr/sbin/nologin --gid "$DEPLOY_USER" "$runtime_user"
+  fi
+  unit_directory="/etc/systemd/system/${unit}.d"
+  if [ ! -f "$unit_directory/identity.conf" ]; then
+    install -d -m 755 "$unit_directory"
+    printf '[Service]\nUser=%s\n' "$runtime_user" > "$unit_directory/identity.conf"
+    systemctl daemon-reload
+  fi
+  prepare_sandbox() {
+    sandbox="$PROJECT_DIR/.runtime/agent-sandboxes/$runtime"
+    if [ ! -d "$sandbox" ] || [ -L "$sandbox" ]; then return 1; fi
+    # 不跟随工作区中的符号链接，避免修改工作区外文件的归属。
+    chown -hR "$runtime_user:$DEPLOY_USER" "$sandbox"
+    find -P "$sandbox" -type d -exec chmod u+rwx,g+rws,o-rwx {} +
+    find -P "$sandbox" -type f -exec chmod g+rw,o-rwx {} +
+  }
   # 实例只按需启动，禁止随服务器启动而一次性拉起全部账号运行时。
   systemctl disable "$unit" >/dev/null 2>&1 || true
   if systemctl is-active --quiet "$unit"; then
@@ -63,7 +82,9 @@ for runtime in $desired_runtimes; do
       install -o "$DEPLOY_USER" -g "$DEPLOY_USER" /dev/null "$activity_path"
     fi
     if printf '%s\n' "$restart_runtimes" | grep -Fxq "$runtime"; then
-      systemctl restart "$unit"
+      systemctl stop "$unit"
+      prepare_sandbox
+      systemctl start "$unit"
     else
       now=$(date +%s)
       modified=$(stat -c %Y "$activity_path")
@@ -73,6 +94,7 @@ for runtime in $desired_runtimes; do
       fi
     fi
   elif printf '%s\n' "$activation_runtimes" | grep -Fxq "$runtime"; then
+    prepare_sandbox
     if systemctl start "$unit"; then
       echo "[和工作] 按需启动运行时：$runtime"
     else

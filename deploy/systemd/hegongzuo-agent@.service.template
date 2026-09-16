@@ -6,10 +6,11 @@ OnFailure=hegongzuo-alert@%n.service
 
 [Service]
 Type=simple
-User=__DEPLOY_USER__
+# 每个实例的独立系统用户由协调器写入 drop-in，模板默认不以平台用户运行。
+User=nobody
 Group=__DEPLOY_USER__
 WorkingDirectory=__PROJECT_DIR__
-EnvironmentFile=__PROJECT_DIR__/.env
+EnvironmentFile=__PROJECT_DIR__/.runtime/agent-credentials/%i.env
 ExecStart=/usr/bin/env node scripts/run-agent-runtime.mjs %i
 Restart=on-failure
 RestartSec=5
@@ -21,6 +22,13 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
+ProtectProc=invisible
+UMask=0007
+InaccessiblePaths=__PROJECT_DIR__/.env -__PROJECT_DIR__/.git
+# 隐藏其他账号、同步凭证和业务附件，只挂载当前实例及公开注册表。
+TemporaryFileSystem=__PROJECT_DIR__/.runtime
+BindPaths=__PROJECT_DIR__/.runtime/agent-sandboxes/%i
+BindReadOnlyPaths=__PROJECT_DIR__/.runtime/agent-runtimes.json
 # DSH 运行时可能读取已安装的 Corepack/Pnpm；其余用户目录继续隔离。
 BindReadOnlyPaths=/home/__DEPLOY_USER__/.cache/node/corepack
 # 每个实例仅可写入自身的 DSH 数据与工作区，无法修改项目源码、运行时配置或其他账号文件。

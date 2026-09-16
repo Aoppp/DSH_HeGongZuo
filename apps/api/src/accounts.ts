@@ -165,11 +165,20 @@ export class AccountsService {
   }
 
   async resetPassword(id: string): Promise<boolean> {
-    const result = await this.pool.query(
-      'UPDATE accounts SET password_hash = $2, updated_at = now() WHERE id = $1',
-      [id, hashPassword(defaultAccountPassword)],
-    )
-    return (result.rowCount ?? 0) > 0
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      const result = await client.query(
+        'UPDATE accounts SET password_hash = $2, failed_login_count = 0, locked_until = NULL, updated_at = now() WHERE id = $1',
+        [id, hashPassword(defaultAccountPassword)],
+      )
+      await client.query('DELETE FROM sessions WHERE account_id = $1', [id])
+      await client.query('COMMIT')
+      return (result.rowCount ?? 0) > 0
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally { client.release() }
   }
 
   async setStatus(id: string, status: string): Promise<AccountRecord | null> {
@@ -186,7 +195,7 @@ export class AccountsService {
 
   private async nextId(): Promise<string> {
     const result = await this.pool.query<{ value: string }>(
-      `SELECT 'ACC-' || lpad((COALESCE(MAX(substring(id FROM '[0-9]+$')::bigint), 0) + 1)::text, 4, '0') AS value FROM accounts`,
+      `SELECT 'ACC-' || lpad(value::text, GREATEST(4, length(value::text)), '0') AS value FROM nextval('account_id_sequence') AS value`,
     )
     return result.rows[0]?.value ?? 'ACC-0001'
   }

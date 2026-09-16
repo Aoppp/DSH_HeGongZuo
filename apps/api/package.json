@@ -24,6 +24,7 @@
     "db:seed:accounts": "node scripts/seed-accounts.mjs"
   },
   "dependencies": {
+    "@hegongzuo/employee-agent": "workspace:*",
     "@hegongzuo/employee-domain": "workspace:*",
     "mammoth": "^1.12.2",
     "pdf-parse": "^2.4.5",

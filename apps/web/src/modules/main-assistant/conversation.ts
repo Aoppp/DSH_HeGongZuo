@@ -35,6 +35,15 @@ function packedSequenceRange(event: { readonly seq0?: unknown; readonly data?: u
 /** 将实时事件或短历史窗口合并进当前历史，避免重复事件和旧响应覆盖新内容。 */
 export function mergeHistoryEntries(current: readonly HistoryEntry[], incoming: readonly HistoryEntry[]): HistoryEntry[] {
   if (incoming.length === 0) return [...current]
+  // 旧请求可能返回同一起点的较短压缩片段，不能倒退已经接收的正文。
+  const currentPacked = new Map(current.flatMap((entry) => {
+    const range = packedSequenceRange(entry.event)
+    return range ? [[range[0], range[1]] as const] : []
+  }))
+  incoming = incoming.filter((entry) => {
+    const range = packedSequenceRange(entry.event)
+    return !range || (currentPacked.get(range[0]) ?? -1) <= range[1]
+  })
   const merged = new Map<number, HistoryEntry>()
   const incomingPackedRanges = incoming.map((entry) => packedSequenceRange(entry.event)).filter((range): range is readonly [number, number] => range !== null)
   const currentPackedRanges = current.map((entry) => packedSequenceRange(entry.event)).filter((range): range is readonly [number, number] => range !== null)
@@ -151,21 +160,30 @@ export function mergeHistoryWindow(history: readonly AssistantMessage[], current
 export function latestTurnFinished(entries: readonly HistoryEntry[]): boolean {
   let latestObservedTurn = -1
   let latestCompletedTurn = -1
+  let latestActivitySequence = -1
+  let latestCompletedSequence = -1
   for (const entry of entries) {
     const event = entry.event
     const turn = 'data' in event && event.data && typeof event.data === 'object' && 'turn' in event.data && typeof event.data.turn === 'number'
       ? event.data.turn
       : -1
     latestObservedTurn = Math.max(latestObservedTurn, turn)
+    if (['turn/start', 'step/start', 'assistant/chunk', 'text-chunks', 'tool/call'].includes(event.type)) latestActivitySequence = Math.max(latestActivitySequence, eventSequence(event))
     // assistant/message 是 DSH 已持久化的完整正文。某些历史响应会先返回它、稍后
     // 才带 turn/end；将其视为完成可避免完整回复仍显示“正在生成”。
     if (event.type === 'assistant/message') {
       const hasToolCall = event.data.message.content.some((part) => part.type === 'tool-call')
-      if (!hasToolCall) latestCompletedTurn = Math.max(latestCompletedTurn, turn)
+      if (!hasToolCall) {
+        latestCompletedTurn = Math.max(latestCompletedTurn, turn)
+        latestCompletedSequence = Math.max(latestCompletedSequence, eventSequence(event))
+      }
     }
-    if (event.type === 'turn/end') latestCompletedTurn = Math.max(latestCompletedTurn, turn)
+    if (event.type === 'turn/end') {
+      latestCompletedTurn = Math.max(latestCompletedTurn, turn)
+      latestCompletedSequence = Math.max(latestCompletedSequence, eventSequence(event))
+    }
   }
   // 长回复的历史窗口可能已截掉本轮 user/message，因此完成判断必须按 turn，不能
   // 依赖用户消息仍在当前分页中。
-  return latestObservedTurn >= 0 && latestCompletedTurn >= latestObservedTurn
+  return latestObservedTurn >= 0 && latestCompletedTurn >= latestObservedTurn && latestCompletedSequence >= latestActivitySequence
 }

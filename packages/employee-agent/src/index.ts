@@ -2,13 +2,13 @@ import type { Context } from '@deepseek-ai/cordis'
 import '@deepseek-ai/dsh-system-prompt'
 import '@deepseek-ai/dsh-tools'
 import '@deepseek-ai/dsh-workspace'
-import pg, { type PoolConfig } from 'pg'
 import { publishAgentRuntimeReadiness } from '@hegongzuo/agent-runtime-contract'
 
 import { PostgresEmployeeRepository } from './postgres-repository.js'
 import type { EmployeeDataSource } from './repository.js'
 import { registerSessionDeletionRoute } from './session-deletion.js'
 import { createEmployeeTools } from './tools.js'
+import { remoteEmployeeSource } from './remote-source.js'
 
 export const name = 'hegongzuo-employee-agent'
 export const inject = [
@@ -65,15 +65,7 @@ export async function registerEmployeeAgent(ctx: Context, repository: EmployeeDa
 }
 
 export async function apply(ctx: Context): Promise<void> {
-  const databaseUrl = process.env.DATABASE_URL?.trim()
-  if (!databaseUrl) throw new Error('员工管理 Agent 缺少 DATABASE_URL，无法读取 PostgreSQL 员工数据。')
-  const databaseConfig: PoolConfig = { connectionString: databaseUrl, max: 4 }
-  if (process.env.DATABASE_SSL === 'require') databaseConfig.ssl = { rejectUnauthorized: false }
-  const database = new pg.Pool(databaseConfig)
-  const repository = new PostgresEmployeeRepository(database)
-  await repository.verifyConnection()
-  ctx.effect(() => async () => { await database.end() }, 'hegongzuo.employee-agent.postgresql')
-  await registerEmployeeAgent(ctx, repository)
+  await registerEmployeeAgent(ctx, remoteEmployeeSource())
   registerSessionDeletionRoute(ctx)
   publishAgentRuntimeReadiness(ctx, 'employee-query')
 }
@@ -84,3 +76,4 @@ export type { EmployeeDataSource } from './repository.js'
 export { PostgresEmployeeRepository } from './postgres-repository.js'
 export { permanentlyDeleteSession, registerSessionDeletionRoute } from './session-deletion.js'
 export { createEmployeeTools } from './tools.js'
+export { remoteEmployeeSource } from './remote-source.js'

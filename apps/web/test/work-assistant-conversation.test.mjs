@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { appendSessionEvents, hasPendingInteractiveTool, latestTurnFinished, mergeHistoryEntries, mergeHistoryMessages, mergeHistoryWindow, messagesFromHistory, parseMarkdownTable } from '../src/modules/work-assistant/main/conversation.ts'
+import { appendSessionEvents, hasPendingInteractiveTool, latestTurnFinished, mergeHistoryEntries, mergeHistoryMessages, mergeHistoryWindow, messagesFromHistory, parseMarkdownTable } from '../src/modules/main-assistant/conversation.ts'
 
 test('工作助理在服务端历史尚未写入时保留刚发送的消息', () => {
   const history = [{ id: 'user-saved', kind: 'user', text: '之前的消息' }]

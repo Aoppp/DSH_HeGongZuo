@@ -1,20 +1,15 @@
-import type { HistoryEntry, SessionId, SessionEvent, WorkspaceView } from '@deepseek-ai/dsh-client-connection/client'
+import type { SessionId, SessionEvent, WorkspaceView } from '@deepseek-ai/dsh-client-connection/client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-
 import { AccountDshApiClient, unwrapDshResponse } from '../../../shared/dsh/client'
-import { appendSessionEvents, hasPendingInteractiveTool, latestTurnFinished, mergeHistoryEntries, messagesFromHistory, type AssistantMessage } from '../conversation'
+import { hasPendingInteractiveTool } from '../conversation'
+import { SessionLedger } from './session-ledger'
 
 export type MainAssistantConnection = 'connecting' | 'connected' | 'reconnecting' | 'failed'
 export type MainAssistantTask = 'idle' | 'submitting' | 'running' | 'stopping'
-
 const noProgressTimeoutMs = 2 * 60_000
-
 function isAbortReason(reason: unknown): boolean {
-  if (reason instanceof DOMException && (reason.name === 'AbortError' || reason.name === 'TimeoutError')) return true
   return /abort(ed)?|user aborted a request|timeout/i.test(reason instanceof Error ? reason.message : String(reason))
 }
-
-function reconnectDelay(attempt: number): number { return Math.min(5_000, 500 * 2 ** Math.min(attempt, 4)) }
 
 export function useMainAssistantSession(apiBasePath = '/api/agents/main-assistant', runtimeId = 'main-assistant') {
   const client = useMemo(() => new AccountDshApiClient(apiBasePath), [apiBasePath])
@@ -22,283 +17,240 @@ export function useMainAssistantSession(apiBasePath = '/api/agents/main-assistan
   const [task, setTask] = useState<MainAssistantTask>('idle')
   const [workspace, setWorkspace] = useState<WorkspaceView | null>(null)
   const [sessionId, setSessionId] = useState<SessionId | null>(null)
-  const [history, setHistory] = useState<readonly HistoryEntry[]>([])
-  const [pendingMessage, setPendingMessage] = useState<AssistantMessage | null>(null)
+  const [messages, setMessages] = useState<SessionLedger['messages']>([])
   const [error, setError] = useState<string | null>(null)
   const [settledRevision, setSettledRevision] = useState(0)
-  const activeSessionRef = useRef<SessionId | null>(null)
+  const ledger = useRef(new SessionLedger())
+  const active = useRef<SessionId | null>(null)
   const workspaceRef = useRef<WorkspaceView | null>(null)
   const taskRef = useRef<MainAssistantTask>('idle')
-  const lastProgressAt = useRef(Date.now())
-  const pendingEvents = useRef(new Map<number, SessionEvent>())
-  const flushTimer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null)
-
-  const transitionTask = useCallback((next: MainAssistantTask) => {
-    taskRef.current = next
-    setTask(next)
+  const lastProgress = useRef(Date.now())
+  const pendingEvents = useRef<SessionEvent[]>([])
+  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const epoch = useRef(0)
+  const syncing = useRef<Promise<void> | null>(null)
+  const publish = useCallback(() => {
+    const next = ledger.current.messages
+    setMessages((current) => current.length === next.length && current.every((item, index) => item.id === next[index]?.id && item.text === next[index]?.text && item.state === next[index]?.state) ? current : next)
   }, [])
 
-  const settleTask = useCallback(() => {
-    transitionTask('idle')
-    setPendingMessage(null)
-    setSettledRevision((current) => current + 1)
-  }, [transitionTask])
-
-  const clearEventQueue = useCallback(() => {
-    pendingEvents.current.clear()
-    if (flushTimer.current !== null) globalThis.clearTimeout(flushTimer.current)
+  const transition = useCallback((next: MainAssistantTask) => { taskRef.current = next; setTask(next) }, [])
+  const finish = useCallback(() => {
+    if (taskRef.current !== 'idle') setSettledRevision((value) => value + 1)
+    transition('idle')
+  }, [transition])
+  const flush = useCallback(() => {
+    if (flushTimer.current !== null) clearTimeout(flushTimer.current)
     flushTimer.current = null
-  }, [])
+    ledger.current.append(pendingEvents.current)
+    pendingEvents.current = []
+    publish()
+    if (ledger.current.canFinish()) finish()
+  }, [finish, publish])
 
-  const queueEvent = useCallback((event: SessionEvent) => {
-    lastProgressAt.current = Date.now()
-    pendingEvents.current.set(event.seq, event)
-    if (event.type === 'tool/call' && event.data.name === 'ask_user_question') {
-      const target = activeSessionRef.current
-      if (target) {
-        transitionTask('stopping')
-        void client.sessions.cancel({ sessionId: target }).finally(() => {
-          if (activeSessionRef.current !== target) return
-          settleTask()
-          setError('当前任务需要补充信息，已结束等待。请直接发送完整问题。')
-        })
-      }
-    }
-    if (event.type === 'turn/start' || event.type === 'step/start' || event.type === 'assistant/chunk') transitionTask('running')
-    if (event.type === 'turn/end') settleTask()
-    if (flushTimer.current !== null) return
-    flushTimer.current = globalThis.setTimeout(() => {
-      flushTimer.current = null
-      const events = [...pendingEvents.current.values()]
-      pendingEvents.current.clear()
-      setHistory((current) => appendSessionEvents(current, events))
-      if (events.some((item) => item.type === 'user/message' && item.data.source.kind === 'user')) setPendingMessage(null)
-    }, 80)
-  }, [client, settleTask, transitionTask])
-
-  const loadHistory = useCallback(async (target: SessionId, recentOnly: boolean, signal?: AbortSignal) => {
-    const response = unwrapDshResponse(await client.sessions.history({ sessionId: target, maxMessages: recentOnly ? 4 : 60 }, signal))
-    if (activeSessionRef.current !== target) return false
-    clearEventQueue()
-    if (hasPendingInteractiveTool(response.events)) {
-      try { unwrapDshResponse(await client.sessions.cancel({ sessionId: target }, signal)) } catch { /* 可能已由运行时结束。 */ }
-      const targetWorkspace = workspaceRef.current
-      try {
-        await client.deleteSession(target)
-        if (activeSessionRef.current !== target || !targetWorkspace) return true
-        const next = unwrapDshResponse(await client.sessions.create({ workspaceId: targetWorkspace.workspaceId }, signal)).sessionId
-        activeSessionRef.current = next
-        setSessionId(next)
-        setHistory([])
-        setPendingMessage(null)
-        settleTask()
-        setError('上一条任务停在了网页不支持的交互，已自动恢复。请重新发送完整问题。')
-      } catch {
-        if (activeSessionRef.current === target) {
-          settleTask()
-          setError('上一条任务无法继续，请点击“清空对话”后重新发送。')
+  const reconcile = useCallback((target: SessionId, signal?: AbortSignal): Promise<void> => {
+    if (syncing.current) return syncing.current
+    const currentEpoch = epoch.current
+    const revision = ledger.current.revision
+    const valid = () => active.current === target && epoch.current === currentEpoch && !signal?.aborted
+    const request = (async () => {
+      const response = unwrapDshResponse(await client.sessions.history({ sessionId: target, maxMessages: 60 }, signal))
+      if (!valid()) return
+      const before = ledger.current.entries.length
+      ledger.current.merge(response.events)
+      // 请求期间到达的实时事件必须合并，不得丢弃。
+      ledger.current.append(pendingEvents.current)
+      pendingEvents.current = []
+      publish()
+      if (ledger.current.entries.length > before) lastProgress.current = Date.now()
+      if (revision !== ledger.current.revision) return
+      if (ledger.current.canFinish(revision)) { finish(); return }
+      if (hasPendingInteractiveTool(ledger.current.entries)) {
+        try { unwrapDshResponse(await client.sessions.cancel({ sessionId: target }, signal)) } catch { return }
+        if (valid() && revision === ledger.current.revision) {
+          finish()
+          setError('当前任务需要补充信息，已停止等待。历史对话已保留，请直接补充问题。')
         }
       }
-      return true
-    }
-    setHistory((current) => recentOnly ? mergeHistoryEntries(current, response.events) : response.events)
-    if (latestTurnFinished(response.events)) settleTask()
-    return latestTurnFinished(response.events)
-  }, [clearEventQueue, client, settleTask])
+      // host 的 running=false 可能属于上一轮；没有本轮完成内容时不提前结束。
+    })()
+    syncing.current = request
+    void request.finally(() => { if (syncing.current === request) syncing.current = null }).catch(() => undefined)
+    return request
+  }, [client, finish, publish])
 
-  const reconcile = useCallback(async (target: SessionId, signal?: AbortSignal) => {
-    const finished = await loadHistory(target, true, signal)
-    if (finished || activeSessionRef.current !== target) return
-    const sessions = unwrapDshResponse(await client.sessions.list({}, signal))
-    const current = sessions.items.find((item) => item.sessionId === target)
-    if (!current?.running) settleTask()
-  }, [client, loadHistory, settleTask])
+  const queueEvent = useCallback((event: SessionEvent) => {
+    lastProgress.current = Date.now()
+    pendingEvents.current.push(event)
+    if (event.type === 'turn/start' || event.type === 'assistant/chunk') transition('running')
+    if (flushTimer.current === null) flushTimer.current = setTimeout(flush, 80)
+    if (event.type === 'turn/end' || (event.type === 'tool/call' && event.data.name === 'ask_user_question')) {
+      const target = active.current
+      if (target) void reconcile(target).catch(() => undefined)
+    }
+  }, [flush, reconcile, transition])
 
   const clearConversation = useCallback(async () => {
-    const current = activeSessionRef.current
-    const targetWorkspace = workspaceRef.current
-    if (!current || !targetWorkspace || taskRef.current !== 'idle') return
+    const current = active.current, targetWorkspace = workspaceRef.current
+    if (!targetWorkspace || taskRef.current !== 'idle') return
+    epoch.current += 1
+    syncing.current = null
+    active.current = null
+    pendingEvents.current = []
+    if (flushTimer.current !== null) clearTimeout(flushTimer.current)
+    flushTimer.current = null
+    transition('stopping')
     setError(null)
-    activeSessionRef.current = null
-    clearEventQueue()
+    let deleted = !current
     try {
-      await client.deleteSession(current)
+      if (current) await client.deleteSession(current)
+      deleted = true
+      active.current = null
+      setSessionId(null)
+      ledger.current = new SessionLedger()
+      pendingEvents.current = []
+      setMessages([])
       const next = unwrapDshResponse(await client.sessions.create({ workspaceId: targetWorkspace.workspaceId })).sessionId
-      activeSessionRef.current = next
+      active.current = next
       setSessionId(next)
-      setHistory([])
-      setPendingMessage(null)
     } catch (reason) {
-      activeSessionRef.current = current
-      setError(reason instanceof Error ? reason.message : '清空对话失败。')
+      if (!deleted) active.current = current
+      setError(deleted ? '旧对话已清空，新对话创建失败，请点击清空对话重试。' : '清空对话失败，原对话已保留。')
       throw reason
-    }
-  }, [clearEventQueue, client])
+    } finally { finish() }
+  }, [client, finish, transition])
 
   const send = useCallback(async (text: string) => {
-    const target = activeSessionRef.current
+    const target = active.current
     if (!target || taskRef.current !== 'idle') return
+    flush()
+    const currentEpoch = epoch.current
+    const revision = ledger.current.submit(text)
+    const valid = () => active.current === target && epoch.current === currentEpoch && ledger.current.revision === revision
+    publish()
     setError(null)
-    lastProgressAt.current = Date.now()
-    setPendingMessage({ id: `pending-${Date.now()}`, kind: 'user', text })
-    transitionTask('submitting')
+    lastProgress.current = Date.now()
+    transition('submitting')
     try {
-      const submitted = client.promptSession({
-        sessionId: target,
-        mode: 'queue',
-        content: [{ type: 'text', text }],
-        clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      })
-      transitionTask('running')
+      const submitted = client.promptSession({ sessionId: target, mode: 'queue', content: [{ type: 'text', text }], clientTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+      transition('running')
       unwrapDshResponse(await submitted)
+      if (valid()) void reconcile(target).catch(() => undefined)
     } catch (reason) {
-      if (isAbortReason(reason)) {
-        transitionTask('running')
-        try { await reconcile(target) } catch { /* 实时连接或看门狗会继续恢复。 */ }
-        return
-      }
-      settleTask()
-      setError(reason instanceof Error ? reason.message : '任务提交失败。')
+      if (!valid()) return
+      if (isAbortReason(reason)) { void reconcile(target).catch(() => undefined); return }
+      ledger.current.failSubmission(revision)
+      publish()
+      finish()
+      setError(reason instanceof Error ? reason.message : '任务提交失败，消息已保留，请重试。')
     }
-  }, [client, reconcile, settleTask, transitionTask])
+  }, [client, finish, flush, publish, reconcile, transition])
 
   const stop = useCallback(async () => {
-    const target = activeSessionRef.current
+    const target = active.current, currentEpoch = epoch.current
     if (!target || taskRef.current === 'idle') return
-    transitionTask('stopping')
-    setError(null)
+    transition('stopping')
     try {
       unwrapDshResponse(await client.sessions.cancel({ sessionId: target }))
       await reconcile(target)
-      setError('已停止当前处理，可以继续发送新任务。')
-    } catch (reason) {
-      if (!isAbortReason(reason)) setError(reason instanceof Error ? reason.message : '停止处理失败。')
-    } finally { settleTask() }
-  }, [client, reconcile, settleTask, transitionTask])
+      if (active.current === target && epoch.current === currentEpoch) {
+        ledger.current.failSubmission(ledger.current.revision)
+        publish()
+        finish()
+        setError('已停止当前处理，历史内容已保留。')
+      }
+    } catch { if (active.current === target) { transition('running'); setError('停止请求未确认，正在继续核对处理状态。') } }
+  }, [client, finish, publish, reconcile, transition])
 
   useEffect(() => {
     const controller = new AbortController()
-    let disposed = false
+    epoch.current += 1
+    ledger.current = new SessionLedger()
+    syncing.current = null
+    setSessionId(null)
+    setMessages([])
+    transition('idle')
+    const pause = (ms: number) => new Promise<void>((resolve) => {
+      const done = () => { clearTimeout(timer); controller.signal.removeEventListener('abort', done); resolve() }
+      const timer = setTimeout(done, ms)
+      controller.signal.addEventListener('abort', done, { once: true })
+    })
     const markConnected = () => {
+      if (controller.signal.aborted) return
       setConnection('connected')
-      setError((current) => current === '连接暂时中断，正在自动恢复…' || current === '工作空间连接失败，正在自动重试。' ? null : current)
-      const target = activeSessionRef.current
-      if (target && taskRef.current !== 'idle') void reconcile(target, controller.signal).catch(() => undefined)
+      setError((value) => value === '连接暂时中断，正在自动恢复…' ? null : value)
+      const target = active.current
+      if (target) void reconcile(target, controller.signal).catch(() => undefined)
     }
-
     async function bootstrap() {
       let attempt = 0
-      while (!controller.signal.aborted && !disposed) {
+      while (!controller.signal.aborted) {
         try {
-          const workspaceResponse = unwrapDshResponse(await client.workspace.list({}, controller.signal))
-          const items = workspaceResponse.items
-          const targetWorkspace = items.find((item) => item.path.includes(`/.runtime/agent-sandboxes/${runtimeId}--`) && item.path.endsWith('/workspace')) ?? items[0]
+          const items = unwrapDshResponse(await client.workspace.list({}, controller.signal)).items
+          const targetWorkspace = items.find((item) => item.path.includes(`/.runtime/agent-sandboxes/${runtimeId}--`) && item.path.endsWith('/workspace'))
           if (!targetWorkspace) throw new Error('工作空间正在准备。')
           const sessions = unwrapDshResponse(await client.sessions.list({}, controller.signal))
           const existing = sessions.items.find((item) => item.cwd === targetWorkspace.path && item.origin !== 'subagent')
-          const active = existing?.sessionId ?? unwrapDshResponse(await client.sessions.create({ workspaceId: targetWorkspace.workspaceId }, controller.signal)).sessionId
-          if (disposed) return
+          const target = existing?.sessionId ?? unwrapDshResponse(await client.sessions.create({ workspaceId: targetWorkspace.workspaceId }, controller.signal)).sessionId
+          const history = unwrapDshResponse(await client.sessions.history({ sessionId: target, maxMessages: 60 }, controller.signal)).events
+          if (controller.signal.aborted) return
           workspaceRef.current = targetWorkspace
-          activeSessionRef.current = active
+          active.current = target
+          ledger.current.merge(history)
+          publish()
           setWorkspace(targetWorkspace)
-          setSessionId(active)
-          setConnection('connected')
-          if (existing?.running) transitionTask('running')
-          void loadHistory(active, false, controller.signal).catch((reason) => {
-            if (!disposed && !isAbortReason(reason)) setError('对话记录加载失败，后续消息仍可正常使用。')
-          })
+          setSessionId(target)
+          transition(existing?.running && !ledger.current.canFinish() ? 'running' : 'idle')
+          markConnected()
           return
-        } catch (reason) {
-          if (controller.signal.aborted || disposed) return
-          attempt += 1
-          setConnection(attempt >= 3 ? 'failed' : 'reconnecting')
-          if (attempt >= 3 && !isAbortReason(reason)) setError('工作空间连接失败，正在自动重试。')
-          await new Promise((resolve) => globalThis.setTimeout(resolve, reconnectDelay(attempt)))
+        } catch {
+          if (controller.signal.aborted) return
+          setConnection(++attempt >= 3 ? 'failed' : 'reconnecting')
+          await pause(Math.min(5_000, 500 * 2 ** Math.min(attempt, 4)))
         }
       }
     }
-
-    async function pumpMux() {
-      while (!controller.signal.aborted && !disposed) {
+    async function pump(kind: 'mux' | 'host') {
+      while (!controller.signal.aborted) {
         try {
-          for await (const envelope of client.events.mux({}, controller.signal, markConnected)) {
+          const stream = kind === 'mux' ? client.events.mux({}, controller.signal, markConnected) : client.events.host({}, controller.signal, markConnected)
+          for await (const envelope of stream) {
+            if (controller.signal.aborted) return
             const frame = envelope.payload
-            if (frame.type === 'session/event' && frame.sessionId === activeSessionRef.current) queueEvent(frame.event)
+            if (frame.type === 'session/event' && frame.sessionId === active.current) queueEvent(frame.event)
+            if (frame.type === 'host/session-status' && frame.sessionId === active.current) void reconcile(frame.sessionId, controller.signal).catch(() => undefined)
+            if (frame.type === 'host/agent-error' && frame.sessionId === active.current && !isAbortReason(frame.message)) setError(frame.message)
           }
-        } catch (reason) {
-          if (controller.signal.aborted || disposed) return
-          if (!isAbortReason(reason)) setError('连接暂时中断，正在自动恢复…')
-        }
-        if (!disposed) setConnection('reconnecting')
-        await new Promise((resolve) => globalThis.setTimeout(resolve, 800))
+        } catch { /* 断线不清空消息，不改变业务轮次。 */ }
+        if (controller.signal.aborted) return
+        setConnection('reconnecting')
+        setError('连接暂时中断，正在自动恢复…')
+        await pause(800)
       }
     }
-
-    async function pumpHost() {
-      while (!controller.signal.aborted && !disposed) {
-        try {
-          for await (const envelope of client.events.host({}, controller.signal, markConnected)) {
-            const frame = envelope.payload
-            if (frame.type === 'host/session-status' && frame.sessionId === activeSessionRef.current) {
-              if (frame.running) transitionTask('running')
-              else { void reconcile(frame.sessionId, controller.signal).catch(() => settleTask()) }
-            }
-            if (frame.type === 'host/agent-error' && frame.sessionId === activeSessionRef.current && !isAbortReason(frame.message)) setError(frame.message)
-          }
-        } catch (reason) {
-          if (controller.signal.aborted || disposed) return
-          if (!isAbortReason(reason)) setError('连接暂时中断，正在自动恢复…')
-        }
-        if (!disposed) setConnection('reconnecting')
-        await new Promise((resolve) => globalThis.setTimeout(resolve, 800))
-      }
-    }
-
     void bootstrap()
-    void pumpMux()
-    void pumpHost()
+    void pump('mux')
+    void pump('host')
     return () => {
-      disposed = true
       controller.abort()
-      clearEventQueue()
-      activeSessionRef.current = null
+      epoch.current += 1
+      if (flushTimer.current !== null) clearTimeout(flushTimer.current)
+      flushTimer.current = null
+      pendingEvents.current = []
+      active.current = null
       workspaceRef.current = null
     }
-  }, [clearEventQueue, client, loadHistory, queueEvent, reconcile, runtimeId, settleTask, transitionTask])
+  }, [client, publish, queueEvent, reconcile, runtimeId, transition])
 
   useEffect(() => {
-    if (task === 'idle' || task === 'stopping' || !sessionId) return
-    const timer = globalThis.setInterval(() => {
-      const silentFor = Date.now() - lastProgressAt.current
-      if (silentFor >= noProgressTimeoutMs) {
-        transitionTask('stopping')
-        void client.sessions.cancel({ sessionId }).finally(() => {
-          settleTask()
-          setError('处理长时间没有进展，已自动停止。请检查文件后重新发送。')
-        })
-      } else if (connection !== 'connected' || silentFor >= 8_000) {
-        void reconcile(sessionId).catch(() => undefined)
-      }
-    }, 5_000)
-    return () => globalThis.clearInterval(timer)
-  }, [client, connection, reconcile, sessionId, settleTask, task, transitionTask])
+    if (!sessionId) return
+    const timer = setInterval(() => {
+      if (active.current !== sessionId || taskRef.current === 'stopping') return
+      if (taskRef.current !== 'idle' && Date.now() - lastProgress.current >= noProgressTimeoutMs) void stop()
+      else void reconcile(sessionId).catch(() => undefined)
+    }, task === 'idle' ? 15_000 : 3_000)
+    return () => clearInterval(timer)
+  }, [reconcile, sessionId, stop, task])
 
-  const messages = useMemo(() => {
-    const persisted = messagesFromHistory(history)
-    return pendingMessage ? [...persisted, pendingMessage] : persisted
-  }, [history, pendingMessage])
-
-  return {
-    busy: task !== 'idle',
-    clearConversation,
-    connection,
-    error,
-    messages,
-    send,
-    sessionId,
-    settledRevision,
-    stop,
-    task,
-    workspace,
-  }
+  return { busy: task !== 'idle', clearConversation, connection, error, messages, send, sessionId, settledRevision, stop, task, workspace }
 }

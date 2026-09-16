@@ -1,10 +1,11 @@
-import { createWriteStream } from 'node:fs'
-import { lstat, mkdir, readdir, rename, rm, stat } from 'node:fs/promises'
+import { constants, createWriteStream } from 'node:fs'
+import { lstat, mkdir, open, readdir, rename, rm, stat } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import path from 'node:path'
 import { pipeline } from 'node:stream/promises'
 
 import { HttpError } from '../../http/http.js'
+import { withWorkspaceTarget } from './safe-workspace-path.js'
 
 export const mainAssistantQuotaBytes = 3 * 1024 * 1024 * 1024
 export const workAssistantMaximumFileBytes = 200 * 1024 * 1024
@@ -38,26 +39,24 @@ function safeRelativePath(value: string | null): string {
   return normalized
 }
 
-function resolveWorkspacePath(workspacePath: string, relativePath: string): string {
-  const root = path.resolve(workspacePath)
-  const target = path.resolve(root, relativePath)
-  if (!target.startsWith(`${root}${path.sep}`)) throw new HttpError(400, '文件路径超出个人工作区。')
-  return target
-}
-
 async function directorySize(directory: string): Promise<number> {
+  return withWorkspaceTarget(path.dirname(directory), `${path.basename(directory)}/.guard`, async (anchor) => {
+  directory = path.dirname(anchor)
   let total = 0
   const entries = await readdir(directory, { withFileTypes: true })
   for (const entry of entries) {
     if (entry.name.startsWith('.upload-')) continue
     const target = path.join(directory, entry.name)
     if (entry.isDirectory()) total += await directorySize(target)
-    else if (entry.isFile()) total += (await stat(target)).size
+    else if (entry.isFile()) total += (await lstat(target)).size
   }
   return total
+  })
 }
 
 async function collectFiles(directory: string, prefix = ''): Promise<WorkspaceFile[]> {
+  return withWorkspaceTarget(path.dirname(directory), `${path.basename(directory)}/.guard`, async (anchor) => {
+  directory = path.dirname(anchor)
   const entries = await readdir(directory, { withFileTypes: true })
   const files: WorkspaceFile[] = []
   for (const entry of entries) {
@@ -66,11 +65,13 @@ async function collectFiles(directory: string, prefix = ''): Promise<WorkspaceFi
     const target = path.join(directory, entry.name)
     if (entry.isDirectory()) files.push(...await collectFiles(target, relativePath))
     else if (entry.isFile()) {
-      const details = await stat(target)
+      const details = await lstat(target)
+      if (!details.isFile()) continue
       files.push({ path: relativePath, name: entry.name, size: details.size, updatedAt: details.mtime.toISOString() })
     }
   }
   return files
+  })
 }
 
 function isVisibleFilePath(relativePath: string): boolean {
@@ -98,11 +99,13 @@ export class AssistantWorkspaceFiles {
 
   private async prepareWorkspace(accountId: string): Promise<string> {
     const workspace = this.workspacePath(accountId)
-    await Promise.all([
-      mkdir(path.join(workspace, uploadDirectory), { recursive: true }),
-      mkdir(path.join(workspace, outputDirectory), { recursive: true }),
-      mkdir(path.join(workspace, internalDirectory), { recursive: true }),
-    ])
+    await mkdir(workspace, { recursive: true })
+    for (const directory of [uploadDirectory, outputDirectory, internalDirectory]) {
+      await withWorkspaceTarget(workspace, directory, async (target) => {
+        await mkdir(target, { recursive: true })
+        if (!(await lstat(target)).isDirectory()) throw new HttpError(400, '工作区目录无效。')
+      })
+    }
     return workspace
   }
 
@@ -126,7 +129,7 @@ export class AssistantWorkspaceFiles {
     const declaredLength = contentLength(request)
     if (declaredLength !== null && declaredLength > workAssistantMaximumFileBytes) throw new HttpError(413, '单个表格文件不能超过 200MB。')
     const workspace = await this.prepareWorkspace(accountId)
-    const target = resolveWorkspacePath(workspace, `${uploadDirectory}/${name}`)
+    return withWorkspaceTarget(workspace, `${uploadDirectory}/${name}`, async (target) => {
     let previousSize = 0
     try { previousSize = (await stat(target)).size } catch { /* 新文件无需扣除旧大小。 */ }
     const [uploadBytes, outputBytes] = await Promise.all([
@@ -136,7 +139,7 @@ export class AssistantWorkspaceFiles {
     const usedBytes = uploadBytes + outputBytes
     if (usedBytes - previousSize + (declaredLength ?? 0) > mainAssistantQuotaBytes) throw new HttpError(413, '个人工作区空间不足，请删除不再需要的文件后再上传。')
 
-    const temporary = path.join(workspace, internalDirectory, `.upload-${crypto.randomUUID()}`)
+    return withWorkspaceTarget(workspace, `${internalDirectory}/.upload-${crypto.randomUUID()}`, async (temporary) => {
     let received = 0
     const limit = async function* () {
       for await (const chunk of request) {
@@ -156,26 +159,30 @@ export class AssistantWorkspaceFiles {
       await rm(temporary, { force: true })
       throw error
     }
+    })
+    })
   }
 
   async remove(accountId: string, requestedPath: string | null): Promise<void> {
     const workspace = this.workspacePath(accountId)
     const relativePath = safeRelativePath(requestedPath)
     if (!isVisibleFilePath(relativePath)) throw new HttpError(400, '只能删除上传文件或处理结果。')
-    const target = resolveWorkspacePath(workspace, relativePath)
+    await withWorkspaceTarget(workspace, relativePath, async (target) => {
     let details
     try { details = await lstat(target) } catch { throw new HttpError(404, '文件不存在。') }
     if (!details.isFile()) throw new HttpError(400, '只能删除文件。')
     await rm(target)
+    })
   }
 
   async download(accountId: string, requestedPath: string | null, response: ServerResponse): Promise<void> {
     const workspace = this.workspacePath(accountId)
     const relativePath = safeRelativePath(requestedPath)
     if (!isVisibleFilePath(relativePath)) throw new HttpError(400, '只能下载上传文件或处理结果。')
-    const target = resolveWorkspacePath(workspace, relativePath)
-    let details
-    try { details = await lstat(target) } catch { throw new HttpError(404, '文件不存在。') }
+    await withWorkspaceTarget(workspace, relativePath, async (target) => {
+    const handle = await open(target, constants.O_RDONLY | constants.O_NOFOLLOW)
+    try {
+    const details = await handle.stat()
     if (!details.isFile()) throw new HttpError(400, '只能下载文件。')
     const fileName = path.basename(relativePath)
     response.writeHead(200, {
@@ -184,6 +191,8 @@ export class AssistantWorkspaceFiles {
       'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       'cache-control': 'no-store',
     })
-    await pipeline((await import('node:fs')).createReadStream(target), response)
+    await pipeline(handle.createReadStream(), response)
+    } finally { await handle.close() }
+    })
   }
 }

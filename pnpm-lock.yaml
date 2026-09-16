@@ -24,6 +24,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@hegongzuo/employee-agent':
+        specifier: workspace:*
+        version: link:../../packages/employee-agent
       '@hegongzuo/employee-domain':
         specifier: workspace:*
         version: link:../../packages/employee-domain

@@ -7,6 +7,7 @@ import { isAccountPermissionId, type AccountPermissionId } from './account-permi
 export interface AuthUser {
   readonly id: string
   readonly accountId: string
+  readonly runtimeKey: string
   readonly displayName: string
   readonly position: string
   readonly permissions: readonly AccountPermissionId[]
@@ -15,6 +16,7 @@ export interface AuthUser {
 interface AccountRow {
   readonly id: string
   readonly account_id: string
+  readonly runtime_key: string
   readonly display_name: string
   readonly position: string
   readonly password_hash: string
@@ -61,7 +63,7 @@ export class AuthService {
     await this.assertSourceCanAttempt(sourceHash)
     const normalized = accountId.trim()
     const result = await this.pool.query<AccountRow>(
-      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.status, a.failed_login_count, a.locked_until,
+      `SELECT a.id, a.account_id, a.runtime_key, a.display_name, a.position, a.password_hash, a.status, a.failed_login_count, a.locked_until,
         COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
        FROM accounts a WHERE a.account_id = $1`,
       [normalized],
@@ -84,6 +86,8 @@ export class AuthService {
     const client = await this.pool.connect()
     try {
       await client.query('BEGIN')
+      const locked = await client.query<{ password_hash: string; status: string }>('SELECT password_hash, status FROM accounts WHERE id = $1 FOR UPDATE', [account.id])
+      if (locked.rows[0]?.password_hash !== account.password_hash || locked.rows[0]?.status !== 'active') throw new AuthError('账号状态已变更，请重新登录。')
       await client.query('UPDATE accounts SET failed_login_count = 0, locked_until = NULL, updated_at = now() WHERE id = $1', [account.id])
       await client.query(
         `INSERT INTO sessions (token_hash, account_id, expires_at)
@@ -102,6 +106,7 @@ export class AuthService {
       user: {
         id: account.id,
         accountId: account.account_id,
+        runtimeKey: account.runtime_key,
         displayName: account.display_name,
         position: account.position,
         permissions: permissionsFor(account),
@@ -112,7 +117,7 @@ export class AuthService {
   async userForToken(token: string | null | undefined): Promise<AuthUser | null> {
     if (!token) return null
     const result = await this.pool.query<AccountRow>(
-      `SELECT a.id, a.account_id, a.display_name, a.position, a.password_hash, a.status, a.failed_login_count, a.locked_until,
+      `SELECT a.id, a.account_id, a.runtime_key, a.display_name, a.position, a.password_hash, a.status, a.failed_login_count, a.locked_until,
         COALESCE((SELECT array_agg(p.permission_id ORDER BY p.permission_id) FROM account_module_permissions p WHERE p.account_id = a.id), '{}'::varchar[]) AS permissions
        FROM sessions s
        JOIN accounts a ON a.id = s.account_id
@@ -124,6 +129,7 @@ export class AuthService {
     return {
       id: account.id,
       accountId: account.account_id,
+      runtimeKey: account.runtime_key,
       displayName: account.display_name,
       position: account.position,
       permissions: permissionsFor(account),
@@ -142,11 +148,17 @@ export class AuthService {
     if (!account || !verifyPassword(currentPassword, account.password_hash)) {
       throw new AuthError('当前密码不正确。')
     }
-    await this.pool.query(
-      'UPDATE accounts SET password_hash = $2, updated_at = now() WHERE id = $1',
-      [id, hashPassword(newPassword)],
-    )
-    await this.pool.query('DELETE FROM sessions WHERE account_id = $1', [id])
+    const client = await this.pool.connect()
+    try {
+      await client.query('BEGIN')
+      const changed = await client.query('UPDATE accounts SET password_hash = $2, failed_login_count = 0, locked_until = NULL, updated_at = now() WHERE id = $1 AND password_hash = $3', [id, hashPassword(newPassword), account.password_hash])
+      if (!changed.rowCount) throw new AuthError('密码已变更，请重新登录。')
+      await client.query('DELETE FROM sessions WHERE account_id = $1', [id])
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally { client.release() }
   }
 
   async logout(token: string | null | undefined): Promise<void> {

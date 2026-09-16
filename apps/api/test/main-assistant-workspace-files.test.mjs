@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -46,4 +46,21 @@ test('不同账号使用相互隔离的主助手工作区', () => {
   const mainAssistant = new AssistantWorkspaceFiles(root)
   assert.equal(mainAssistant.workspacePath('test2'), path.join(root, '.runtime', 'agent-sandboxes', 'main-assistant--test2', 'workspace'))
   assert.notEqual(mainAssistant.workspacePath('test2'), mainAssistant.workspacePath('test3'))
+})
+
+test('拒绝经中间目录符号链接下载、删除和覆盖外部文件', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'hg-path-security-'))
+  try {
+    const files = new AssistantWorkspaceFiles(root)
+    await files.list('testuser')
+    const external = path.join(root, 'private')
+    await mkdir(external)
+    await writeFile(path.join(external, 'secret.txt'), 'fixture-private')
+    await symlink(external, path.join(files.workspacePath('testuser'), 'outputs', 'escape'))
+    await assert.rejects(files.remove('testuser', 'outputs/escape/secret.txt'), /符号链接/)
+    await assert.rejects(files.download('testuser', 'outputs/escape/secret.txt', {}), /符号链接/)
+    await symlink(path.join(external, 'secret.txt'), path.join(files.workspacePath('testuser'), 'uploads', 'secret.txt'))
+    await assert.rejects(files.upload('testuser', uploadRequest('secret.txt', 'overwrite')), /符号链接/)
+    assert.equal(await readFile(path.join(external, 'secret.txt'), 'utf8'), 'fixture-private')
+  } finally { await rm(root, { recursive: true, force: true }) }
 })

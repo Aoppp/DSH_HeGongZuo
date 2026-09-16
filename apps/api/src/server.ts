@@ -39,6 +39,8 @@ import { MeetingValidationError, parseMeetingInput, parseMeetingSummaryUpdate } 
 import { RecruitmentRepository } from './modules/recruitment/recruitment-repository.js'
 import { RecruitmentValidationError, parseJobInput, parseUploads } from './modules/recruitment/recruitment-input.js'
 import { HttpError, readJson, sendJson } from './http/http.js'
+import { AgentEmployeeGateway } from './modules/agent-runtime/employee-gateway.js'
+import { revokeAccountConnections } from './modules/accounts/active-connections.js'
 import { requireAuth, requirePermission, requirePlatformAdministration } from './http/auth-middleware.js'
 
 const repository = new PostgresEmployeeRepository(database)
@@ -49,6 +51,7 @@ const host = process.env.HEGONGZUO_API_HOST ?? '127.0.0.1'
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const accountRuntimeTasks = new AccountRuntimeTasks(accounts, projectRoot)
 const platformManagement = new PlatformManagementService(database)
+const agentEmployeeGateway = new AgentEmployeeGateway(database, projectRoot, () => platformManagement.assertModuleEnabled('employee-agent'))
 const employeeWorkRecords = new MockEmployeeWorkRecordsSource()
 const employeeAttendance = new PostgresAttendanceSource(database)
 const wecomDirectory = new WeComDirectoryRepository(database)
@@ -197,6 +200,11 @@ function encodeAuditCursor(cursor: { readonly createdAt: string; readonly id: nu
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
   const url = new URL(request.url ?? '/', 'http://localhost')
 
+  if (url.pathname === '/api/internal/agent-employees' && request.method === 'POST') {
+    sendJson(response, 200, await agentEmployeeGateway.execute(bearerToken(request) ?? '', await readJson(request)))
+    return
+  }
+
   if (url.pathname === callbackPath) {
     await handleWeComCallback(request, response, url)
     return
@@ -258,12 +266,15 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const newPassword = typeof record.newPassword === 'string' ? record.newPassword : ''
     if (!currentPassword || !newPassword) throw new HttpError(400, '请填写当前密码和新密码。')
     await auth.changePassword(changeUser.id, currentPassword, newPassword)
+    revokeAccountConnections(changeUser.id)
     sendJson(response, 200, { ok: true })
     return
   }
 
   if (url.pathname === '/api/auth/logout' && request.method === 'POST') {
+    const leaving = await auth.userForToken(sessionToken(request))
     await auth.logout(sessionToken(request))
+    if (leaving) revokeAccountConnections(leaving.id)
     response.writeHead(204, { 'set-cookie': sessionCookie(request, '', true) })
     response.end()
     return
@@ -438,23 +449,23 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   }
 
   if (url.pathname === '/api/main-assistant/files' && request.method === 'GET') {
-    sendJson(response, 200, await mainAssistantFiles.list(currentUser.accountId))
+    sendJson(response, 200, await mainAssistantFiles.list(currentUser.runtimeKey))
     return
   }
 
   if (url.pathname === '/api/main-assistant/files' && request.method === 'POST') {
-    const file = await mainAssistantFiles.upload(currentUser.accountId, request)
+    const file = await mainAssistantFiles.upload(currentUser.runtimeKey, request)
     sendJson(response, 201, { file })
     return
   }
 
   if (url.pathname === '/api/main-assistant/files/download' && request.method === 'GET') {
-    await mainAssistantFiles.download(currentUser.accountId, url.searchParams.get('path'), response)
+    await mainAssistantFiles.download(currentUser.runtimeKey, url.searchParams.get('path'), response)
     return
   }
 
   if (url.pathname === '/api/main-assistant/files' && request.method === 'DELETE') {
-    await mainAssistantFiles.remove(currentUser.accountId, url.searchParams.get('path'))
+    await mainAssistantFiles.remove(currentUser.runtimeKey, url.searchParams.get('path'))
     sendJson(response, 200, { ok: true })
     return
   }
@@ -475,7 +486,10 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (!authorization) throw new HttpError(503, '该功能服务尚未完成运行时配置。')
     if (authorization.access === 'permission') requirePermission(currentUser, authorization.permissionId)
     if (runtimeRequest.agentId === 'employee-query') await platformManagement.assertModuleEnabled('employee-agent')
-    await proxyAgentRequest(request, response, currentUser, runtimeRequest)
+    await proxyAgentRequest(request, response, currentUser, runtimeRequest, async () => {
+      const latest = await auth.userForToken(sessionToken(request))
+      return latest?.id === currentUser.id && (authorization.access === 'base' || latest.permissions.includes(authorization.permissionId))
+    })
     return
   }
 
@@ -553,6 +567,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       permissions: record.permissions,
     })
     if (!updated) throw new HttpError(404, '账号不存在。')
+    if (existing.permissions.some((permission) => !updated.permissions.includes(permission))) revokeAccountConnections(updated.id)
     await platformManagement.replaceAccountNotificationPreferences(updated.id, updated.permissions, record.notificationTypes, currentUser.id, currentUser.displayName)
     const runtimeChange = runtimeChangeForAccountUpdate(existing, updated, agentPermissionIds)
     if (runtimeChange.sync) accountRuntimeTasks.enqueue(updated, { transitionStatus: false, provision: runtimeChange.provision || existing.accountId !== updated.accountId })
@@ -566,6 +581,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     if (accountIdPath === currentUser.id) throw new HttpError(400, '不能删除当前登录的账号。')
     const existing = await accounts.findById(accountIdPath)
     if (!existing || !await accounts.delete(accountIdPath)) throw new HttpError(404, '账号不存在。')
+    revokeAccountConnections(accountIdPath)
     // 删除后立即从运行时配置移除该账号；systemd 配置监听器随即停止对应实例。
     accountRuntimeTasks.synchronize()
     await platformManagement.record(currentUser.id, currentUser.displayName, '删除账号', '账号', accountIdPath, { changes: [{ field: 'accountId', label: '登录名', before: existing.accountId, after: '已删除' }, { field: 'displayName', label: '显示名称', before: existing.displayName, after: '已删除' }, { field: 'permissions', label: '功能权限', before: existing.permissions.join('、') || '无', after: '已删除' }] })
@@ -577,6 +593,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   if (resetPasswordId && request.method === 'POST') {
     requirePlatformAdministration(currentUser)
     if (!await accounts.resetPassword(resetPasswordId)) throw new HttpError(404, '账号不存在。')
+    revokeAccountConnections(resetPasswordId)
     await platformManagement.record(currentUser.id, currentUser.displayName, '重置账号密码', '账号', resetPasswordId)
     sendJson(response, 200, { ok: true })
     return
@@ -877,7 +894,10 @@ server.on('upgrade', (request, socket, head) => {
       return
     }
     if (runtimeRequest.agentId === 'employee-query') await platformManagement.assertModuleEnabled('employee-agent')
-    await proxyAgentUpgrade(request, socket, head, user, runtimeRequest)
+    await proxyAgentUpgrade(request, socket, head, user, runtimeRequest, async () => {
+      const latest = await auth.userForToken(sessionToken(request))
+      return latest?.id === user.id && (authorization.access === 'base' || latest.permissions.includes(authorization.permissionId))
+    })
   })().catch((error: unknown) => {
     const status = error instanceof AgentRuntimeProxyError ? error.status : 502
     const message = error instanceof Error ? error.message : '员工查询服务暂时不可用。'

@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:net'
+import { readFile } from 'node:fs/promises'
+import path from 'node:path'
 
 import { accountAgentRuntimes } from './account-agent-runtime-paths.mjs'
 
@@ -89,7 +91,8 @@ async function waitForAgentRuntimes() {
     await Promise.all(accountAgentRuntimes.map(async (runtime) => {
       if (!pending.has(runtime.accountId)) return
       try {
-        const response = await fetch(`http://127.0.0.1:${runtime.port}/`, { signal: AbortSignal.timeout(1_500) })
+        const credential = JSON.parse(await readFile(path.resolve(runtime.dshHome, '../../../agent-credentials', `${path.basename(path.dirname(runtime.dshHome))}.json`), 'utf8'))
+        const response = await fetch(`http://127.0.0.1:${runtime.port}/`, { signal: AbortSignal.timeout(1_500), headers: { 'x-hegongzuo-runtime-token': credential.token } })
         if (response.ok) pending.delete(runtime.accountId)
       } catch {
         // DSH is still starting; retry until the shared deadline.

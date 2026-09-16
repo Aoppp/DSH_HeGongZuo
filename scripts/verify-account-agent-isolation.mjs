@@ -32,7 +32,8 @@ for (const runtime of accountAgentRuntimes) {
     throw new Error(`账号 ${runtime.accountId} 的独立 profile 未安装员工 Agent。`)
   }
 
-  const response = await fetch(`http://127.0.0.1:${runtime.port}`, { signal: AbortSignal.timeout(3000) })
+  const credential = JSON.parse(await readFile(path.resolve(runtime.dshHome, '../../../agent-credentials', `${path.basename(path.dirname(runtime.dshHome))}.json`), 'utf8'))
+  const response = await fetch(`http://127.0.0.1:${runtime.port}`, { signal: AbortSignal.timeout(3000), headers: { 'x-hegongzuo-runtime-token': credential.token } })
   if (!response.ok) throw new Error(`账号 ${runtime.accountId} 的 Agent 运行时未正常响应。`)
   const workspaceStorage = JSON.parse(await readFile(path.join(runtime.dshHome, 'storages', 'workspace.json'), 'utf8'))
   const workspaceRecords = Object.values(workspaceStorage.tables?.workspaces ?? {})
